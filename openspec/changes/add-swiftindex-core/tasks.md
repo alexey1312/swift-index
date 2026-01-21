@@ -359,7 +359,7 @@
 - [x] J.3.4 Add usage examples
 
 ### J.4 Distribution
-- [ ] J.4.1 Create Homebrew formula
+- [x] J.4.1 Create Homebrew formula
 - [x] J.4.2 Create release workflow
 - [x] J.4.3 Add versioning
 

@@ -72,3 +72,49 @@ jobs:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, '-') }}
           files: artifacts/swiftindex-macos.zip
+
+  update-homebrew:
+    name: Update Homebrew Tap
+    needs: release
+    if: ${{ !contains(github.ref, '-') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Download release asset and calculate SHA256
+        id: sha
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          curl -sL "https://github.com/alexey1312/swift-index/releases/download/v${VERSION}/swiftindex-macos.zip" -o swiftindex-macos.zip
+          MACOS_SHA=$(sha256sum swiftindex-macos.zip | cut -d' ' -f1)
+          echo "macos=${MACOS_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout Homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: alexey1312/homebrew-swift-index
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: homebrew-swift-index
+
+      - name: Update formula
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          MACOS_SHA="${{ steps.sha.outputs.macos }}"
+
+          FORMULA="homebrew-swift-index/Formula/swiftindex.rb"
+
+          sed -i "s/version \".*\"/version \"${VERSION}\"/" "$FORMULA"
+          sed -i "s/sha256 \".*\"/sha256 \"${MACOS_SHA}\"/" "$FORMULA"
+
+          cat "$FORMULA"
+
+      - name: Commit and push
+        working-directory: homebrew-swift-index
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/swiftindex.rb
+          git diff --staged --quiet || git commit -m "chore: bump to v${{ steps.version.outputs.version }}"
+          git push
