@@ -59,7 +59,7 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
         self.providers = providers
         self.id = id
         self.name = name
-        self.activeProviderManager = ActiveProviderManager()
+        activeProviderManager = ActiveProviderManager()
     }
 
     /// Creates the default provider chain optimized for local-first operation.
@@ -71,7 +71,7 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
         EmbeddingProviderChain(
             providers: [
                 MLXEmbeddingProvider(),
-                SwiftEmbeddingsProvider()
+                SwiftEmbeddingsProvider(),
             ],
             id: "default-chain",
             name: "Default Embedding Chain"
@@ -82,7 +82,7 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
     public static var softwareOnly: EmbeddingProviderChain {
         EmbeddingProviderChain(
             providers: [
-                SwiftEmbeddingsProvider()
+                SwiftEmbeddingsProvider(),
             ],
             id: "software-chain",
             name: "Software-Only Chain"
@@ -242,9 +242,9 @@ private actor ActiveProviderManager {
 
 // MARK: - Builder
 
-extension EmbeddingProviderChain {
+public extension EmbeddingProviderChain {
     /// Builder for constructing custom provider chains.
-    public final class Builder: @unchecked Sendable {
+    final class Builder: @unchecked Sendable {
         private var providers: [any EmbeddingProvider] = []
         private var chainId: String = "custom-chain"
         private var chainName: String = "Custom Embedding Chain"
@@ -265,7 +265,7 @@ extension EmbeddingProviderChain {
             dimension: Int = 384
         ) -> Builder {
             #if arch(arm64) && os(macOS)
-            providers.append(MLXEmbeddingProvider(modelName: modelName, dimension: dimension))
+                providers.append(MLXEmbeddingProvider(modelName: modelName, dimension: dimension))
             #endif
             return self
         }
@@ -329,14 +329,14 @@ extension EmbeddingProviderChain {
         /// Sets the chain identifier.
         @discardableResult
         public func id(_ id: String) -> Builder {
-            self.chainId = id
+            chainId = id
             return self
         }
 
         /// Sets the chain name.
         @discardableResult
         public func name(_ name: String) -> Builder {
-            self.chainName = name
+            chainName = name
             return self
         }
 
@@ -353,9 +353,9 @@ extension EmbeddingProviderChain {
 
 // MARK: - Convenience Extensions
 
-extension EmbeddingProviderChain {
+public extension EmbeddingProviderChain {
     /// Creates a chain with a single provider.
-    public static func single(_ provider: any EmbeddingProvider) -> EmbeddingProviderChain {
+    static func single(_ provider: any EmbeddingProvider) -> EmbeddingProviderChain {
         EmbeddingProviderChain(
             providers: [provider],
             id: "single-\(provider.id)",
@@ -364,7 +364,7 @@ extension EmbeddingProviderChain {
     }
 
     /// Creates a chain from a builder configuration.
-    public static func build(
+    static func build(
         _ configure: (Builder) -> Void
     ) -> EmbeddingProviderChain {
         let builder = Builder()

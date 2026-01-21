@@ -45,10 +45,10 @@ enum Direction: String, CaseIterable {
 
     var opposite: Direction {
         switch self {
-        case .north: return .south
-        case .south: return .north
-        case .east: return .west
-        case .west: return .east
+        case .north: .south
+        case .south: .north
+        case .east: .west
+        case .west: .east
         }
     }
 }

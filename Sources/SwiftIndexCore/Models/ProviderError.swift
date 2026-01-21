@@ -46,30 +46,30 @@ public enum ProviderError: Error, Sendable, Equatable {
 extension ProviderError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .notAvailable(let reason):
+        case let .notAvailable(reason):
             return "Provider not available: \(reason)"
-        case .modelNotFound(let name):
+        case let .modelNotFound(name):
             return "Model not found: \(name)"
-        case .downloadFailed(let reason):
+        case let .downloadFailed(reason):
             return "Model download failed: \(reason)"
-        case .apiKeyMissing(let provider):
+        case let .apiKeyMissing(provider):
             return "API key required for \(provider)"
-        case .apiError(let code, let message):
+        case let .apiError(code, message):
             return "API error (\(code)): \(message)"
-        case .networkError(let message):
+        case let .networkError(message):
             return "Network error: \(message)"
-        case .invalidInput(let message):
+        case let .invalidInput(message):
             return "Invalid input: \(message)"
-        case .dimensionMismatch(let expected, let actual):
+        case let .dimensionMismatch(expected, actual):
             return "Dimension mismatch: expected \(expected), got \(actual)"
         case .timeout:
             return "Embedding operation timed out"
-        case .embeddingFailed(let message):
+        case let .embeddingFailed(message):
             return "Embedding failed: \(message)"
-        case .allProvidersFailed(let errors):
+        case let .allProvidersFailed(errors):
             let details = errors.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
             return "All providers failed: \(details)"
-        case .unknown(let message):
+        case let .unknown(message):
             return "Unknown error: \(message)"
         }
     }

@@ -11,41 +11,41 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
     public let definition: MCPTool
 
     public init() {
-        self.definition = MCPTool(
+        definition = MCPTool(
             name: "search_code",
             description: """
-                Search indexed code using hybrid semantic search.
-                Combines BM25 keyword matching with vector similarity
-                for accurate code retrieval. Returns ranked results
-                with code snippets and metadata.
-                """,
+            Search indexed code using hybrid semantic search.
+            Combines BM25 keyword matching with vector similarity
+            for accurate code retrieval. Returns ranked results
+            with code snippets and metadata.
+            """,
             inputSchema: .object([
                 "type": "object",
                 "properties": .object([
                     "query": .object([
                         "type": "string",
-                        "description": "Natural language search query"
+                        "description": "Natural language search query",
                     ]),
                     "limit": .object([
                         "type": "integer",
                         "description": "Maximum number of results to return",
                         "default": 10,
                         "minimum": 1,
-                        "maximum": 100
+                        "maximum": 100,
                     ]),
                     "path_filter": .object([
                         "type": "string",
-                        "description": "Optional glob pattern to filter results by path"
+                        "description": "Optional glob pattern to filter results by path",
                     ]),
                     "semantic_weight": .object([
                         "type": "number",
                         "description": "Weight for semantic search (0.0-1.0, default 0.7)",
                         "default": 0.7,
                         "minimum": 0.0,
-                        "maximum": 1.0
-                    ])
+                        "maximum": 1.0,
+                    ]),
                 ]),
-                "required": .array([.string("query")])
+                "required": .array([.string("query")]),
             ])
         )
     }
@@ -90,7 +90,7 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         // For now, return placeholder results
 
         // Placeholder implementation showing expected output format
-        return [
+        [
             SearchResultDTO(
                 path: "Sources/Example/AuthService.swift",
                 startLine: 45,
@@ -98,20 +98,20 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                 kind: "function",
                 score: 0.892,
                 content: """
-                    func authenticate(username: String, password: String) async throws -> User {
-                        let hashedPassword = try hashPassword(password)
-                        guard let user = try await userStore.findByUsername(username) else {
-                            throw AuthError.userNotFound
-                        }
-                        guard user.passwordHash == hashedPassword else {
-                            throw AuthError.invalidCredentials
-                        }
-                        return user
+                func authenticate(username: String, password: String) async throws -> User {
+                    let hashedPassword = try hashPassword(password)
+                    guard let user = try await userStore.findByUsername(username) else {
+                        throw AuthError.userNotFound
                     }
-                    """,
+                    guard user.passwordHash == hashedPassword else {
+                        throw AuthError.invalidCredentials
+                    }
+                    return user
+                }
+                """,
                 symbols: ["authenticate(username:password:)"],
                 matchType: "semantic"
-            )
+            ),
         ]
     }
 
@@ -128,7 +128,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             output += "      \"end_line\": \(result.endLine),\n"
             output += "      \"kind\": \"\(result.kind)\",\n"
             output += "      \"score\": \(String(format: "%.3f", result.score)),\n"
-            output += "      \"symbols\": [\(result.symbols.map { "\"\(escapeJSON($0))\"" }.joined(separator: ", "))],\n"
+            let symbolsJSON = result.symbols.map { "\"\(escapeJSON($0))\"" }.joined(separator: ", ")
+            output += "      \"symbols\": [\(symbolsJSON)],\n"
             output += "      \"match_type\": \"\(result.matchType)\",\n"
             output += "      \"content\": \"\(escapeJSON(result.content))\"\n"
             output += "    }"

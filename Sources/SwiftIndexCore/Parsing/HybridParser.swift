@@ -33,9 +33,9 @@ public struct HybridParser: Parser, Sendable {
 
     /// Creates a hybrid parser with default configuration.
     public init() {
-        self.swiftParser = SwiftSyntaxParser()
-        self.treeSitterParser = TreeSitterParser()
-        self.plainTextParser = PlainTextParser()
+        swiftParser = SwiftSyntaxParser()
+        treeSitterParser = TreeSitterParser()
+        plainTextParser = PlainTextParser()
     }
 
     /// Creates a hybrid parser with custom parsers.

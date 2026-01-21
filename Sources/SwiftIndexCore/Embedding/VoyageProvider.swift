@@ -58,8 +58,8 @@ public struct VoyageProvider: EmbeddingProvider, Sendable {
         dimension: Int = 1024,
         maxBatchSize: Int = 128
     ) {
-        self.id = "voyage"
-        self.name = "Voyage AI Provider"
+        id = "voyage"
+        name = "Voyage AI Provider"
         self.dimension = dimension
         self.apiKey = apiKey
         self.modelName = modelName
@@ -69,7 +69,7 @@ public struct VoyageProvider: EmbeddingProvider, Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 300
-        self.session = URLSession(configuration: config)
+        session = URLSession(configuration: config)
     }
 
     // MARK: - EmbeddingProvider
@@ -179,7 +179,7 @@ extension Array {
     func chunked(into size: Int) -> [[Element]] {
         guard size > 0 else { return [self] }
         return stride(from: 0, to: count, by: size).map {
-            Array(self[$0..<Swift.min($0 + size, count)])
+            Array(self[$0 ..< Swift.min($0 + size, count)])
         }
     }
 }

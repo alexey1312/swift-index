@@ -32,117 +32,117 @@ struct E2ETests {
         // Create a model file
         let userModel = sourcesDir.appendingPathComponent("User.swift")
         try """
-            import Foundation
+        import Foundation
 
-            /// Represents a user in the system.
-            struct User: Identifiable, Codable {
-                let id: UUID
-                var name: String
-                var email: String
-                var createdAt: Date
+        /// Represents a user in the system.
+        struct User: Identifiable, Codable {
+            let id: UUID
+            var name: String
+            var email: String
+            var createdAt: Date
 
-                /// Creates a new user with the given details.
-                init(name: String, email: String) {
-                    self.id = UUID()
-                    self.name = name
-                    self.email = email
-                    self.createdAt = Date()
-                }
-
-                /// Validates the user's email format.
-                func isValidEmail() -> Bool {
-                    let pattern = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}"
-                    return email.range(of: pattern, options: .regularExpression) != nil
-                }
+            /// Creates a new user with the given details.
+            init(name: String, email: String) {
+                self.id = UUID()
+                self.name = name
+                self.email = email
+                self.createdAt = Date()
             }
-            """.write(to: userModel, atomically: true, encoding: .utf8)
+
+            /// Validates the user's email format.
+            func isValidEmail() -> Bool {
+                let pattern = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}"
+                return email.range(of: pattern, options: .regularExpression) != nil
+            }
+        }
+        """.write(to: userModel, atomically: true, encoding: .utf8)
 
         // Create an authentication service
         let authService = sourcesDir.appendingPathComponent("AuthenticationService.swift")
         try """
-            import Foundation
+        import Foundation
 
-            /// Error types for authentication operations.
-            enum AuthenticationError: Error {
-                case invalidCredentials
-                case userNotFound
-                case tokenExpired
-                case networkError(underlying: Error)
+        /// Error types for authentication operations.
+        enum AuthenticationError: Error {
+            case invalidCredentials
+            case userNotFound
+            case tokenExpired
+            case networkError(underlying: Error)
+        }
+
+        /// Service handling user authentication.
+        actor AuthenticationService {
+            private var currentUser: User?
+            private var authToken: String?
+
+            /// Authenticates a user with email and password.
+            func login(email: String, password: String) async throws -> User {
+                // Validate credentials
+                guard !email.isEmpty, !password.isEmpty else {
+                    throw AuthenticationError.invalidCredentials
+                }
+
+                // Simulate network call
+                try await Task.sleep(nanoseconds: 100_000_000)
+
+                let user = User(name: "Test User", email: email)
+                self.currentUser = user
+                self.authToken = UUID().uuidString
+
+                return user
             }
 
-            /// Service handling user authentication.
-            actor AuthenticationService {
-                private var currentUser: User?
-                private var authToken: String?
-
-                /// Authenticates a user with email and password.
-                func login(email: String, password: String) async throws -> User {
-                    // Validate credentials
-                    guard !email.isEmpty, !password.isEmpty else {
-                        throw AuthenticationError.invalidCredentials
-                    }
-
-                    // Simulate network call
-                    try await Task.sleep(nanoseconds: 100_000_000)
-
-                    let user = User(name: "Test User", email: email)
-                    self.currentUser = user
-                    self.authToken = UUID().uuidString
-
-                    return user
-                }
-
-                /// Logs out the current user.
-                func logout() {
-                    currentUser = nil
-                    authToken = nil
-                }
-
-                /// Returns the currently authenticated user.
-                func getCurrentUser() -> User? {
-                    return currentUser
-                }
+            /// Logs out the current user.
+            func logout() {
+                currentUser = nil
+                authToken = nil
             }
-            """.write(to: authService, atomically: true, encoding: .utf8)
+
+            /// Returns the currently authenticated user.
+            func getCurrentUser() -> User? {
+                return currentUser
+            }
+        }
+        """.write(to: authService, atomically: true, encoding: .utf8)
 
         // Create a network client
         let networkClient = sourcesDir.appendingPathComponent("NetworkClient.swift")
         try """
-            import Foundation
+        import Foundation
 
-            /// Protocol for network operations.
-            protocol NetworkClientProtocol {
-                func fetch<T: Decodable>(_ url: URL) async throws -> T
-                func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R
+        /// Protocol for network operations.
+        protocol NetworkClientProtocol {
+            func fetch<T: Decodable>(_ url: URL) async throws -> T
+            func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R
+        }
+
+        /// HTTP client for API requests.
+        final class NetworkClient: NetworkClientProtocol, Sendable {
+            private let session: URLSession
+            private let decoder: JSONDecoder
+
+            init(session: URLSession = .shared) {
+                self.session = session
+                self.decoder = JSONDecoder()
+                self.decoder.dateDecodingStrategy = .iso8601
             }
 
-            /// HTTP client for API requests.
-            final class NetworkClient: NetworkClientProtocol, Sendable {
-                private let session: URLSession
-                private let decoder: JSONDecoder
-
-                init(session: URLSession = .shared) {
-                    self.session = session
-                    self.decoder = JSONDecoder()
-                    self.decoder.dateDecodingStrategy = .iso8601
-                }
-
-                func fetch<T: Decodable>(_ url: URL) async throws -> T {
-                    let (data, _) = try await session.data(from: url)
-                    return try decoder.decode(T.self, from: data)
-                }
-
-                func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R {
-                    var request = URLRequest(url: url)
-                    request.httpMethod = "POST"
-                    request.httpBody = try JSONEncoder().encode(body)
-                    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-                    let (data, _) = try await session.data(for: request)
-                    return try decoder.decode(R.self, from: data)
-                }
+            func fetch<T: Decodable>(_ url: URL) async throws -> T {
+                let (data, _) = try await session.data(from: url)
+                return try decoder.decode(T.self, from: data)
             }
-            """.write(to: networkClient, atomically: true, encoding: .utf8)
+
+            func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R {
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.httpBody = try JSONEncoder().encode(body)
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+                let (data, _) = try await session.data(for: request)
+                return try decoder.decode(R.self, from: data)
+            }
+        }
+        """.write(to: networkClient, atomically: true, encoding: .utf8)
 
         return tempDir
     }
@@ -155,7 +155,7 @@ struct E2ETests {
     // MARK: - Index → Search Flow Tests
 
     @Test("Index and search flow works end-to-end")
-    func testIndexSearchFlow() async throws {
+    func indexSearchFlow() async throws {
         let projectDir = try createTestProject()
         defer { cleanupTestProject(projectDir) }
 
@@ -185,14 +185,14 @@ struct E2ETests {
         for file in files {
             let content = try String(contentsOf: file, encoding: .utf8)
             let result = parser.parse(content: content, path: file.path)
-            guard case .success(let chunks) = result else {
+            guard case let .success(chunks) = result else {
                 Issue.record("Parser should succeed for \(file.lastPathComponent)")
                 continue
             }
             allChunks.append(contentsOf: chunks)
         }
 
-        #expect(allChunks.count > 0, "Should have parsed chunks")
+        #expect(!allChunks.isEmpty, "Should have parsed chunks")
 
         // Store chunks with embeddings
         for chunk in allChunks {
@@ -204,7 +204,7 @@ struct E2ETests {
         let chunkStore = await indexManager.chunkStore
         let vectorStore = await indexManager.vectorStore
         let bm25Results = try await chunkStore.searchFTS(query: "authentication", limit: 10)
-        #expect(bm25Results.count > 0, "BM25 should find authentication-related chunks")
+        #expect(!bm25Results.isEmpty, "BM25 should find authentication-related chunks")
 
         // Create search engine using stores from index manager
         let searchEngine = HybridSearchEngine(
@@ -218,18 +218,18 @@ struct E2ETests {
             query: "user login flow",
             options: SearchOptions(limit: 5, semanticWeight: 1.0)
         )
-        #expect(semanticResults.count > 0, "Semantic search should return results")
+        #expect(!semanticResults.isEmpty, "Semantic search should return results")
 
         // Test hybrid search
         let hybridResults = try await searchEngine.search(
             query: "authentication error handling",
             options: SearchOptions(limit: 10, semanticWeight: 0.7)
         )
-        #expect(hybridResults.count > 0, "Hybrid search should return results")
+        #expect(!hybridResults.isEmpty, "Hybrid search should return results")
     }
 
     @Test("Search returns relevant results ranked by score")
-    func testSearchRelevanceRanking() async throws {
+    func searchRelevanceRanking() async throws {
         let projectDir = try createTestProject()
         defer { cleanupTestProject(projectDir) }
 
@@ -249,7 +249,7 @@ struct E2ETests {
             let content = try String(contentsOf: file, encoding: .utf8)
             let result = parser.parse(content: content, path: file.path)
 
-            guard case .success(let chunks) = result else {
+            guard case let .success(chunks) = result else {
                 continue
             }
 
@@ -274,7 +274,7 @@ struct E2ETests {
         )
 
         // Verify results are sorted by score (descending)
-        for i in 0..<(results.count - 1) {
+        for i in 0 ..< (results.count - 1) {
             #expect(
                 results[i].score >= results[i + 1].score,
                 "Results should be sorted by score descending"
@@ -285,7 +285,7 @@ struct E2ETests {
     // MARK: - Provider Fallback Chain Tests
 
     @Test("Provider chain falls back when provider unavailable")
-    func testProviderFallbackChain() async throws {
+    func providerFallbackChain() async throws {
         // Create a chain with unavailable provider first, then available mock
         let unavailableProvider = UnavailableEmbeddingProvider()
         let mockProvider = MockEmbeddingProvider(dimension: 384)
@@ -306,7 +306,7 @@ struct E2ETests {
     }
 
     @Test("Provider chain throws when all providers unavailable")
-    func testProviderChainAllUnavailable() async throws {
+    func providerChainAllUnavailable() async throws {
         let chain = EmbeddingProviderChain(
             providers: [UnavailableEmbeddingProvider(), UnavailableEmbeddingProvider()],
             id: "empty-chain",
@@ -320,7 +320,7 @@ struct E2ETests {
     // MARK: - Incremental Indexing Tests
 
     @Test("Incremental indexing only processes changed files")
-    func testIncrementalIndexing() async throws {
+    func incrementalIndexing() async throws {
         let projectDir = try createTestProject()
         defer { cleanupTestProject(projectDir) }
 
@@ -348,7 +348,7 @@ struct E2ETests {
             }
 
             let result = parser.parse(content: content, path: file.path)
-            guard case .success(let chunks) = result else {
+            guard case let .success(chunks) = result else {
                 continue
             }
 
@@ -378,28 +378,28 @@ struct E2ETests {
     }
 
     @Test("Parser handles Swift declarations correctly")
-    func testParserHandlesDeclarations() throws {
+    func parserHandlesDeclarations() throws {
         let code = """
-            struct User {
-                let id: UUID
-                var name: String
+        struct User {
+            let id: UUID
+            var name: String
 
-                func greet() -> String {
-                    return "Hello, \\(name)"
-                }
+            func greet() -> String {
+                return "Hello, \\(name)"
             }
+        }
 
-            extension User: Equatable {}
+        extension User: Equatable {}
 
-            protocol Identifiable {
-                var id: UUID { get }
-            }
-            """
+        protocol Identifiable {
+            var id: UUID { get }
+        }
+        """
 
         let parser = HybridParser()
         let result = parser.parse(content: code, path: "User.swift")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
@@ -407,42 +407,43 @@ struct E2ETests {
         // Should parse struct, function, extension, and protocol
         #expect(chunks.count >= 3, "Should parse multiple declarations")
 
-        let kinds = Set(chunks.map { $0.kind })
-        #expect(kinds.contains(ChunkKind.struct) || kinds.contains(where: { $0.isTypeDeclaration }), "Should contain struct")
+        let kinds = Set(chunks.map(\.kind))
+        let hasStruct = kinds.contains(ChunkKind.struct) || kinds.contains(where: \.isTypeDeclaration)
+        #expect(hasStruct, "Should contain struct")
     }
 
     // MARK: - Hybrid Parser Tests
 
     @Test("HybridParser routes Swift files to SwiftSyntax")
-    func testHybridParserSwiftRouting() {
+    func hybridParserSwiftRouting() {
         let parser = HybridParser()
         let swiftCode = """
-            func hello() {
-                print("Hello")
-            }
-            """
+        func hello() {
+            print("Hello")
+        }
+        """
 
         let result = parser.parse(content: swiftCode, path: "test.swift")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed for Swift file")
             return
         }
 
-        #expect(chunks.count > 0, "Should parse Swift file")
+        #expect(!chunks.isEmpty, "Should parse Swift file")
         #expect(chunks[0].kind == ChunkKind.function || chunks[0].kind == ChunkKind.method, "Should identify function")
     }
 
     @Test("HybridParser handles unknown extensions gracefully")
-    func testHybridParserUnknownExtension() {
+    func hybridParserUnknownExtension() {
         let parser = HybridParser()
         let content = "Some random text content"
 
         let result = parser.parse(content: content, path: "readme.txt")
         // Should use plain text fallback - may succeed or fail depending on implementation
         switch result {
-        case .success(let chunks):
-            #expect(chunks.count >= 0, "Should handle unknown extensions")
+        case let .success(chunks):
+            #expect(chunks.isEmpty, "Should handle unknown extensions")
         case .failure:
             // Acceptable - unknown extension may fail gracefully
             #expect(Bool(true), "Parser returned failure for unknown extension")
@@ -469,7 +470,7 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
     func embed(_ text: String) async throws -> [Float] {
         // Generate deterministic embedding based on text hash
         var generator = SeededRNG(seed: UInt64(bitPattern: Int64(text.hashValue)))
-        var embedding = (0..<dimension).map { _ in Float.random(in: -1...1, using: &generator) }
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         // Normalize
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
@@ -483,7 +484,7 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
     func embed(_ texts: [String]) async throws -> [[Float]] {
         var results: [[Float]] = []
         for text in texts {
-            results.append(try await embed(text))
+            try await results.append(embed(text))
         }
         return results
     }

@@ -58,7 +58,7 @@ enum CLIUtils {
         var partials: [PartialConfig] = []
 
         // Load from file if specified
-        if let configPath = configPath {
+        if let configPath {
             let resolvedPath = resolvePath(configPath)
             logger.debug("Loading config from: \(resolvedPath)")
 
@@ -112,7 +112,7 @@ enum CLIUtils {
 
         // Also check standard VOYAGE_API_KEY
         if partial.voyageAPIKey == nil,
-            let voyageKey = ProcessInfo.processInfo.environment["VOYAGE_API_KEY"]
+           let voyageKey = ProcessInfo.processInfo.environment["VOYAGE_API_KEY"]
         {
             partial.voyageAPIKey = voyageKey
         }
@@ -123,7 +123,7 @@ enum CLIUtils {
 
         // Also check standard OPENAI_API_KEY
         if partial.openAIAPIKey == nil,
-            let openAIKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]
+           let openAIKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]
         {
             partial.openAIAPIKey = openAIKey
         }

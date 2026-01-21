@@ -50,8 +50,8 @@ public struct OllamaEmbeddingProvider: EmbeddingProvider, Sendable {
         modelName: String = "nomic-embed-text",
         dimension: Int = 768
     ) {
-        self.id = "ollama"
-        self.name = "Ollama Embedding Provider"
+        id = "ollama"
+        name = "Ollama Embedding Provider"
         self.dimension = dimension
         self.baseURL = baseURL
         self.modelName = modelName
@@ -60,7 +60,7 @@ public struct OllamaEmbeddingProvider: EmbeddingProvider, Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
-        self.session = URLSession(configuration: config)
+        session = URLSession(configuration: config)
     }
 
     // MARK: - EmbeddingProvider

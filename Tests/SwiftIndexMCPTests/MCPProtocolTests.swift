@@ -1,8 +1,8 @@
 // MARK: - MCP Protocol Tests
 
 import Foundation
-import Testing
 @testable import SwiftIndexMCP
+import Testing
 
 @Suite("MCP Protocol Types")
 struct MCPProtocolTests {
@@ -69,8 +69,8 @@ struct MCPProtocolTests {
         @Test("Decode object")
         func decodeObject() throws {
             let json = """
-                {"name": "test", "value": 42}
-                """
+            {"name": "test", "value": 42}
+            """
             let value = try JSONDecoder().decode(JSONValue.self, from: json.data(using: .utf8)!)
             #expect(value["name"] == .string("test"))
             #expect(value["value"] == .int(42))
@@ -82,7 +82,7 @@ struct MCPProtocolTests {
                 "string": .string("hello"),
                 "number": .int(42),
                 "array": .array([.bool(true), .null]),
-                "nested": .object(["key": .string("value")])
+                "nested": .object(["key": .string("value")]),
             ])
 
             let encoder = JSONEncoder()
@@ -159,19 +159,19 @@ struct MCPProtocolTests {
         @Test("Decode initialize request")
         func decodeInitializeRequest() throws {
             let json = """
-                {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "initialize",
-                    "params": {
-                        "protocolVersion": "2024-11-05",
-                        "clientInfo": {
-                            "name": "test-client",
-                            "version": "1.0.0"
-                        }
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "clientInfo": {
+                        "name": "test-client",
+                        "version": "1.0.0"
                     }
                 }
-                """
+            }
+            """
             let request = try JSONDecoder().decode(
                 JSONRPCRequest.self,
                 from: json.data(using: .utf8)!
@@ -186,11 +186,11 @@ struct MCPProtocolTests {
         @Test("Decode notification (no ID)")
         func decodeNotification() throws {
             let json = """
-                {
-                    "jsonrpc": "2.0",
-                    "method": "initialized"
-                }
-                """
+            {
+                "jsonrpc": "2.0",
+                "method": "initialized"
+            }
+            """
             let request = try JSONDecoder().decode(
                 JSONRPCRequest.self,
                 from: json.data(using: .utf8)!
@@ -306,8 +306,8 @@ struct MCPProtocolTests {
                 inputSchema: .object([
                     "type": "object",
                     "properties": .object([
-                        "param1": .object(["type": "string"])
-                    ])
+                        "param1": .object(["type": "string"]),
+                    ]),
                 ])
             )
 
@@ -325,7 +325,7 @@ struct MCPProtocolTests {
             #expect(result.content.count == 1)
             #expect(result.isError == nil)
 
-            if case .text(let content) = result.content[0] {
+            if case let .text(content) = result.content[0] {
                 #expect(content.text == "Hello, world!")
                 #expect(content.type == "text")
             } else {
@@ -340,7 +340,7 @@ struct MCPProtocolTests {
             #expect(result.content.count == 1)
             #expect(result.isError == true)
 
-            if case .text(let content) = result.content[0] {
+            if case let .text(content) = result.content[0] {
                 #expect(content.text == "Something went wrong")
             } else {
                 Issue.record("Expected text content")

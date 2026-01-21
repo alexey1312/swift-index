@@ -1,8 +1,8 @@
 // MARK: - EmbeddingProviderTests
 
 import Foundation
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 // MARK: - Mock Provider
 
@@ -62,7 +62,7 @@ final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
 
     private func generateEmbedding(for text: String) -> [Float] {
         // Generate normalized vector from text hash
-        var embedding = (0..<dimension).map { i in
+        var embedding = (0 ..< dimension).map { i in
             Float(sin(Double(text.hashValue &+ i)))
         }
 
@@ -80,9 +80,8 @@ final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
 
 @Suite("MLXEmbeddingProvider Tests")
 struct MLXEmbeddingProviderTests {
-
     @Test("Provider has correct properties")
-    func testProviderProperties() {
+    func providerProperties() {
         let provider = MLXEmbeddingProvider()
 
         #expect(provider.id == "mlx")
@@ -91,7 +90,7 @@ struct MLXEmbeddingProviderTests {
     }
 
     @Test("Provider with custom configuration")
-    func testCustomConfiguration() {
+    func customConfiguration() {
         let provider = MLXEmbeddingProvider(
             modelName: "custom-model",
             dimension: 768,
@@ -102,7 +101,7 @@ struct MLXEmbeddingProviderTests {
     }
 
     @Test("Empty text throws invalidInput error")
-    func testEmptyTextThrows() async throws {
+    func emptyTextThrows() async throws {
         let provider = MLXEmbeddingProvider()
 
         await #expect(throws: ProviderError.self) {
@@ -111,7 +110,7 @@ struct MLXEmbeddingProviderTests {
     }
 
     @Test("Empty batch returns empty array")
-    func testEmptyBatchReturnsEmpty() async throws {
+    func emptyBatchReturnsEmpty() async throws {
         let provider = MLXEmbeddingProvider()
 
         let result = try await provider.embed([String]())
@@ -119,7 +118,7 @@ struct MLXEmbeddingProviderTests {
     }
 
     @Test("Batch with empty text throws invalidInput error")
-    func testBatchWithEmptyTextThrows() async throws {
+    func batchWithEmptyTextThrows() async throws {
         let provider = MLXEmbeddingProvider()
 
         await #expect(throws: ProviderError.self) {
@@ -128,14 +127,14 @@ struct MLXEmbeddingProviderTests {
     }
 
     #if arch(arm64) && os(macOS)
-    @Test("Availability check on Apple Silicon")
-    func testAvailabilityAppleSilicon() async {
-        let provider = MLXEmbeddingProvider()
+        @Test("Availability check on Apple Silicon")
+        func availabilityAppleSilicon() async {
+            let provider = MLXEmbeddingProvider()
 
-        // On Apple Silicon, availability depends on model being present
-        // This test verifies the check doesn't crash
-        _ = await provider.isAvailable()
-    }
+            // On Apple Silicon, availability depends on model being present
+            // This test verifies the check doesn't crash
+            _ = await provider.isAvailable()
+        }
     #endif
 }
 
@@ -143,7 +142,6 @@ struct MLXEmbeddingProviderTests {
 
 @Suite("SwiftEmbeddingsProvider Tests")
 struct SwiftEmbeddingsProviderTests {
-
     @Test("Provider has correct properties")
     func testProviderProperties() {
         let provider = SwiftEmbeddingsProvider()
@@ -154,21 +152,21 @@ struct SwiftEmbeddingsProviderTests {
     }
 
     @Test("Model enum dimensions")
-    func testModelDimensions() {
+    func modelDimensions() {
         #expect(SwiftEmbeddingsProvider.Model.bgeSmall.dimension == 384)
         #expect(SwiftEmbeddingsProvider.Model.bgeBase.dimension == 768)
         #expect(SwiftEmbeddingsProvider.Model.miniLM.dimension == 384)
     }
 
     @Test("Model HuggingFace IDs")
-    func testModelHuggingFaceIds() {
+    func modelHuggingFaceIds() {
         #expect(SwiftEmbeddingsProvider.Model.bgeSmall.huggingFaceId == "BAAI/bge-small-en-v1.5")
         #expect(SwiftEmbeddingsProvider.Model.bgeBase.huggingFaceId == "BAAI/bge-base-en-v1.5")
         #expect(SwiftEmbeddingsProvider.Model.miniLM.huggingFaceId == "sentence-transformers/all-MiniLM-L6-v2")
     }
 
     @Test("Provider with different models")
-    func testDifferentModels() {
+    func differentModels() {
         let smallProvider = SwiftEmbeddingsProvider(model: .bgeSmall)
         let baseProvider = SwiftEmbeddingsProvider(model: .bgeBase)
 
@@ -177,7 +175,7 @@ struct SwiftEmbeddingsProviderTests {
     }
 
     @Test("Custom model configuration")
-    func testCustomModelConfiguration() {
+    func customModelConfiguration() {
         let provider = SwiftEmbeddingsProvider(
             modelName: "custom-model",
             dimension: 512,
@@ -205,7 +203,7 @@ struct SwiftEmbeddingsProviderTests {
     }
 
     @Test("All models are iterable")
-    func testAllModelsCaseIterable() {
+    func allModelsCaseIterable() {
         let allModels = SwiftEmbeddingsProvider.Model.allCases
         #expect(allModels.count == 3)
     }
@@ -215,9 +213,8 @@ struct SwiftEmbeddingsProviderTests {
 
 @Suite("EmbeddingProviderChain Tests")
 struct EmbeddingProviderChainTests {
-
     @Test("Chain has correct properties")
-    func testChainProperties() {
+    func chainProperties() {
         let chain = EmbeddingProviderChain.default
 
         #expect(chain.id == "default-chain")
@@ -225,21 +222,21 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Default chain has two providers")
-    func testDefaultChainProviderCount() {
+    func defaultChainProviderCount() {
         let chain = EmbeddingProviderChain.default
 
         #expect(chain.allProviders.count == 2)
     }
 
     @Test("Software-only chain has one provider")
-    func testSoftwareOnlyChainProviderCount() {
+    func softwareOnlyChainProviderCount() {
         let chain = EmbeddingProviderChain.softwareOnly
 
         #expect(chain.allProviders.count == 1)
     }
 
     @Test("Chain uses first available provider")
-    func testChainUsesFirstAvailable() async throws {
+    func chainUsesFirstAvailable() async throws {
         let firstProvider = MockEmbeddingProvider(id: "first", available: true)
         let secondProvider = MockEmbeddingProvider(id: "second", available: true)
 
@@ -254,7 +251,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Chain falls back when first provider unavailable")
-    func testChainFallbackOnUnavailable() async throws {
+    func chainFallbackOnUnavailable() async throws {
         let firstProvider = MockEmbeddingProvider(id: "first", available: false)
         let secondProvider = MockEmbeddingProvider(id: "second", available: true)
 
@@ -269,7 +266,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Chain falls back when first provider fails")
-    func testChainFallbackOnFailure() async throws {
+    func chainFallbackOnFailure() async throws {
         let firstProvider = MockEmbeddingProvider(
             id: "first",
             available: true,
@@ -289,7 +286,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Chain throws allProvidersFailed when all fail")
-    func testChainThrowsWhenAllFail() async throws {
+    func chainThrowsWhenAllFail() async throws {
         let firstProvider = MockEmbeddingProvider(
             id: "first",
             available: true,
@@ -311,7 +308,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Chain caches active provider")
-    func testChainCachesActiveProvider() async throws {
+    func chainCachesActiveProvider() async throws {
         let provider = MockEmbeddingProvider(id: "cached", available: true)
 
         let chain = EmbeddingProviderChain(providers: [provider])
@@ -378,7 +375,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Batch embedding uses correct provider")
-    func testBatchEmbedding() async throws {
+    func batchEmbedding() async throws {
         let provider = MockEmbeddingProvider()
         let chain = EmbeddingProviderChain(providers: [provider])
 
@@ -390,18 +387,18 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Chain availability reflects providers")
-    func testChainAvailability() async {
+    func chainAvailability() async {
         let unavailableChain = EmbeddingProviderChain(
             providers: [
                 MockEmbeddingProvider(id: "a", available: false),
-                MockEmbeddingProvider(id: "b", available: false)
+                MockEmbeddingProvider(id: "b", available: false),
             ]
         )
 
         let availableChain = EmbeddingProviderChain(
             providers: [
                 MockEmbeddingProvider(id: "a", available: false),
-                MockEmbeddingProvider(id: "b", available: true)
+                MockEmbeddingProvider(id: "b", available: true),
             ]
         )
 
@@ -413,7 +410,7 @@ struct EmbeddingProviderChainTests {
     }
 
     @Test("Single provider chain")
-    func testSingleProviderChain() {
+    func singleProviderChain() {
         let provider = MockEmbeddingProvider(id: "single")
         let chain = EmbeddingProviderChain.single(provider)
 
@@ -426,9 +423,8 @@ struct EmbeddingProviderChainTests {
 
 @Suite("EmbeddingProviderChain.Builder Tests")
 struct EmbeddingProviderChainBuilderTests {
-
     @Test("Builder creates chain with providers")
-    func testBuilderCreatesChain() {
+    func builderCreatesChain() {
         let chain = EmbeddingProviderChain.Builder()
             .add(MockEmbeddingProvider(id: "first"))
             .add(MockEmbeddingProvider(id: "second"))
@@ -442,7 +438,7 @@ struct EmbeddingProviderChainBuilderTests {
     }
 
     @Test("Builder adds Swift embeddings")
-    func testBuilderAddsSwiftEmbeddings() {
+    func builderAddsSwiftEmbeddings() {
         let chain = EmbeddingProviderChain.Builder()
             .addSwiftEmbeddings(model: .bgeSmall)
             .build()
@@ -452,19 +448,19 @@ struct EmbeddingProviderChainBuilderTests {
     }
 
     #if arch(arm64) && os(macOS)
-    @Test("Builder adds MLX on Apple Silicon")
-    func testBuilderAddsMLXOnAppleSilicon() {
-        let chain = EmbeddingProviderChain.Builder()
-            .addMLX()
-            .build()
+        @Test("Builder adds MLX on Apple Silicon")
+        func builderAddsMLXOnAppleSilicon() {
+            let chain = EmbeddingProviderChain.Builder()
+                .addMLX()
+                .build()
 
-        #expect(chain.allProviders.count == 1)
-        #expect(chain.allProviders.first?.id == "mlx")
-    }
+            #expect(chain.allProviders.count == 1)
+            #expect(chain.allProviders.first?.id == "mlx")
+        }
     #endif
 
     @Test("Build with closure syntax")
-    func testBuildWithClosure() {
+    func buildWithClosure() {
         let chain = EmbeddingProviderChain.build { builder in
             builder.add(MockEmbeddingProvider(id: "closure-test"))
             builder.id("closure-chain")
@@ -479,12 +475,11 @@ struct EmbeddingProviderChainBuilderTests {
 
 @Suite("ProviderError Tests")
 struct ProviderErrorTests {
-
     @Test("allProvidersFailed error description")
-    func testAllProvidersFailedDescription() {
+    func allProvidersFailedDescription() {
         let errors: [String: ProviderError] = [
             "mlx": .notAvailable(reason: "No Apple Silicon"),
-            "swift": .modelNotFound(name: "bge-small")
+            "swift": .modelNotFound(name: "bge-small"),
         ]
 
         let error = ProviderError.allProvidersFailed(errors)
@@ -495,7 +490,7 @@ struct ProviderErrorTests {
     }
 
     @Test("ProviderError is Equatable")
-    func testProviderErrorEquatable() {
+    func providerErrorEquatable() {
         let error1 = ProviderError.timeout
         let error2 = ProviderError.timeout
         let error3 = ProviderError.modelNotFound(name: "test")
@@ -505,7 +500,7 @@ struct ProviderErrorTests {
     }
 
     @Test("ProviderError is Sendable")
-    func testProviderErrorSendable() async {
+    func providerErrorSendable() async {
         let error: ProviderError = .timeout
 
         await Task.detached {
@@ -519,9 +514,8 @@ struct ProviderErrorTests {
 
 @Suite("Embedding Provider Integration Tests")
 struct EmbeddingProviderIntegrationTests {
-
     @Test("Embedding vector is normalized")
-    func testEmbeddingNormalized() async throws {
+    func embeddingNormalized() async throws {
         let provider = MockEmbeddingProvider()
         let embedding = try await provider.embed("test text")
 
@@ -531,7 +525,7 @@ struct EmbeddingProviderIntegrationTests {
     }
 
     @Test("Different texts produce different embeddings")
-    func testDifferentEmbeddings() async throws {
+    func differentEmbeddings() async throws {
         let provider = MockEmbeddingProvider()
 
         // Use very different texts to ensure different embeddings
@@ -547,7 +541,7 @@ struct EmbeddingProviderIntegrationTests {
     }
 
     @Test("Same text produces same embedding")
-    func testDeterministicEmbeddings() async throws {
+    func deterministicEmbeddings() async throws {
         let provider = MockEmbeddingProvider()
 
         let embedding1 = try await provider.embed("test text")
@@ -557,7 +551,7 @@ struct EmbeddingProviderIntegrationTests {
     }
 
     @Test("Batch embedding produces correct count")
-    func testBatchEmbeddingCount() async throws {
+    func batchEmbeddingCount() async throws {
         let provider = MockEmbeddingProvider(dimension: 384)
 
         let texts = ["one", "two", "three", "four", "five"]
@@ -570,7 +564,7 @@ struct EmbeddingProviderIntegrationTests {
     }
 
     @Test("Chain maintains dimension consistency")
-    func testChainDimensionConsistency() async throws {
+    func chainDimensionConsistency() async throws {
         let provider1 = MockEmbeddingProvider(id: "p1", dimension: 384)
         let provider2 = MockEmbeddingProvider(id: "p2", dimension: 384)
 

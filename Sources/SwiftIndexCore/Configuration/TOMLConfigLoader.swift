@@ -223,7 +223,7 @@ private struct TOMLConfig: Codable {
 
 // MARK: - Layered Configuration Loading
 
-extension TOMLConfigLoader {
+public extension TOMLConfigLoader {
     /// Loads configuration from multiple sources with layered priority.
     ///
     /// Sources are checked in order (highest to lowest priority):
@@ -239,7 +239,7 @@ extension TOMLConfigLoader {
     ///   - projectDirectory: Path to the project root directory.
     ///   - homeDirectory: Optional home directory path for global config. If nil, uses current user's home.
     /// - Returns: Complete merged configuration.
-    public static func loadLayered(
+    static func loadLayered(
         cli cliConfig: PartialConfig = .empty,
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,

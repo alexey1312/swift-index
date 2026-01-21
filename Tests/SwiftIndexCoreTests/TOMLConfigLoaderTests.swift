@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 @Suite("TOMLConfigLoader Tests")
 struct TOMLConfigLoaderTests {
@@ -35,7 +35,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Invalid Syntax Tests
 
     @Test("Throws invalidSyntax for malformed TOML")
-    func testInvalidSyntax() throws {
+    func invalidSyntax() throws {
         let contents = """
         [embedding
         provider = "mlx"
@@ -54,7 +54,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Empty File Tests
 
     @Test("Returns empty config for empty file")
-    func testEmptyFile() throws {
+    func emptyFile() throws {
         let filePath = try createTempTOMLFile(contents: "")
         defer { removeTempFile(at: filePath) }
 
@@ -67,7 +67,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Embedding Section Tests
 
     @Test("Parses embedding section")
-    func testEmbeddingSection() throws {
+    func embeddingSection() throws {
         let contents = """
         [embedding]
         provider = "mlx"
@@ -87,7 +87,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Parses partial embedding section")
-    func testPartialEmbeddingSection() throws {
+    func partialEmbeddingSection() throws {
         let contents = """
         [embedding]
         provider = "voyage"
@@ -107,7 +107,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Search Section Tests
 
     @Test("Parses search section")
-    func testSearchSection() throws {
+    func searchSection() throws {
         let contents = """
         [search]
         semantic_weight = 0.8
@@ -129,7 +129,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Accepts integer as semantic_weight")
-    func testIntegerSemanticWeight() throws {
+    func integerSemanticWeight() throws {
         let contents = """
         [search]
         semantic_weight = 1
@@ -147,7 +147,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Indexing Section Tests
 
     @Test("Parses indexing section with arrays")
-    func testIndexingSection() throws {
+    func indexingSection() throws {
         let contents = """
         [indexing]
         exclude = [".git", ".build", "DerivedData"]
@@ -171,7 +171,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Handles empty arrays")
-    func testEmptyArrays() throws {
+    func emptyArrays() throws {
         let contents = """
         [indexing]
         exclude = []
@@ -191,7 +191,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Storage Section Tests
 
     @Test("Parses storage section")
-    func testStorageSection() throws {
+    func storageSection() throws {
         let contents = """
         [storage]
         index_path = ".custom-index"
@@ -211,7 +211,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - API Keys Section Tests
 
     @Test("Parses api_keys section")
-    func testAPIKeysSection() throws {
+    func aPIKeysSection() throws {
         let contents = """
         [api_keys]
         voyage = "voyage-api-key-123"
@@ -231,7 +231,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Watch Section Tests
 
     @Test("Parses watch section")
-    func testWatchSection() throws {
+    func watchSection() throws {
         let contents = """
         [watch]
         debounce_ms = 1000
@@ -249,7 +249,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Logging Section Tests
 
     @Test("Parses logging section")
-    func testLoggingSection() throws {
+    func loggingSection() throws {
         let contents = """
         [logging]
         level = "debug"
@@ -267,7 +267,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Complete Configuration Tests
 
     @Test("Parses complete configuration")
-    func testCompleteConfiguration() throws {
+    func completeConfiguration() throws {
         let contents = """
         [embedding]
         provider = "mlx"
@@ -332,7 +332,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Type Validation Tests
 
     @Test("Throws invalidValue for wrong type in embedding.provider")
-    func testInvalidTypeEmbeddingProvider() throws {
+    func invalidTypeEmbeddingProvider() throws {
         let contents = """
         [embedding]
         provider = 123
@@ -349,7 +349,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Throws invalidValue for wrong type in search.rrf_k")
-    func testInvalidTypeRRFK() throws {
+    func invalidTypeRRFK() throws {
         let contents = """
         [search]
         rrf_k = "sixty"
@@ -366,7 +366,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Throws invalidValue for wrong type in array element")
-    func testInvalidTypeArrayElement() throws {
+    func invalidTypeArrayElement() throws {
         let contents = """
         [indexing]
         exclude = [".git", 123, ".build"]
@@ -383,7 +383,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Throws invalidValue for wrong type in boolean field")
-    func testInvalidTypeBooleanField() throws {
+    func invalidTypeBooleanField() throws {
         let contents = """
         [search]
         multi_hop_enabled = "yes"
@@ -402,14 +402,14 @@ struct TOMLConfigLoaderTests {
     // MARK: - Factory Method Tests
 
     @Test("forProject creates correct path")
-    func testForProjectPath() {
+    func forProjectPath() {
         let loader = TOMLConfigLoader.forProject(at: "/path/to/project")
 
         #expect(loader.filePath == "/path/to/project/.swiftindex.toml")
     }
 
     @Test("forGlobal creates path in home directory")
-    func testForGlobalPath() {
+    func forGlobalPath() {
         let loader = TOMLConfigLoader.forGlobal()
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
 
@@ -419,7 +419,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Layered Configuration Tests
 
     @Test("loadLayered merges configs with correct priority")
-    func testLoadLayeredPriority() throws {
+    func loadLayeredPriority() throws {
         // Create a project TOML with some values
         let projectContents = """
         [embedding]
@@ -454,7 +454,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("loadLayered handles missing project config")
-    func testLoadLayeredMissingProjectConfig() {
+    func loadLayeredMissingProjectConfig() {
         let cliConfig = PartialConfig(embeddingProvider: "voyage")
 
         let merged = TOMLConfigLoader.loadLayered(
@@ -468,7 +468,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("loadLayered uses defaults for empty configs")
-    func testLoadLayeredDefaults() {
+    func loadLayeredDefaults() {
         let merged = TOMLConfigLoader.loadLayered(projectDirectory: "/nonexistent/path")
 
         // Should match Config.default
@@ -482,7 +482,7 @@ struct TOMLConfigLoaderTests {
     // MARK: - Edge Cases
 
     @Test("Handles comments in TOML")
-    func testCommentsInTOML() throws {
+    func commentsInTOML() throws {
         let contents = """
         # This is a comment
         [embedding]
@@ -502,7 +502,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Handles quoted strings with special characters")
-    func testQuotedStringsWithSpecialChars() throws {
+    func quotedStringsWithSpecialChars() throws {
         let contents = """
         [storage]
         index_path = ".swift-index/v1"
@@ -520,7 +520,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Handles unknown sections gracefully")
-    func testUnknownSectionsIgnored() throws {
+    func unknownSectionsIgnored() throws {
         let contents = """
         [embedding]
         provider = "mlx"
@@ -543,7 +543,7 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("Handles unknown keys within known sections")
-    func testUnknownKeysIgnored() throws {
+    func unknownKeysIgnored() throws {
         let contents = """
         [embedding]
         provider = "mlx"

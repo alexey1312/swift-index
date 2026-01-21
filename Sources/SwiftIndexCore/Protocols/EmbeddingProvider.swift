@@ -46,8 +46,8 @@ public protocol EmbeddingProvider: Sendable {
 
 // MARK: - Default Implementation
 
-extension EmbeddingProvider {
-    public func embed(_ texts: [String]) async throws -> [[Float]] {
+public extension EmbeddingProvider {
+    func embed(_ texts: [String]) async throws -> [[Float]] {
         var results: [[Float]] = []
         results.reserveCapacity(texts.count)
 

@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 // MARK: - TreeSitterParser Tests
 
@@ -9,7 +9,7 @@ struct TreeSitterParserTests {
     // MARK: - C Function Tests
 
     @Test("Parse C function declaration")
-    func testParseCFunction() {
+    func parseCFunction() {
         let parser = TreeSitterParser()
         let content = """
         int calculateSum(int a, int b) {
@@ -19,7 +19,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "helpers.c")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -29,7 +29,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse C struct definition")
-    func testParseCStruct() {
+    func parseCStruct() {
         let parser = TreeSitterParser()
         let content = """
         struct Point {
@@ -40,7 +40,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "types.c")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -52,7 +52,7 @@ struct TreeSitterParserTests {
     // MARK: - JSON Tests
 
     @Test("Parse JSON object")
-    func testParseJSONObject() {
+    func parseJSONObject() {
         let parser = TreeSitterParser()
         let content = """
         {
@@ -66,7 +66,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "package.json")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -76,7 +76,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse JSON array")
-    func testParseJSONArray() {
+    func parseJSONArray() {
         let parser = TreeSitterParser()
         let content = """
         [
@@ -87,7 +87,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "items.json")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -98,7 +98,7 @@ struct TreeSitterParserTests {
     // MARK: - YAML Tests
 
     @Test("Parse YAML mapping")
-    func testParseYAMLMapping() {
+    func parseYAMLMapping() {
         let parser = TreeSitterParser()
         let content = """
         name: SwiftIndex
@@ -110,7 +110,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "config.yaml")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -120,7 +120,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse YAML sequence")
-    func testParseYAMLSequence() {
+    func parseYAMLSequence() {
         let parser = TreeSitterParser()
         let content = """
         - item1
@@ -131,7 +131,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "list.yml")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -142,7 +142,7 @@ struct TreeSitterParserTests {
     // MARK: - Markdown Tests
 
     @Test("Parse Markdown sections")
-    func testParseMarkdownSection() {
+    func parseMarkdownSection() {
         let parser = TreeSitterParser()
         let content = """
         # Introduction
@@ -160,7 +160,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "README.md")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -171,7 +171,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse Markdown code block")
-    func testParseMarkdownCodeBlock() {
+    func parseMarkdownCodeBlock() {
         let parser = TreeSitterParser()
         let content = """
         # Example
@@ -186,7 +186,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "example.md")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -197,7 +197,7 @@ struct TreeSitterParserTests {
     // MARK: - Objective-C Tests
 
     @Test("Parse Objective-C interface")
-    func testParseObjCInterface() {
+    func parseObjCInterface() {
         let parser = TreeSitterParser()
         let content = """
         @interface MyClass : NSObject
@@ -211,7 +211,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "MyClass.h")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -221,7 +221,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse Objective-C implementation")
-    func testParseObjCImplementation() {
+    func parseObjCImplementation() {
         let parser = TreeSitterParser()
         let content = """
         @implementation MyClass
@@ -235,7 +235,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "MyClass.m")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -244,7 +244,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Parse Objective-C method definition")
-    func testParseObjCMethodDefinition() {
+    func parseObjCMethodDefinition() {
         let parser = TreeSitterParser()
         let content = """
         @implementation Calculator
@@ -267,7 +267,7 @@ struct TreeSitterParserTests {
 
         let result = parser.parse(content: content, path: "Calculator.m")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -283,7 +283,7 @@ struct TreeSitterParserTests {
         let parser = TreeSitterParser()
         let result = parser.parse(content: "", path: "empty.c")
 
-        guard case .failure(let error) = result else {
+        guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")
             return
         }
@@ -292,11 +292,11 @@ struct TreeSitterParserTests {
     }
 
     @Test("Handle whitespace-only content")
-    func testWhitespaceOnlyContent() {
+    func whitespaceOnlyContent() {
         let parser = TreeSitterParser()
         let result = parser.parse(content: "   \n\n  \t  ", path: "whitespace.c")
 
-        guard case .failure(let error) = result else {
+        guard case let .failure(error) = result else {
             Issue.record("Expected failure for whitespace-only content")
             return
         }
@@ -310,7 +310,7 @@ struct TreeSitterParserTests {
 @Suite("HybridParser Tests")
 struct HybridParserTests {
     @Test("Routes Swift files to SwiftSyntaxParser")
-    func testRoutesSwiftToSwiftSyntax() {
+    func routesSwiftToSwiftSyntax() {
         let parser = HybridParser()
         let content = """
         func hello() {
@@ -320,7 +320,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "test.swift")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -330,7 +330,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes Objective-C files to TreeSitterParser")
-    func testRoutesObjCToTreeSitter() {
+    func routesObjCToTreeSitter() {
         let parser = HybridParser()
         let content = """
         @interface Test : NSObject
@@ -339,7 +339,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "Test.h")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -348,7 +348,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes unknown extensions to PlainTextParser")
-    func testRoutesUnknownToPlainText() {
+    func routesUnknownToPlainText() {
         let parser = HybridParser()
         let content = """
         Some random content
@@ -357,7 +357,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "unknown.xyz")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse with plain text fallback")
             return
         }
@@ -367,7 +367,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes C files correctly")
-    func testRoutesCFiles() {
+    func routesCFiles() {
         let parser = HybridParser()
         let content = """
         int main() {
@@ -377,7 +377,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "main.c")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -386,7 +386,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes JSON files correctly")
-    func testRoutesJSONFiles() {
+    func routesJSONFiles() {
         let parser = HybridParser()
         let content = """
         {"key": "value"}
@@ -394,7 +394,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "config.json")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -403,7 +403,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes YAML files correctly")
-    func testRoutesYAMLFiles() {
+    func routesYAMLFiles() {
         let parser = HybridParser()
         let content = """
         key: value
@@ -411,7 +411,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "config.yaml")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -420,7 +420,7 @@ struct HybridParserTests {
     }
 
     @Test("Routes Markdown files correctly")
-    func testRoutesMarkdownFiles() {
+    func routesMarkdownFiles() {
         let parser = HybridParser()
         let content = """
         # Title
@@ -429,7 +429,7 @@ struct HybridParserTests {
 
         let result = parser.parse(content: content, path: "README.md")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -471,13 +471,13 @@ struct HybridParserTests {
 @Suite("PlainTextParser Tests")
 struct PlainTextParserTests {
     @Test("Creates single chunk for small content")
-    func testSmallContent() {
+    func smallContent() {
         let parser = PlainTextParser()
         let content = "Small content."
 
         let result = parser.parse(content: content, path: "test.txt")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -487,28 +487,31 @@ struct PlainTextParserTests {
     }
 
     @Test("Creates multiple chunks for large content")
-    func testLargeContent() {
+    func largeContent() {
         let parser = PlainTextParser(maxChunkSize: 100, overlapSize: 20)
         // Create content larger than maxChunkSize (100) with multiple lines
         // Each line is ~15 chars, so 20 lines = 300 chars
         var lines: [String] = []
-        for i in 1...20 {
+        for i in 1 ... 20 {
             lines.append("Line \(i) text.")
         }
         let content = lines.joined(separator: "\n")
 
         let result = parser.parse(content: content, path: "large.txt")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
 
-        #expect(chunks.count > 1, "Content of \(content.count) chars should produce multiple chunks with maxChunkSize=100")
+        #expect(
+            chunks.count > 1,
+            "Content of \(content.count) chars should produce multiple chunks with maxChunkSize=100"
+        )
     }
 
     @Test("Preserves line numbers")
-    func testLineNumbers() {
+    func lineNumbers() {
         let parser = PlainTextParser()
         let content = """
         Line 1
@@ -520,7 +523,7 @@ struct PlainTextParserTests {
 
         let result = parser.parse(content: content, path: "test.txt")
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -534,7 +537,7 @@ struct PlainTextParserTests {
         let parser = PlainTextParser()
         let result = parser.parse(content: "", path: "empty.txt")
 
-        guard case .failure(let error) = result else {
+        guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")
             return
         }

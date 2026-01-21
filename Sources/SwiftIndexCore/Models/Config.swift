@@ -120,9 +120,9 @@ public struct Config: Sendable, Equatable {
 
 // MARK: - Defaults
 
-extension Config {
+public extension Config {
     /// Default exclude patterns.
-    public static let defaultExcludePatterns: [String] = [
+    static let defaultExcludePatterns: [String] = [
         ".git",
         ".build",
         "DerivedData",
@@ -136,13 +136,13 @@ extension Config {
     ]
 
     /// Default configuration.
-    public static let `default` = Config()
+    static let `default` = Config()
 
     /// Create config by merging partial configs with priority.
     ///
     /// - Parameter partials: Array of partial configs, highest priority first.
     /// - Returns: Complete merged config.
-    public static func merge(_ partials: [PartialConfig]) -> Config {
+    static func merge(_ partials: [PartialConfig]) -> Config {
         var config = Config.default
 
         // Apply partials in reverse order (lowest priority first)

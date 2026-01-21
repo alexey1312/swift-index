@@ -10,6 +10,7 @@
 4. **Используют простой text search** — без семантического понимания кода
 
 SwiftIndex решает эти проблемы как **Swift-native MCP-сервер** с:
+
 - 100% точным AST парсингом через SwiftSyntax
 - Privacy-first подходом (полностью локальная работа)
 - Гибридным поиском (BM25 + semantic + RRF fusion)
@@ -18,12 +19,14 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 ## What Changes
 
 ### NEW: Configuration Layer
+
 - TOML конфигурация (`.swiftindex.toml`)
 - Environment variables с приоритетом
 - CLI flags override
 - Layered config merge: CLI > Env > Project > Global > Defaults
 
 ### NEW: Hybrid Parsing Layer
+
 - **SwiftSyntax** для .swift файлов (100% точность AST)
 - **tree-sitter** для остальных языков:
   - Objective-C (.m, .h)
@@ -35,7 +38,9 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 - AST-aware chunking с сохранением контекста
 
 ### NEW: Embedding Provider Chain
+
 Автоматический fallback с privacy-first подходом:
+
 1. **MLXEmbeddingProvider** — Apple Silicon native, zero network
 2. **OllamaEmbeddingProvider** — локальный Ollama server
 3. **SwiftEmbeddingsProvider** — pure Swift, always available
@@ -43,12 +48,14 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 5. **OpenAIProvider** — cloud fallback (requires API key)
 
 ### NEW: Storage Layer
+
 - **GRDB.swift** — type-safe SQLite для метаданных
 - **FTS5** — full-text search для BM25
 - **USearch** — HNSW vector index для semantic search
 - Incremental indexing с file hash tracking
 
 ### NEW: Hybrid Search Engine
+
 - **BM25Search** — keyword-based через FTS5
 - **SemanticSearch** — vector similarity через USearch
 - **RRF Fusion** — Reciprocal Rank Fusion для объединения
@@ -56,13 +63,16 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 - Configurable weights (semantic_weight: 0.7 default)
 
 ### NEW: MCP Server
+
 4 инструмента для AI assistants:
+
 - `index_codebase` — индексация Swift проекта
 - `search_code` — гибридный семантический поиск
 - `code_research` — multi-hop архитектурный анализ
 - `watch_codebase` — отслеживание изменений
 
 ### NEW: CLI Application
+
 - `swiftindex index` — однократная индексация
 - `swiftindex search <query>` — поиск из терминала
 - `swiftindex watch` — watch mode с auto-sync
@@ -74,7 +84,9 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 ## Impact
 
 ### Affected Specs
+
 7 новых capability specs:
+
 - `configuration` — конфигурация и settings
 - `parsing` — AST парсинг и chunking
 - `embedding` — embedding provider chain
@@ -84,7 +96,9 @@ SwiftIndex решает эти проблемы как **Swift-native MCP-сер
 - `cli` — CLI commands
 
 ### Affected Code
+
 Greenfield implementation — новый Swift package:
+
 ```
 swift-index/
 ├── Package.swift                    # 15+ dependencies
@@ -98,34 +112,42 @@ swift-index/
 ```
 
 ### Dependencies (15+)
+
 **Parsing:**
+
 - swift-syntax (600.0.0+)
 - swift-tree-sitter (0.9.0+)
 - tree-sitter-objc, tree-sitter-c, tree-sitter-json, tree-sitter-yaml, tree-sitter-markdown
 
 **Embeddings:**
+
 - mlx-swift-lm (2.29.0+)
 - ollama-swift (1.8.0+)
 - swift-embeddings (0.0.25+)
 - swift-huggingface (0.5.0+)
 
 **Storage:**
+
 - GRDB.swift (7.0.0+)
 - usearch (2.0.0+)
 
 **Configuration:**
+
 - swift-toml (1.0.0+)
 
 **CLI:**
+
 - swift-argument-parser (1.5.0+)
 - swift-log (1.6.0+)
 
 ### Risk Assessment
+
 - **Low risk** — greenfield project, no breaking changes
 - **Dependency risk** — некоторые библиотеки молодые (swift-tree-sitter, swift-embeddings)
 - **Performance risk** — большие проекты (10K+ files) требуют оптимизации
 
 ### Rollout Plan
+
 1. Phase 0: Foundation — Package.swift, protocols, models
 2. Phase 1: Core components — parallel development (2 agents)
 3. Phase 2: Storage layer

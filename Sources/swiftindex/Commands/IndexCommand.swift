@@ -16,13 +16,13 @@ struct IndexCommand: AsyncParsableCommand {
         commandName: "index",
         abstract: "Index a Swift codebase for semantic search",
         discussion: """
-            Scans the specified directory for Swift files and other supported
-            source files, parses them into semantic chunks, generates embeddings,
-            and stores them in a local index.
+        Scans the specified directory for Swift files and other supported
+        source files, parses them into semantic chunks, generates embeddings,
+        and stores them in a local index.
 
-            By default, only changed files are re-indexed. Use --force to
-            rebuild the entire index from scratch.
-            """
+        By default, only changed files are re-indexed. Use --force to
+        rebuild the entire index from scratch.
+        """
     )
 
     // MARK: - Arguments

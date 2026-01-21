@@ -5,6 +5,7 @@ import Foundation
 /// The type of code construct a chunk represents.
 public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
     // MARK: - Swift Types
+
     case function
     case method
     case initializer
@@ -22,6 +23,7 @@ public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
     case constant
 
     // MARK: - Objective-C Types
+
     case objcInterface
     case objcImplementation
     case objcMethod
@@ -29,18 +31,21 @@ public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
     case objcCategory
 
     // MARK: - C Types
+
     case cFunction
     case cStruct
     case cTypedef
     case cMacro
 
     // MARK: - Data Types
+
     case jsonObject
     case jsonArray
     case yamlMapping
     case yamlSequence
 
     // MARK: - Documentation
+
     case markdownSection
     case markdownCodeBlock
     case comment
@@ -48,9 +53,11 @@ public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
     case document
 
     // MARK: - C++ Types
+
     case namespace
 
     // MARK: - Generic
+
     case file
     case interface
     case unknown
@@ -58,59 +65,59 @@ public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
 
 // MARK: - Convenience Properties
 
-extension ChunkKind {
+public extension ChunkKind {
     /// Whether this is a Swift-specific chunk kind.
-    public var isSwift: Bool {
+    var isSwift: Bool {
         switch self {
         case .function, .method, .initializer, .deinitializer, .subscript,
              .class, .struct, .enum, .protocol, .extension, .actor,
              .macro, .typealias, .variable, .constant:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
     /// Whether this is an Objective-C chunk kind.
-    public var isObjC: Bool {
+    var isObjC: Bool {
         switch self {
         case .objcInterface, .objcImplementation, .objcMethod,
              .objcProperty, .objcCategory:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
     /// Whether this is a C chunk kind.
-    public var isC: Bool {
+    var isC: Bool {
         switch self {
         case .cFunction, .cStruct, .cTypedef, .cMacro:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
     /// Whether this represents a type declaration.
-    public var isTypeDeclaration: Bool {
+    var isTypeDeclaration: Bool {
         switch self {
         case .class, .struct, .enum, .protocol, .actor,
              .objcInterface, .cStruct:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 
     /// Whether this represents a callable.
-    public var isCallable: Bool {
+    var isCallable: Bool {
         switch self {
         case .function, .method, .initializer, .subscript,
              .objcMethod, .cFunction:
-            return true
+            true
         default:
-            return false
+            false
         }
     }
 }

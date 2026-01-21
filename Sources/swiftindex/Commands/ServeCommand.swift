@@ -16,16 +16,16 @@ struct ServeCommand: AsyncParsableCommand {
         commandName: "serve",
         abstract: "Start MCP server for AI assistant integration",
         discussion: """
-            Starts a Model Context Protocol (MCP) server that communicates
-            via stdin/stdout. This allows AI assistants like Claude to use
-            SwiftIndex tools for semantic code search.
+        Starts a Model Context Protocol (MCP) server that communicates
+        via stdin/stdout. This allows AI assistants like Claude to use
+        SwiftIndex tools for semantic code search.
 
-            Available MCP tools:
-            - index_codebase: Index a Swift project
-            - search_code: Hybrid semantic search
-            - code_research: Multi-hop architectural analysis
-            - watch_codebase: Watch for file changes
-            """
+        Available MCP tools:
+        - index_codebase: Index a Swift project
+        - search_code: Hybrid semantic search
+        - code_research: Multi-hop architectural analysis
+        - watch_codebase: Watch for file changes
+        """
     )
 
     // MARK: - Options

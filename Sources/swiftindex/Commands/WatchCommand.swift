@@ -15,11 +15,11 @@ struct WatchCommand: AsyncParsableCommand {
         commandName: "watch",
         abstract: "Watch for file changes and update index incrementally",
         discussion: """
-            Monitors the specified directory for file changes and automatically
-            updates the index. Uses debouncing to batch rapid changes.
+        Monitors the specified directory for file changes and automatically
+        updates the index. Uses debouncing to batch rapid changes.
 
-            Press Ctrl+C to stop watching.
-            """
+        Press Ctrl+C to stop watching.
+        """
     )
 
     // MARK: - Arguments

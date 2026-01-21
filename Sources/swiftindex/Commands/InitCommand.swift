@@ -16,15 +16,15 @@ struct InitCommand: AsyncParsableCommand {
         commandName: "init",
         abstract: "Initialize SwiftIndex configuration for a project",
         discussion: """
-            Creates a `.swiftindex.toml` configuration file in the current
-            directory with sensible defaults for Swift projects.
+        Creates a `.swiftindex.toml` configuration file in the current
+        directory with sensible defaults for Swift projects.
 
-            The configuration can be customized later by editing the file
-            or by passing options to this command.
+        The configuration can be customized later by editing the file
+        or by passing options to this command.
 
-            Existing configuration files will not be overwritten unless
-            --force is specified.
-            """
+        Existing configuration files will not be overwritten unless
+        --force is specified.
+        """
     )
 
     // MARK: - Options

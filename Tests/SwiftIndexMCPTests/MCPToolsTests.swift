@@ -1,8 +1,8 @@
 // MARK: - MCP Tools Tests
 
 import Foundation
-import Testing
 @testable import SwiftIndexMCP
+import Testing
 
 @Suite("MCP Tools")
 struct MCPToolsTests {
@@ -35,7 +35,7 @@ struct MCPToolsTests {
         func executeWithMissingPathReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
             #expect(result.isError == true || result.content.first.map { content in
-                if case .text(let text) = content {
+                if case let .text(text) = content {
                     return text.text.contains("Missing")
                 }
                 return false
@@ -48,7 +48,7 @@ struct MCPToolsTests {
                 arguments: .object(["path": "/nonexistent/path/that/does/not/exist"])
             )
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("does not exist") || content.text.contains("error"))
             }
         }
@@ -62,7 +62,7 @@ struct MCPToolsTests {
                 arguments: .object(["path": .string(testPath)])
             )
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("indexed_files") || content.text.contains("path"))
             }
         }
@@ -96,7 +96,7 @@ struct MCPToolsTests {
         func executeWithMissingQueryReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("Missing") || content.text.contains("query"))
             }
         }
@@ -107,7 +107,7 @@ struct MCPToolsTests {
                 arguments: .object(["query": "   "])
             )
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("empty") || content.text.contains("cannot"))
             }
         }
@@ -117,12 +117,12 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "authentication",
-                    "limit": 5
+                    "limit": 5,
                 ])
             )
 
             #expect(result.isError != true)
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("results") || content.text.contains("query"))
             }
         }
@@ -143,7 +143,7 @@ struct MCPToolsTests {
         func toolDefinitionDescription() {
             #expect(!tool.definition.description.isEmpty)
             #expect(tool.definition.description.lowercased().contains("research") ||
-                   tool.definition.description.lowercased().contains("analysis"))
+                tool.definition.description.lowercased().contains("analysis"))
         }
 
         @Test("Tool definition has depth parameter")
@@ -158,7 +158,7 @@ struct MCPToolsTests {
         func executeWithMissingQueryReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("Missing") || content.text.contains("query"))
             }
         }
@@ -168,11 +168,11 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "test query",
-                    "depth": 10  // Max is 5
+                    "depth": 10, // Max is 5
                 ])
             )
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("Depth") || content.text.contains("between"))
             }
         }
@@ -183,12 +183,12 @@ struct MCPToolsTests {
                 arguments: .object([
                     "query": "how does search work",
                     "depth": 2,
-                    "focus": "architecture"
+                    "focus": "architecture",
                 ])
             )
 
             #expect(result.isError != true)
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("analysis") || content.text.contains("references"))
             }
         }
@@ -223,7 +223,7 @@ struct MCPToolsTests {
         func executeWithMissingPathReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("Missing") || content.text.contains("path"))
             }
         }
@@ -233,11 +233,11 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "path": "/tmp",
-                    "action": "invalid_action"
+                    "action": "invalid_action",
                 ])
             )
 
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("Invalid") || content.text.contains("action"))
             }
         }
@@ -249,12 +249,12 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "path": .string(testPath),
-                    "action": "start"
+                    "action": "start",
                 ])
             )
 
             #expect(result.isError != true)
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("watching") || content.text.contains("start"))
             }
         }
@@ -266,12 +266,12 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "path": .string(testPath),
-                    "action": "status"
+                    "action": "status",
                 ])
             )
 
             #expect(result.isError != true)
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("stats") || content.text.contains("watching"))
             }
         }
@@ -283,12 +283,12 @@ struct MCPToolsTests {
             let result = try await tool.execute(
                 arguments: .object([
                     "path": .string(testPath),
-                    "action": "stop"
+                    "action": "stop",
                 ])
             )
 
             #expect(result.isError != true)
-            if case .text(let content) = result.content.first {
+            if case let .text(content) = result.content.first {
                 #expect(content.text.contains("stop") || content.text.contains("watching"))
             }
         }

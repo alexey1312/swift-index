@@ -1,6 +1,6 @@
 import Foundation
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 // MARK: - Mock Implementations
 
@@ -60,10 +60,8 @@ actor MockChunkStore: ChunkStore {
             let searchText = content + " " + symbols
 
             var matchCount = 0
-            for term in terms {
-                if searchText.contains(term) {
-                    matchCount += 1
-                }
+            for term in terms where searchText.contains(term) {
+                matchCount += 1
             }
 
             if matchCount > 0 {
@@ -75,7 +73,7 @@ actor MockChunkStore: ChunkStore {
         return results
             .sorted { $0.score > $1.score }
             .prefix(limit)
-            .map { $0 }
+            .map(\.self)
     }
 
     func allIDs() async throws -> [String] {
@@ -137,7 +135,7 @@ actor MockVectorStore: VectorStore {
         return results
             .sorted { $0.similarity > $1.similarity }
             .prefix(limit)
-            .map { $0 }
+            .map(\.self)
     }
 
     func delete(id: String) async throws {
@@ -164,7 +162,7 @@ actor MockVectorStore: VectorStore {
         var normA: Float = 0
         var normB: Float = 0
 
-        for i in 0..<min(a.count, b.count) {
+        for i in 0 ..< min(a.count, b.count) {
             dotProduct += a[i] * b[i]
             normA += a[i] * a[i]
             normB += b[i] * b[i]
@@ -203,7 +201,7 @@ actor SearchTestMockEmbeddingProvider: EmbeddingProvider {
         // Generate deterministic embedding based on text hash
         var vector = [Float](repeating: 0, count: dimension)
         let hash = text.hashValue
-        for i in 0..<dimension {
+        for i in 0 ..< dimension {
             vector[i] = Float((hash &+ i * 31) % 1000) / 1000.0
         }
         return vector
@@ -215,7 +213,7 @@ actor SearchTestMockEmbeddingProvider: EmbeddingProvider {
 @Suite("RRF Fusion Tests")
 struct RRFFusionTests {
     @Test("RRF score calculation")
-    func testRRFScoreCalculation() {
+    func rRFScoreCalculation() {
         let fusion = RRFFusion(k: 60)
 
         // Score for rank 1: 1 / (60 + 1) = 0.0164
@@ -228,7 +226,7 @@ struct RRFFusionTests {
     }
 
     @Test("Fuse two ranked lists")
-    func testFuseTwoLists() {
+    func fuseTwoLists() {
         let fusion = RRFFusion(k: 60)
 
         let list1: [(id: String, score: Float)] = [
@@ -263,7 +261,7 @@ struct RRFFusionTests {
     }
 
     @Test("Fuse with weights")
-    func testFuseWithWeights() {
+    func fuseWithWeights() {
         let fusion = RRFFusion(k: 60)
 
         let list1: [(id: String, score: Float)] = [
@@ -285,7 +283,7 @@ struct RRFFusionTests {
     }
 
     @Test("Empty list handling")
-    func testEmptyLists() {
+    func emptyLists() {
         let fusion = RRFFusion(k: 60)
 
         let empty: [(id: String, score: Float)] = []
@@ -341,7 +339,7 @@ struct BM25SearchTests {
     }
 
     @Test("Search finds matching chunks")
-    func testSearchFindsMatches() async throws {
+    func searchFindsMatches() async throws {
         let chunks = makeTestChunks()
         let store = MockChunkStore(chunks: chunks)
         let search = BM25Search(chunkStore: store)
@@ -358,7 +356,7 @@ struct BM25SearchTests {
     }
 
     @Test("Search respects limit")
-    func testSearchRespectsLimit() async throws {
+    func searchRespectsLimit() async throws {
         let chunks = makeTestChunks()
         let store = MockChunkStore(chunks: chunks)
         let search = BM25Search(chunkStore: store)
@@ -370,7 +368,7 @@ struct BM25SearchTests {
     }
 
     @Test("Search with path filter")
-    func testSearchWithPathFilter() async throws {
+    func searchWithPathFilter() async throws {
         let chunks = makeTestChunks()
         let store = MockChunkStore(chunks: chunks)
         let search = BM25Search(chunkStore: store)
@@ -384,7 +382,7 @@ struct BM25SearchTests {
     }
 
     @Test("Search with extension filter")
-    func testSearchWithExtensionFilter() async throws {
+    func searchWithExtensionFilter() async throws {
         var chunks = makeTestChunks()
         chunks.append(CodeChunk(
             id: "chunk4",
@@ -460,7 +458,7 @@ struct SemanticSearchTests {
     }
 
     @Test("Search returns semantic results")
-    func testSemanticSearch() async throws {
+    func semanticSearch() async throws {
         let (_, chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let search = SemanticSearch(
             vectorStore: vectorStore,
@@ -479,7 +477,7 @@ struct SemanticSearchTests {
     }
 
     @Test("Raw search returns IDs and scores")
-    func testRawSearch() async throws {
+    func rawSearch() async throws {
         let (_, chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let search = SemanticSearch(
             vectorStore: vectorStore,
@@ -556,7 +554,7 @@ struct HybridSearchTests {
     }
 
     @Test("Hybrid search combines BM25 and semantic")
-    func testHybridSearchCombination() async throws {
+    func hybridSearchCombination() async throws {
         let (chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let engine = HybridSearchEngine(
             chunkStore: chunkStore,
@@ -577,7 +575,7 @@ struct HybridSearchTests {
     }
 
     @Test("Semantic weight affects ranking")
-    func testSemanticWeightAffectsRanking() async throws {
+    func semanticWeightAffectsRanking() async throws {
         let (chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let engine = HybridSearchEngine(
             chunkStore: chunkStore,
@@ -599,7 +597,7 @@ struct HybridSearchTests {
     }
 
     @Test("Multi-hop search follows references")
-    func testMultiHopSearch() async throws {
+    func multiHopSearch() async throws {
         let (chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let engine = HybridSearchEngine(
             chunkStore: chunkStore,
@@ -622,13 +620,13 @@ struct HybridSearchTests {
         #expect(!results.isEmpty)
 
         // Check if any multi-hop results were found
-        _ = results.filter { $0.isMultiHop }
+        _ = results.filter(\.isMultiHop)
         // Multi-hop may or may not find results depending on mock behavior
         // Just verify the search completes without error
     }
 
     @Test("Path filter works in hybrid search")
-    func testPathFilterInHybridSearch() async throws {
+    func pathFilterInHybridSearch() async throws {
         let (chunkStore, vectorStore, embeddingProvider) = try await makeTestSetup()
         let engine = HybridSearchEngine(
             chunkStore: chunkStore,
@@ -645,7 +643,7 @@ struct HybridSearchTests {
     }
 
     @Test("Strategy options creation")
-    func testStrategyOptions() {
+    func strategyOptions() {
         let bm25Options = HybridSearchEngine.options(for: .bm25Only)
         #expect(bm25Options.semanticWeight == 0.0)
 
@@ -662,7 +660,7 @@ struct HybridSearchTests {
 @Suite("SearchResult Tests")
 struct SearchResultTests {
     @Test("SearchResult creation")
-    func testSearchResultCreation() {
+    func searchResultCreation() {
         let chunk = CodeChunk(
             path: "/test.swift",
             content: "func test() {}",
@@ -690,7 +688,7 @@ struct SearchResultTests {
     }
 
     @Test("SearchResult comparison")
-    func testSearchResultComparison() {
+    func searchResultComparison() {
         let chunk1 = CodeChunk(
             id: "1",
             path: "/test1.swift",
@@ -722,7 +720,7 @@ struct SearchResultTests {
     }
 
     @Test("SearchResult identifiable")
-    func testSearchResultIdentifiable() {
+    func searchResultIdentifiable() {
         let chunk = CodeChunk(
             id: "unique-id",
             path: "/test.swift",

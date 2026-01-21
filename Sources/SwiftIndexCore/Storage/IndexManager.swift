@@ -48,10 +48,10 @@ public actor IndexManager {
         let dbPath = (directory as NSString).appendingPathComponent("chunks.db")
         let vectorPath = (directory as NSString).appendingPathComponent("vectors.usearch")
 
-        self.chunkStore = try GRDBChunkStore(path: dbPath)
-        self.vectorStore = try USearchVectorStore(dimension: dimension, path: vectorPath)
+        chunkStore = try GRDBChunkStore(path: dbPath)
+        vectorStore = try USearchVectorStore(dimension: dimension, path: vectorPath)
         self.config = config
-        self.logger = Logger(label: "IndexManager")
+        logger = Logger(label: "IndexManager")
     }
 
     /// Create an index manager with custom stores (for testing).
@@ -68,7 +68,7 @@ public actor IndexManager {
         self.chunkStore = chunkStore
         self.vectorStore = vectorStore
         self.config = config
-        self.logger = Logger(label: "IndexManager")
+        logger = Logger(label: "IndexManager")
     }
 
     // MARK: - Indexing
@@ -86,7 +86,7 @@ public actor IndexManager {
         logger.debug("Indexed chunk", metadata: [
             "id": "\(chunk.id)",
             "path": "\(chunk.path)",
-            "kind": "\(chunk.kind.rawValue)"
+            "kind": "\(chunk.kind.rawValue)",
         ])
     }
 
@@ -104,7 +104,7 @@ public actor IndexManager {
         try await vectorStore.addBatch(vectors)
 
         logger.info("Indexed batch", metadata: [
-            "count": "\(items.count)"
+            "count": "\(items.count)",
         ])
     }
 
@@ -155,7 +155,7 @@ public actor IndexManager {
         logger.info("Reindexed file", metadata: [
             "path": "\(path)",
             "oldChunks": "\(oldChunks.count)",
-            "newChunks": "\(newChunks.count)"
+            "newChunks": "\(newChunks.count)",
         ])
     }
 
@@ -386,14 +386,14 @@ public actor IndexManager {
 
                 logger.debug("Pruned deleted file", metadata: [
                     "path": "\(path)",
-                    "chunks": "\(chunks.count)"
+                    "chunks": "\(chunks.count)",
                 ])
             }
         }
 
         if removedCount > 0 {
             logger.info("Pruned deleted files", metadata: [
-                "removedChunks": "\(removedCount)"
+                "removedChunks": "\(removedCount)",
             ])
         }
 
@@ -404,8 +404,8 @@ public actor IndexManager {
     ///
     /// - Returns: Consistency report.
     public func verifyConsistency() async throws -> ConsistencyReport {
-        let chunkIDs = Set(try await chunkStore.allIDs())
-        let vectorIDs = Set(try await vectorStore.allIDs())
+        let chunkIDs = try await Set(chunkStore.allIDs())
+        let vectorIDs = try await Set(vectorStore.allIDs())
 
         let missingVectors = chunkIDs.subtracting(vectorIDs)
         let orphanedVectors = vectorIDs.subtracting(chunkIDs)
@@ -437,7 +437,7 @@ public actor IndexManager {
 
         if repairedCount > 0 {
             logger.info("Repaired index", metadata: [
-                "orphanedVectorsRemoved": "\(report.orphanedVectors.count)"
+                "orphanedVectorsRemoved": "\(report.orphanedVectors.count)",
             ])
         }
 

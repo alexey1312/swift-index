@@ -14,22 +14,22 @@ enum InstallTarget: String, ExpressibleByArgument, CaseIterable {
     var description: String {
         switch self {
         case .claudeCode:
-            return "Claude Code (Anthropic)"
+            "Claude Code (Anthropic)"
         case .cursor:
-            return "Cursor IDE"
+            "Cursor IDE"
         case .codex:
-            return "OpenAI Codex"
+            "OpenAI Codex"
         }
     }
 
     var configPath: String {
         switch self {
         case .claudeCode:
-            return "~/.config/claude-code/mcp.json"
+            "~/.config/claude-code/mcp.json"
         case .cursor:
-            return "~/.config/cursor/mcp.json"
+            "~/.config/cursor/mcp.json"
         case .codex:
-            return "~/.config/codex/mcp.json"
+            "~/.config/codex/mcp.json"
         }
     }
 }
@@ -45,17 +45,17 @@ struct InstallCommand: ParsableCommand {
         commandName: "install-claude-code",
         abstract: "Install SwiftIndex as MCP server for AI assistants",
         discussion: """
-            Configures SwiftIndex as a Model Context Protocol (MCP) server
-            for the specified AI assistant platform.
+        Configures SwiftIndex as a Model Context Protocol (MCP) server
+        for the specified AI assistant platform.
 
-            Supported targets:
-            - claude-code: Claude Code by Anthropic
-            - cursor: Cursor IDE
-            - codex: OpenAI Codex
+        Supported targets:
+        - claude-code: Claude Code by Anthropic
+        - cursor: Cursor IDE
+        - codex: OpenAI Codex
 
-            This command modifies the MCP configuration file to add
-            SwiftIndex as an available tool provider.
-            """
+        This command modifies the MCP configuration file to add
+        SwiftIndex as an available tool provider.
+        """
     )
 
     // MARK: - Arguments
@@ -102,7 +102,7 @@ struct InstallCommand: ParsableCommand {
                 "command": resolvedExecutable,
                 "args": ["serve"],
                 "env": [:] as [String: String],
-            ]
+            ],
         ]
 
         if dryRun {
@@ -141,7 +141,7 @@ struct InstallCommand: ParsableCommand {
         if fileManager.fileExists(atPath: configPath) {
             logger.debug("Reading existing config")
             if let data = fileManager.contents(atPath: configPath),
-                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
             {
                 existingConfig = json
             }

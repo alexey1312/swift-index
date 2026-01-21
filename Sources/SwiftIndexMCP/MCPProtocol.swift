@@ -16,7 +16,7 @@ public struct JSONRPCRequest: Codable, Sendable {
         method: String,
         params: JSONValue? = nil
     ) {
-        self.jsonrpc = "2.0"
+        jsonrpc = "2.0"
         self.id = id
         self.method = method
         self.params = params
@@ -34,19 +34,19 @@ public struct JSONRPCResponse: Codable, Sendable {
         id: RequestID?,
         result: JSONValue
     ) {
-        self.jsonrpc = "2.0"
+        jsonrpc = "2.0"
         self.id = id
         self.result = result
-        self.error = nil
+        error = nil
     }
 
     public init(
         id: RequestID?,
         error: JSONRPCError
     ) {
-        self.jsonrpc = "2.0"
+        jsonrpc = "2.0"
         self.id = id
-        self.result = nil
+        result = nil
         self.error = error
     }
 }
@@ -108,9 +108,9 @@ public enum RequestID: Codable, Sendable, Equatable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.singleValueContainer()
         switch self {
-        case .string(let value):
+        case let .string(value):
             try container.encode(value)
-        case .number(let value):
+        case let .number(value):
             try container.encode(value)
         }
     }
@@ -159,17 +159,17 @@ public enum JSONValue: Codable, Sendable, Equatable {
         switch self {
         case .null:
             try container.encodeNil()
-        case .bool(let value):
+        case let .bool(value):
             try container.encode(value)
-        case .int(let value):
+        case let .int(value):
             try container.encode(value)
-        case .double(let value):
+        case let .double(value):
             try container.encode(value)
-        case .string(let value):
+        case let .string(value):
             try container.encode(value)
-        case .array(let value):
+        case let .array(value):
             try container.encode(value)
-        case .object(let value):
+        case let .object(value):
             try container.encode(value)
         }
     }
@@ -177,45 +177,45 @@ public enum JSONValue: Codable, Sendable, Equatable {
     // MARK: - Convenience Accessors
 
     public var stringValue: String? {
-        if case .string(let value) = self { return value }
+        if case let .string(value) = self { return value }
         return nil
     }
 
     public var intValue: Int? {
-        if case .int(let value) = self { return value }
+        if case let .int(value) = self { return value }
         return nil
     }
 
     public var doubleValue: Double? {
-        if case .double(let value) = self { return value }
-        if case .int(let value) = self { return Double(value) }
+        if case let .double(value) = self { return value }
+        if case let .int(value) = self { return Double(value) }
         return nil
     }
 
     public var boolValue: Bool? {
-        if case .bool(let value) = self { return value }
+        if case let .bool(value) = self { return value }
         return nil
     }
 
     public var arrayValue: [JSONValue]? {
-        if case .array(let value) = self { return value }
+        if case let .array(value) = self { return value }
         return nil
     }
 
     public var objectValue: [String: JSONValue]? {
-        if case .object(let value) = self { return value }
+        if case let .object(value) = self { return value }
         return nil
     }
 
     public subscript(key: String) -> JSONValue? {
-        if case .object(let dict) = self {
+        if case let .object(dict) = self {
             return dict[key]
         }
         return nil
     }
 
     public subscript(index: Int) -> JSONValue? {
-        if case .array(let arr) = self, index >= 0 && index < arr.count {
+        if case let .array(arr) = self, index >= 0, index < arr.count {
             return arr[index]
         }
         return nil
@@ -463,11 +463,11 @@ public enum ToolResultContent: Codable, Sendable {
 
         switch type {
         case "text":
-            self = .text(try TextContent(from: decoder))
+            self = try .text(TextContent(from: decoder))
         case "image":
-            self = .image(try ImageContent(from: decoder))
+            self = try .image(ImageContent(from: decoder))
         case "resource":
-            self = .resource(try ResourceContent(from: decoder))
+            self = try .resource(ResourceContent(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -479,11 +479,11 @@ public enum ToolResultContent: Codable, Sendable {
 
     public func encode(to encoder: Encoder) throws {
         switch self {
-        case .text(let content):
+        case let .text(content):
             try content.encode(to: encoder)
-        case .image(let content):
+        case let .image(content):
             try content.encode(to: encoder)
-        case .resource(let content):
+        case let .resource(content):
             try content.encode(to: encoder)
         }
     }
@@ -495,7 +495,7 @@ public struct TextContent: Codable, Sendable {
     public let text: String
 
     public init(text: String) {
-        self.type = "text"
+        type = "text"
         self.text = text
     }
 }
@@ -507,7 +507,7 @@ public struct ImageContent: Codable, Sendable {
     public let mimeType: String
 
     public init(data: String, mimeType: String) {
-        self.type = "image"
+        type = "image"
         self.data = data
         self.mimeType = mimeType
     }
@@ -519,7 +519,7 @@ public struct ResourceContent: Codable, Sendable {
     public let resource: ResourceReference
 
     public init(resource: ResourceReference) {
-        self.type = "resource"
+        type = "resource"
         self.resource = resource
     }
 }

@@ -1,7 +1,7 @@
 // MARK: - SwiftSyntaxParser Tests
 
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 @Suite("SwiftSyntaxParser Tests")
 struct SwiftSyntaxParserTests {
@@ -17,7 +17,7 @@ struct SwiftSyntaxParserTests {
     @Test("Empty content returns failure")
     func testEmptyContent() {
         let result = parser.parse(content: "", path: "/test.swift")
-        guard case .failure(let error) = result else {
+        guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")
             return
         }
@@ -27,7 +27,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Function Parsing
 
     @Test("Parse free function")
-    func testParseFreeFunction() {
+    func parseFreeFunction() {
         let content = """
         /// Calculates the sum of two numbers.
         func add(_ a: Int, _ b: Int) -> Int {
@@ -36,7 +36,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -52,7 +52,7 @@ struct SwiftSyntaxParserTests {
     }
 
     @Test("Parse async throwing function")
-    func testParseAsyncThrowingFunction() {
+    func parseAsyncThrowingFunction() {
         let content = """
         func fetchData(from url: URL) async throws -> Data {
             try await URLSession.shared.data(from: url).0
@@ -60,7 +60,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -75,7 +75,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Class Parsing
 
     @Test("Parse class with methods")
-    func testParseClassWithMethods() {
+    func parseClassWithMethods() {
         let content = """
         /// A person with a name.
         class Person {
@@ -92,7 +92,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -116,7 +116,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Struct Parsing
 
     @Test("Parse struct with computed property")
-    func testParseStructWithComputedProperty() {
+    func parseStructWithComputedProperty() {
         let content = """
         struct Point {
             var x: Double
@@ -129,7 +129,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -146,7 +146,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Enum Parsing
 
     @Test("Parse enum with associated values")
-    func testParseEnumWithAssociatedValues() {
+    func parseEnumWithAssociatedValues() {
         let content = """
         /// Result type for operations.
         enum Result<Success, Failure: Error> {
@@ -156,7 +156,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -170,7 +170,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Protocol Parsing
 
     @Test("Parse protocol with requirements")
-    func testParseProtocolWithRequirements() {
+    func parseProtocolWithRequirements() {
         let content = """
         /// A type that can be identified.
         protocol Identifiable {
@@ -180,7 +180,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -193,7 +193,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Extension Parsing
 
     @Test("Parse extension with conformance")
-    func testParseExtensionWithConformance() {
+    func parseExtensionWithConformance() {
         let content = """
         extension String: Identifiable {
             var id: String { self }
@@ -201,7 +201,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -214,7 +214,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Actor Parsing
 
     @Test("Parse actor")
-    func testParseActor() {
+    func parseActor() {
         let content = """
         /// A thread-safe counter.
         actor Counter {
@@ -231,7 +231,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -248,7 +248,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Nested Types
 
     @Test("Parse nested types")
-    func testParseNestedTypes() {
+    func parseNestedTypes() {
         let content = """
         struct Outer {
             struct Inner {
@@ -263,7 +263,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -282,7 +282,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Initializers
 
     @Test("Parse failable initializer")
-    func testParseFailableInitializer() {
+    func parseFailableInitializer() {
         let content = """
         struct URL {
             init?(string: String) {
@@ -292,7 +292,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -304,7 +304,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Subscripts
 
     @Test("Parse subscript")
-    func testParseSubscript() {
+    func parseSubscript() {
         let content = """
         struct Matrix {
             subscript(row: Int, column: Int) -> Double {
@@ -315,7 +315,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -328,14 +328,14 @@ struct SwiftSyntaxParserTests {
     // MARK: - Type Alias
 
     @Test("Parse typealias")
-    func testParseTypealias() {
+    func parseTypealias() {
         let content = """
         /// A completion handler type.
         typealias CompletionHandler = (Result<Data, Error>) -> Void
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -348,7 +348,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Doc Comments
 
     @Test("Extract doc block comments")
-    func testExtractDocBlockComments() {
+    func extractDocBlockComments() {
         let content = """
         /**
          * Processes the input data.
@@ -362,7 +362,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -374,7 +374,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - References
 
     @Test("Extract type references")
-    func testExtractTypeReferences() {
+    func extractTypeReferences() {
         let content = """
         func convert(person: Person) -> PersonDTO {
             PersonDTO(name: person.name)
@@ -382,7 +382,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -395,14 +395,15 @@ struct SwiftSyntaxParserTests {
     // MARK: - File Hash
 
     @Test("Same content produces same hash")
-    func testFileHashConsistency() {
+    func fileHashConsistency() {
         let content = "func test() {}"
 
         let result1 = parser.parse(content: content, path: "/test1.swift")
         let result2 = parser.parse(content: content, path: "/test2.swift")
 
-        guard case .success(let chunks1) = result1,
-              case .success(let chunks2) = result2 else {
+        guard case let .success(chunks1) = result1,
+              case let .success(chunks2) = result2
+        else {
             Issue.record("Expected successful parse")
             return
         }
@@ -411,15 +412,16 @@ struct SwiftSyntaxParserTests {
     }
 
     @Test("Different content produces different hash")
-    func testFileHashDifference() {
+    func fileHashDifference() {
         let content1 = "func test1() {}"
         let content2 = "func test2() {}"
 
         let result1 = parser.parse(content: content1, path: "/test.swift")
         let result2 = parser.parse(content: content2, path: "/test.swift")
 
-        guard case .success(let chunks1) = result1,
-              case .success(let chunks2) = result2 else {
+        guard case let .success(chunks1) = result1,
+              case let .success(chunks2) = result2
+        else {
             Issue.record("Expected successful parse")
             return
         }
@@ -430,14 +432,15 @@ struct SwiftSyntaxParserTests {
     // MARK: - Chunk IDs
 
     @Test("Chunk IDs are deterministic")
-    func testChunkIdDeterminism() {
+    func chunkIdDeterminism() {
         let content = "func test() {}"
 
         let result1 = parser.parse(content: content, path: "/test.swift")
         let result2 = parser.parse(content: content, path: "/test.swift")
 
-        guard case .success(let chunks1) = result1,
-              case .success(let chunks2) = result2 else {
+        guard case let .success(chunks1) = result1,
+              case let .success(chunks2) = result2
+        else {
             Issue.record("Expected successful parse")
             return
         }
@@ -448,7 +451,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Complex Fixture
 
     @Test("Parse complex fixture file")
-    func testParseComplexFixture() {
+    func parseComplexFixture() {
         let content = """
         import Foundation
 
@@ -530,7 +533,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/SampleSwift.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -560,7 +563,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Generic Types
 
     @Test("Parse generic struct with where clause")
-    func testParseGenericStructWithWhereClause() {
+    func parseGenericStructWithWhereClause() {
         let content = """
         struct Container<Element> where Element: Equatable {
             var items: [Element] = []
@@ -572,7 +575,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }
@@ -585,7 +588,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Access Modifiers
 
     @Test("Parse declarations with access modifiers")
-    func testParseAccessModifiers() {
+    func parseAccessModifiers() {
         let content = """
         public final class Service {
             private let cache: [String: Any]
@@ -601,7 +604,7 @@ struct SwiftSyntaxParserTests {
         """
 
         let result = parser.parse(content: content, path: "/test.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
         }

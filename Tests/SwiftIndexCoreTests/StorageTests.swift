@@ -1,6 +1,6 @@
-import Testing
 import Foundation
 @testable import SwiftIndexCore
+import Testing
 
 // MARK: - GRDBChunkStore Tests
 
@@ -9,7 +9,7 @@ struct GRDBChunkStoreTests {
     // MARK: - Basic CRUD
 
     @Test("Insert and retrieve chunk")
-    func testInsertAndRetrieve() async throws {
+    func insertAndRetrieve() async throws {
         let store = try GRDBChunkStore()
         let chunk = makeChunk(id: "chunk-1", path: "/test/file.swift")
 
@@ -30,7 +30,7 @@ struct GRDBChunkStoreTests {
         let chunks = [
             makeChunk(id: "batch-1", path: "/test/file1.swift"),
             makeChunk(id: "batch-2", path: "/test/file2.swift"),
-            makeChunk(id: "batch-3", path: "/test/file3.swift")
+            makeChunk(id: "batch-3", path: "/test/file3.swift"),
         ]
 
         try await store.insertBatch(chunks)
@@ -45,7 +45,7 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "path-1", path: "/test/file.swift", startLine: 1),
             makeChunk(id: "path-2", path: "/test/file.swift", startLine: 10),
-            makeChunk(id: "path-3", path: "/test/other.swift", startLine: 1)
+            makeChunk(id: "path-3", path: "/test/other.swift", startLine: 1),
         ])
 
         let chunks = try await store.getByPath("/test/file.swift")
@@ -81,7 +81,7 @@ struct GRDBChunkStoreTests {
     }
 
     @Test("Delete chunk by ID")
-    func testDeleteByID() async throws {
+    func deleteByID() async throws {
         let store = try GRDBChunkStore()
         try await store.insert(makeChunk(id: "delete-1"))
 
@@ -97,7 +97,7 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "del-path-1", path: "/test/delete.swift"),
             makeChunk(id: "del-path-2", path: "/test/delete.swift"),
-            makeChunk(id: "del-path-3", path: "/test/keep.swift")
+            makeChunk(id: "del-path-3", path: "/test/keep.swift"),
         ])
 
         try await store.deleteByPath("/test/delete.swift")
@@ -109,12 +109,12 @@ struct GRDBChunkStoreTests {
     // MARK: - FTS Search
 
     @Test("FTS search finds matching content")
-    func testFTSSearch() async throws {
+    func fTSSearch() async throws {
         let store = try GRDBChunkStore()
         try await store.insertBatch([
             makeChunk(id: "fts-1", content: "func authenticate(user: User) { }"),
             makeChunk(id: "fts-2", content: "func validatePassword(password: String) { }"),
-            makeChunk(id: "fts-3", content: "struct UserProfile { var name: String }")
+            makeChunk(id: "fts-3", content: "struct UserProfile { var name: String }"),
         ])
 
         let results = try await store.searchFTS(query: "authenticate", limit: 10)
@@ -125,12 +125,12 @@ struct GRDBChunkStoreTests {
     }
 
     @Test("FTS search with multiple terms")
-    func testFTSMultipleTerms() async throws {
+    func fTSMultipleTerms() async throws {
         let store = try GRDBChunkStore()
         try await store.insertBatch([
             makeChunk(id: "multi-1", content: "func handleLogin(username: String, password: String)"),
             makeChunk(id: "multi-2", content: "func processPayment(amount: Double)"),
-            makeChunk(id: "multi-3", content: "func validatePassword(password: String) // verify password")
+            makeChunk(id: "multi-3", content: "func validatePassword(password: String) // verify password"),
         ])
 
         let results = try await store.searchFTS(query: "password", limit: 10)
@@ -140,7 +140,7 @@ struct GRDBChunkStoreTests {
     }
 
     @Test("FTS search returns empty for no matches")
-    func testFTSNoMatches() async throws {
+    func fTSNoMatches() async throws {
         let store = try GRDBChunkStore()
         try await store.insert(makeChunk(id: "no-match", content: "func doSomething()"))
 
@@ -152,7 +152,7 @@ struct GRDBChunkStoreTests {
     // MARK: - File Hash Tracking
 
     @Test("Record and check file hash")
-    func testFileHashTracking() async throws {
+    func fileHashTracking() async throws {
         let store = try GRDBChunkStore()
 
         let hasHashBefore = try await store.hasFileHash("hash123")
@@ -183,7 +183,7 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "id-1"),
             makeChunk(id: "id-2"),
-            makeChunk(id: "id-3")
+            makeChunk(id: "id-3"),
         ])
 
         let ids = try await store.allIDs()
@@ -197,7 +197,7 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "paths-1", path: "/test/a.swift"),
             makeChunk(id: "paths-2", path: "/test/a.swift"),
-            makeChunk(id: "paths-3", path: "/test/b.swift")
+            makeChunk(id: "paths-3", path: "/test/b.swift"),
         ])
 
         let paths = try await store.allPaths()
@@ -210,7 +210,7 @@ struct GRDBChunkStoreTests {
         let store = try GRDBChunkStore()
         try await store.insertBatch([
             makeChunk(id: "clear-1"),
-            makeChunk(id: "clear-2")
+            makeChunk(id: "clear-2"),
         ])
         try await store.recordFileHash("clear-hash", path: "/test/file.swift")
 
@@ -228,7 +228,7 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "byid-1"),
             makeChunk(id: "byid-2"),
-            makeChunk(id: "byid-3")
+            makeChunk(id: "byid-3"),
         ])
 
         let chunks = try await store.getByIDs(["byid-1", "byid-3", "nonexistent"])
@@ -247,7 +247,7 @@ struct USearchVectorStoreTests {
     // MARK: - Basic Operations
 
     @Test("Add and contains vector")
-    func testAddAndContains() async throws {
+    func addAndContains() async throws {
         let store = try USearchVectorStore(dimension: dimension)
         let vector: [Float] = [0.1, 0.2, 0.3, 0.4]
 
@@ -263,7 +263,7 @@ struct USearchVectorStoreTests {
         let items: [(id: String, vector: [Float])] = [
             ("batch-1", [0.1, 0.2, 0.3, 0.4]),
             ("batch-2", [0.5, 0.6, 0.7, 0.8]),
-            ("batch-3", [0.9, 1.0, 1.1, 1.2])
+            ("batch-3", [0.9, 1.0, 1.1, 1.2]),
         ]
 
         try await store.addBatch(items)
@@ -280,7 +280,7 @@ struct USearchVectorStoreTests {
         try await store.addBatch([
             ("similar", [1.0, 0.0, 0.0, 0.0]),
             ("different", [0.0, 1.0, 0.0, 0.0]),
-            ("other", [0.0, 0.0, 1.0, 0.0])
+            ("other", [0.0, 0.0, 1.0, 0.0]),
         ])
 
         // Search for vector similar to "similar"
@@ -292,12 +292,12 @@ struct USearchVectorStoreTests {
     }
 
     @Test("Search with minimum similarity threshold")
-    func testSearchWithThreshold() async throws {
+    func searchWithThreshold() async throws {
         let store = try USearchVectorStore(dimension: dimension)
 
         try await store.addBatch([
             ("close", [1.0, 0.0, 0.0, 0.0]),
-            ("far", [0.0, 1.0, 0.0, 0.0])
+            ("far", [0.0, 1.0, 0.0, 0.0]),
         ])
 
         let results = try await store.search(
@@ -322,7 +322,7 @@ struct USearchVectorStoreTests {
     }
 
     @Test("Update vector by re-adding")
-    func testUpdateVector() async throws {
+    func updateVector() async throws {
         let store = try USearchVectorStore(dimension: dimension)
         try await store.add(id: "update-1", vector: [0.1, 0.2, 0.3, 0.4])
 
@@ -336,7 +336,7 @@ struct USearchVectorStoreTests {
     // MARK: - Dimension Validation
 
     @Test("Throws on dimension mismatch")
-    func testDimensionMismatch() async throws {
+    func dimensionMismatch() async throws {
         let store = try USearchVectorStore(dimension: dimension)
 
         await #expect(throws: VectorStoreError.self) {
@@ -345,7 +345,7 @@ struct USearchVectorStoreTests {
     }
 
     @Test("Search throws on dimension mismatch")
-    func testSearchDimensionMismatch() async throws {
+    func searchDimensionMismatch() async throws {
         let store = try USearchVectorStore(dimension: dimension)
         try await store.add(id: "vec-1", vector: [0.1, 0.2, 0.3, 0.4])
 
@@ -361,7 +361,7 @@ struct USearchVectorStoreTests {
         let store = try USearchVectorStore(dimension: dimension)
         try await store.addBatch([
             ("id-1", [0.1, 0.2, 0.3, 0.4]),
-            ("id-2", [0.5, 0.6, 0.7, 0.8])
+            ("id-2", [0.5, 0.6, 0.7, 0.8]),
         ])
 
         let ids = try await store.allIDs()
@@ -374,7 +374,7 @@ struct USearchVectorStoreTests {
         let store = try USearchVectorStore(dimension: dimension)
         try await store.addBatch([
             ("clear-1", [0.1, 0.2, 0.3, 0.4]),
-            ("clear-2", [0.5, 0.6, 0.7, 0.8])
+            ("clear-2", [0.5, 0.6, 0.7, 0.8]),
         ])
 
         try await store.clear()
@@ -384,7 +384,7 @@ struct USearchVectorStoreTests {
     }
 
     @Test("Search on empty store returns empty")
-    func testSearchEmpty() async throws {
+    func searchEmpty() async throws {
         let store = try USearchVectorStore(dimension: dimension)
 
         let results = try await store.search(vector: [0.1, 0.2, 0.3, 0.4], limit: 10)
@@ -422,7 +422,7 @@ struct IndexManagerTests {
         let items: [(chunk: CodeChunk, vector: [Float])] = [
             (makeChunk(id: "batch-1"), [0.1, 0.2, 0.3, 0.4]),
             (makeChunk(id: "batch-2"), [0.5, 0.6, 0.7, 0.8]),
-            (makeChunk(id: "batch-3"), [0.9, 1.0, 1.1, 1.2])
+            (makeChunk(id: "batch-3"), [0.9, 1.0, 1.1, 1.2]),
         ]
 
         try await manager.indexBatch(items)
@@ -435,7 +435,7 @@ struct IndexManagerTests {
     // MARK: - Incremental Indexing
 
     @Test("Check needs indexing for new file")
-    func testNeedsIndexingNew() async throws {
+    func needsIndexingNew() async throws {
         let manager = try await makeIndexManager()
 
         let needsIndexing = try await manager.needsIndexing(fileHash: "new-hash")
@@ -444,7 +444,7 @@ struct IndexManagerTests {
     }
 
     @Test("Check needs indexing for indexed file")
-    func testNeedsIndexingExisting() async throws {
+    func needsIndexingExisting() async throws {
         let manager = try await makeIndexManager()
         try await manager.recordIndexed(fileHash: "existing-hash", path: "/test/file.swift")
 
@@ -460,13 +460,13 @@ struct IndexManagerTests {
         // Index original chunks
         try await manager.indexBatch([
             (makeChunk(id: "old-1", path: "/test/file.swift", fileHash: "old-hash"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "old-2", path: "/test/file.swift", fileHash: "old-hash"), [0.5, 0.6, 0.7, 0.8])
+            (makeChunk(id: "old-2", path: "/test/file.swift", fileHash: "old-hash"), [0.5, 0.6, 0.7, 0.8]),
         ])
         try await manager.recordIndexed(fileHash: "old-hash", path: "/test/file.swift")
 
         // Reindex with new chunks
         let newChunks: [(chunk: CodeChunk, vector: [Float])] = [
-            (makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash"), [0.1, 0.2, 0.3, 0.4])
+            (makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash"), [0.1, 0.2, 0.3, 0.4]),
         ]
         try await manager.reindex(path: "/test/file.swift", newChunks: newChunks)
 
@@ -483,12 +483,12 @@ struct IndexManagerTests {
     // MARK: - Search
 
     @Test("Semantic search")
-    func testSemanticSearch() async throws {
+    func semanticSearch() async throws {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
             (makeChunk(id: "sem-1", content: "authentication"), [1.0, 0.0, 0.0, 0.0]),
             (makeChunk(id: "sem-2", content: "payment"), [0.0, 1.0, 0.0, 0.0]),
-            (makeChunk(id: "sem-3", content: "logging"), [0.0, 0.0, 1.0, 0.0])
+            (makeChunk(id: "sem-3", content: "logging"), [0.0, 0.0, 1.0, 0.0]),
         ])
 
         let results = try await manager.searchSemantic(
@@ -504,8 +504,11 @@ struct IndexManagerTests {
     func testFTSSearch() async throws {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
-            (makeChunk(id: "fts-1", content: "func authenticate(user: User) // handle authentication"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "fts-2", content: "func processPayment()"), [0.5, 0.6, 0.7, 0.8])
+            (
+                makeChunk(id: "fts-1", content: "func authenticate(user: User) // handle authentication"),
+                [0.1, 0.2, 0.3, 0.4]
+            ),
+            (makeChunk(id: "fts-2", content: "func processPayment()"), [0.5, 0.6, 0.7, 0.8]),
         ])
 
         let results = try await manager.searchFTS(query: "authentication", limit: 10)
@@ -515,12 +518,12 @@ struct IndexManagerTests {
     }
 
     @Test("Hybrid search combines semantic and FTS")
-    func testHybridSearch() async throws {
+    func hybridSearch() async throws {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
             (makeChunk(id: "hyb-1", content: "func authenticateUser(credentials: Credentials)"), [1.0, 0.0, 0.0, 0.0]),
             (makeChunk(id: "hyb-2", content: "func validateToken(token: String)"), [0.8, 0.2, 0.0, 0.0]),
-            (makeChunk(id: "hyb-3", content: "func processPayment(amount: Double)"), [0.0, 1.0, 0.0, 0.0])
+            (makeChunk(id: "hyb-3", content: "func processPayment(amount: Double)"), [0.0, 1.0, 0.0, 0.0]),
         ])
 
         let results = try await manager.searchHybrid(
@@ -542,7 +545,7 @@ struct IndexManagerTests {
         try await manager.indexBatch([
             (makeChunk(id: "stat-1", path: "/test/a.swift"), [0.1, 0.2, 0.3, 0.4]),
             (makeChunk(id: "stat-2", path: "/test/a.swift"), [0.5, 0.6, 0.7, 0.8]),
-            (makeChunk(id: "stat-3", path: "/test/b.swift"), [0.9, 1.0, 1.1, 1.2])
+            (makeChunk(id: "stat-3", path: "/test/b.swift"), [0.9, 1.0, 1.1, 1.2]),
         ])
 
         let stats = try await manager.statistics()
@@ -559,7 +562,7 @@ struct IndexManagerTests {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
             (makeChunk(id: "cons-1"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "cons-2"), [0.5, 0.6, 0.7, 0.8])
+            (makeChunk(id: "cons-2"), [0.5, 0.6, 0.7, 0.8]),
         ])
 
         let report = try await manager.verifyConsistency()
@@ -574,7 +577,7 @@ struct IndexManagerTests {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
             (makeChunk(id: "clr-1"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "clr-2"), [0.5, 0.6, 0.7, 0.8])
+            (makeChunk(id: "clr-2"), [0.5, 0.6, 0.7, 0.8]),
         ])
 
         try await manager.clear()

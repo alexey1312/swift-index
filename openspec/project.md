@@ -5,6 +5,7 @@
 SwiftIndex — Swift-native MCP-сервер для семантического поиска по Swift кодовым базам.
 
 Цели:
+
 - Обеспечить AI coding assistants (Claude Code, Cursor, Codex) инструментом семантического поиска, заточенным под Swift
 - Privacy-first подход: полностью локальная работа по умолчанию
 - 100% точный AST парсинг Swift кода через SwiftSyntax
@@ -95,17 +96,17 @@ SwiftIndex — Swift-native MCP-сервер для семантического
 
 ### Primary Dependencies
 
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| swift-syntax | 600.0.0+ | Swift AST parsing |
-| swift-tree-sitter | 0.9.0+ | Multi-language parsing |
-| mlx-swift-lm | 2.29.0+ | MLX embeddings |
-| ollama-swift | 1.8.0+ | Ollama client |
-| swift-embeddings | 0.0.25+ | Pure Swift embeddings |
-| GRDB.swift | 7.0.0+ | SQLite + FTS5 |
-| usearch | 2.0.0+ | HNSW vector index |
-| swift-toml | 1.0.0+ | TOML parsing |
-| swift-argument-parser | 1.5.0+ | CLI framework |
+| Dependency            | Version  | Purpose                |
+| --------------------- | -------- | ---------------------- |
+| swift-syntax          | 600.0.0+ | Swift AST parsing      |
+| swift-tree-sitter     | 0.9.0+   | Multi-language parsing |
+| mlx-swift-lm          | 2.29.0+  | MLX embeddings         |
+| ollama-swift          | 1.8.0+   | Ollama client          |
+| swift-embeddings      | 0.0.25+  | Pure Swift embeddings  |
+| GRDB.swift            | 7.0.0+   | SQLite + FTS5          |
+| usearch               | 2.0.0+   | HNSW vector index      |
+| swift-toml            | 1.0.0+   | TOML parsing           |
+| swift-argument-parser | 1.5.0+   | CLI framework          |
 
 ### External Services (Optional)
 

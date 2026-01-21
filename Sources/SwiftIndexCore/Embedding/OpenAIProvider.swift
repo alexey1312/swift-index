@@ -84,18 +84,18 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
         dimension: Int? = nil,
         maxBatchSize: Int = 2048
     ) {
-        self.id = "openai"
-        self.name = "OpenAI Embedding Provider"
+        id = "openai"
+        name = "OpenAI Embedding Provider"
         self.dimension = dimension ?? model.defaultDimension
         self.apiKey = apiKey
-        self.modelName = model.rawValue
+        modelName = model.rawValue
         self.maxBatchSize = maxBatchSize
 
         // Configure session
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 300
-        self.session = URLSession(configuration: config)
+        session = URLSession(configuration: config)
     }
 
     /// Creates an OpenAI embedding provider with a custom model name.
@@ -111,8 +111,8 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
         dimension: Int,
         maxBatchSize: Int = 2048
     ) {
-        self.id = "openai"
-        self.name = "OpenAI Embedding Provider"
+        id = "openai"
+        name = "OpenAI Embedding Provider"
         self.dimension = dimension
         self.apiKey = apiKey
         self.modelName = modelName
@@ -122,7 +122,7 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 300
-        self.session = URLSession(configuration: config)
+        session = URLSession(configuration: config)
     }
 
     // MARK: - EmbeddingProvider

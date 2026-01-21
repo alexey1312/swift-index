@@ -26,7 +26,7 @@ public actor GRDBChunkStore: ChunkStore {
     /// - Parameter path: Path to the SQLite database file.
     /// - Throws: If database creation or migration fails.
     public init(path: String) throws {
-        self.databasePath = path
+        databasePath = path
 
         // Ensure directory exists
         let directory = (path as NSString).deletingLastPathComponent
@@ -44,7 +44,7 @@ public actor GRDBChunkStore: ChunkStore {
             try db.execute(sql: "PRAGMA journal_mode = WAL")
         }
 
-        self.dbWriter = try DatabasePool(path: path, configuration: config)
+        dbWriter = try DatabasePool(path: path, configuration: config)
         try migrate()
     }
 
@@ -52,13 +52,13 @@ public actor GRDBChunkStore: ChunkStore {
     ///
     /// - Throws: If database creation fails.
     public init() throws {
-        self.databasePath = ":memory:"
+        databasePath = ":memory:"
         // Use DatabaseQueue for in-memory databases (WAL not supported)
         var config = Configuration()
         config.prepareDatabase { db in
             try db.execute(sql: "PRAGMA foreign_keys = ON")
         }
-        self.dbWriter = try DatabaseQueue(configuration: config)
+        dbWriter = try DatabaseQueue(configuration: config)
         try migrate()
     }
 
@@ -337,18 +337,18 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     }
 
     init(chunk: CodeChunk) {
-        self.id = chunk.id
-        self.path = chunk.path
-        self.content = chunk.content
-        self.startLine = chunk.startLine
-        self.endLine = chunk.endLine
-        self.kind = chunk.kind.rawValue
-        self.symbols = (try? JSONEncoder().encode(chunk.symbols))
+        id = chunk.id
+        path = chunk.path
+        content = chunk.content
+        startLine = chunk.startLine
+        endLine = chunk.endLine
+        kind = chunk.kind.rawValue
+        symbols = (try? JSONEncoder().encode(chunk.symbols))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        self.references = (try? JSONEncoder().encode(chunk.references))
+        references = (try? JSONEncoder().encode(chunk.references))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        self.fileHash = chunk.fileHash
-        self.createdAt = chunk.createdAt
+        fileHash = chunk.fileHash
+        createdAt = chunk.createdAt
     }
 
     init(row: Row) {
@@ -423,12 +423,12 @@ public enum ChunkStoreError: Error, Sendable {
 extension ChunkStoreError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .invalidKind(let kind):
-            return "Invalid chunk kind: \(kind)"
-        case .databaseError(let message):
-            return "Database error: \(message)"
-        case .migrationFailed(let message):
-            return "Migration failed: \(message)"
+        case let .invalidKind(kind):
+            "Invalid chunk kind: \(kind)"
+        case let .databaseError(message):
+            "Database error: \(message)"
+        case let .migrationFailed(message):
+            "Migration failed: \(message)"
         }
     }
 }

@@ -16,12 +16,12 @@ struct SearchCommand: AsyncParsableCommand {
         commandName: "search",
         abstract: "Search the indexed codebase",
         discussion: """
-            Performs hybrid semantic search combining BM25 keyword matching
-            with vector similarity search using RRF (Reciprocal Rank Fusion).
+        Performs hybrid semantic search combining BM25 keyword matching
+        with vector similarity search using RRF (Reciprocal Rank Fusion).
 
-            Results include code chunks with context, file paths, and
-            relevance scores.
-            """
+        Results include code chunks with context, file paths, and
+        relevance scores.
+        """
     )
 
     // MARK: - Arguments

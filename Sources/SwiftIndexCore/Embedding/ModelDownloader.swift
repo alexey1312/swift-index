@@ -43,11 +43,11 @@ public actor ModelDownloader {
         public var huggingFaceId: String {
             switch self {
             case .bgeSmall:
-                return "BAAI/bge-small-en-v1.5"
+                "BAAI/bge-small-en-v1.5"
             case .bgeBase:
-                return "BAAI/bge-base-en-v1.5"
+                "BAAI/bge-base-en-v1.5"
             case .miniLM:
-                return "sentence-transformers/all-MiniLM-L6-v2"
+                "sentence-transformers/all-MiniLM-L6-v2"
             }
         }
 
@@ -55,9 +55,9 @@ public actor ModelDownloader {
         public var dimension: Int {
             switch self {
             case .bgeSmall, .miniLM:
-                return 384
+                384
             case .bgeBase:
-                return 768
+                768
             }
         }
 
@@ -65,11 +65,11 @@ public actor ModelDownloader {
         public var approximateSize: Int64 {
             switch self {
             case .bgeSmall:
-                return 133_000_000 // ~127 MB
+                133_000_000 // ~127 MB
             case .bgeBase:
-                return 438_000_000 // ~418 MB
+                438_000_000 // ~418 MB
             case .miniLM:
-                return 91_000_000 // ~87 MB
+                91_000_000 // ~87 MB
             }
         }
 
@@ -343,7 +343,7 @@ public actor ModelDownloader {
         var size: Int64 = 0
         for case let fileURL as URL in enumerator {
             guard let resourceValues = try? fileURL.resourceValues(forKeys: [.fileSizeKey]),
-                let fileSize = resourceValues.fileSize
+                  let fileSize = resourceValues.fileSize
             else {
                 continue
             }
@@ -356,9 +356,9 @@ public actor ModelDownloader {
 
 // MARK: - Convenience Extensions
 
-extension ModelDownloader {
+public extension ModelDownloader {
     /// Human-readable size string.
-    public static func formatSize(_ bytes: Int64) -> String {
+    static func formatSize(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
         formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file

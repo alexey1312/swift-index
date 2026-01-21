@@ -1,9 +1,9 @@
 // MARK: - SwiftSyntaxParser
 
-import Foundation
-import SwiftSyntax
-import SwiftParser
 import Crypto
+import Foundation
+import SwiftParser
+import SwiftSyntax
 
 /// A parser for Swift source files using SwiftSyntax.
 ///
@@ -63,7 +63,7 @@ private final class DeclarationVisitor: SyntaxVisitor {
         self.content = content
         self.path = path
         self.fileHash = fileHash
-        self.lines = content.split(separator: "\n", omittingEmptySubsequences: false)
+        lines = content.split(separator: "\n", omittingEmptySubsequences: false)
         super.init(viewMode: .sourceAccurate)
     }
 
@@ -323,8 +323,8 @@ private final class DeclarationVisitor: SyntaxVisitor {
         }
 
         let isTopLevelOrMember = parent.is(MemberBlockItemSyntax.self) ||
-                                  parent.is(CodeBlockItemSyntax.self) ||
-                                  parent.is(SourceFileSyntax.self)
+            parent.is(CodeBlockItemSyntax.self) ||
+            parent.is(SourceFileSyntax.self)
 
         guard isTopLevelOrMember else {
             return .visitChildren
@@ -422,12 +422,12 @@ private final class DeclarationVisitor: SyntaxVisitor {
 
         for piece in trivia {
             switch piece {
-            case .docLineComment(let text):
+            case let .docLineComment(text):
                 // Strip "///" prefix
                 let content = text.dropFirst(3)
                 docLines.append(String(content).trimmingCharacters(in: .whitespaces))
 
-            case .docBlockComment(let text):
+            case let .docBlockComment(text):
                 // Strip "/**" and "*/" and handle intermediate lines
                 var cleaned = text
                 if cleaned.hasPrefix("/**") {

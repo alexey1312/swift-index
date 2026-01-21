@@ -96,17 +96,17 @@ struct CLITests {
         // Create a sample Swift file
         let swiftFile = dir.appendingPathComponent("Sample.swift")
         try """
-            // Sample Swift file for testing
-            import Foundation
+        // Sample Swift file for testing
+        import Foundation
 
-            struct Sample {
-                let name: String
+        struct Sample {
+            let name: String
 
-                func greet() -> String {
-                    return "Hello, \\(name)!"
-                }
+            func greet() -> String {
+                return "Hello, \\(name)!"
             }
-            """.write(to: swiftFile, atomically: true, encoding: .utf8)
+        }
+        """.write(to: swiftFile, atomically: true, encoding: .utf8)
 
         return dir
     }
@@ -119,7 +119,7 @@ struct CLITests {
     // MARK: - Index Command Tests
 
     @Test("index command shows help with --help")
-    func testIndexCommandHelp() throws {
+    func indexCommandHelp() throws {
         let (stdout, _, exitCode) = try runCommand(["index", "--help"])
 
         #expect(exitCode == 0, "Exit code should be 0")
@@ -129,7 +129,7 @@ struct CLITests {
     }
 
     @Test("index command with valid directory")
-    func testIndexCommandValidDirectory() throws {
+    func indexCommandValidDirectory() throws {
         let fixtureDir = try createTestFixtures()
         defer { cleanupFixtures(fixtureDir) }
 
@@ -141,7 +141,7 @@ struct CLITests {
     }
 
     @Test("index command with non-existent directory fails")
-    func testIndexCommandInvalidDirectory() throws {
+    func indexCommandInvalidDirectory() throws {
         let (_, stderr, exitCode) = try runCommand([
             "index", "/nonexistent/path/that/does/not/exist",
         ])
@@ -154,7 +154,7 @@ struct CLITests {
     }
 
     @Test("index command with --force flag")
-    func testIndexCommandForceFlag() throws {
+    func indexCommandForceFlag() throws {
         let fixtureDir = try createTestFixtures()
         defer { cleanupFixtures(fixtureDir) }
 
@@ -167,7 +167,7 @@ struct CLITests {
     // MARK: - Search Command Tests
 
     @Test("search command shows help with --help")
-    func testSearchCommandHelp() throws {
+    func searchCommandHelp() throws {
         let (stdout, _, exitCode) = try runCommand(["search", "--help"])
 
         #expect(exitCode == 0, "Exit code should be 0")
@@ -177,7 +177,7 @@ struct CLITests {
     }
 
     @Test("search command with query")
-    func testSearchCommandWithQuery() throws {
+    func searchCommandWithQuery() throws {
         let (stdout, _, exitCode) = try runCommand(["search", "authentication"])
 
         #expect(exitCode == 0, "Should succeed")
@@ -185,7 +185,7 @@ struct CLITests {
     }
 
     @Test("search command with --json flag")
-    func testSearchCommandJSONOutput() throws {
+    func searchCommandJSONOutput() throws {
         let (stdout, _, exitCode) = try runCommand(["search", "test query", "--json"])
 
         #expect(exitCode == 0, "Should succeed")
@@ -194,7 +194,7 @@ struct CLITests {
     }
 
     @Test("search command with --limit option")
-    func testSearchCommandLimitOption() throws {
+    func searchCommandLimitOption() throws {
         let (stdout, _, exitCode) = try runCommand(["search", "test", "--limit", "5"])
 
         #expect(exitCode == 0, "Should succeed")
@@ -202,7 +202,7 @@ struct CLITests {
     }
 
     @Test("search command with invalid limit fails")
-    func testSearchCommandInvalidLimit() throws {
+    func searchCommandInvalidLimit() throws {
         let (_, stderr, exitCode) = try runCommand(["search", "test", "--limit", "0"])
 
         #expect(exitCode != 0, "Should fail for invalid limit")
@@ -212,7 +212,7 @@ struct CLITests {
     // MARK: - Install Command Tests
 
     @Test("install-claude-code command shows help with --help")
-    func testInstallCommandHelp() throws {
+    func installCommandHelp() throws {
         let (stdout, _, exitCode) = try runCommand(["install-claude-code", "--help"])
 
         #expect(exitCode == 0, "Exit code should be 0")
@@ -221,7 +221,7 @@ struct CLITests {
     }
 
     @Test("install-claude-code command with --dry-run")
-    func testInstallCommandDryRun() throws {
+    func installCommandDryRun() throws {
         let (stdout, _, exitCode) = try runCommand(["install-claude-code", "--dry-run"])
 
         #expect(exitCode == 0, "Should succeed in dry-run mode")
@@ -231,7 +231,7 @@ struct CLITests {
     }
 
     @Test("install-claude-code creates valid JSON config")
-    func testInstallCommandCreatesValidConfig() throws {
+    func installCommandCreatesValidConfig() throws {
         // Create temporary config directory
         let configDir = tempDir.appendingPathComponent(".config/claude-code")
         try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
@@ -251,7 +251,7 @@ struct CLITests {
     }
 
     @Test("install-claude-code supports cursor target")
-    func testInstallCommandCursorTarget() throws {
+    func installCommandCursorTarget() throws {
         let (stdout, _, exitCode) = try runCommand([
             "install-claude-code", "cursor", "--dry-run",
         ])
@@ -263,7 +263,7 @@ struct CLITests {
     // MARK: - General CLI Tests
 
     @Test("swiftindex shows help with no arguments")
-    func testNoArgumentsShowsHelp() throws {
+    func noArgumentsShowsHelp() throws {
         let (stdout, _, exitCode) = try runCommand(["--help"])
 
         #expect(exitCode == 0, "Should succeed")
@@ -272,16 +272,16 @@ struct CLITests {
     }
 
     @Test("swiftindex shows version with --version")
-    func testVersionFlag() throws {
+    func versionFlag() throws {
         // This may or may not be implemented
         let (stdout, _, _) = try runCommand(["--version"])
 
         // Just verify it doesn't crash
-        #expect(stdout.count >= 0, "Should produce some output")
+        #expect(stdout.isEmpty, "Should produce some output")
     }
 
     @Test("swiftindex handles unknown command gracefully")
-    func testUnknownCommand() throws {
+    func unknownCommand() throws {
         let (_, stderr, exitCode) = try runCommand(["nonexistent-command"])
 
         #expect(exitCode != 0, "Should fail for unknown command")

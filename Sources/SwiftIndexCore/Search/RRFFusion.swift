@@ -121,14 +121,14 @@ public struct RRFFusion: Sendable {
 
 // MARK: - Convenience Extensions
 
-extension RRFFusion {
+public extension RRFFusion {
     /// Fuses two ranked lists (common case for hybrid search).
     ///
     /// - Parameters:
     ///   - first: First ranked list.
     ///   - second: Second ranked list.
     /// - Returns: Fused results.
-    public func fuse<ID: Hashable>(
+    func fuse<ID: Hashable>(
         _ first: [(id: ID, score: Float)],
         _ second: [(id: ID, score: Float)]
     ) -> [(id: ID, score: Float, ranks: [Int?])] {
@@ -143,7 +143,7 @@ extension RRFFusion {
     ///   - second: Second ranked list.
     ///   - secondWeight: Weight for second list.
     /// - Returns: Fused results.
-    public func fuse<ID: Hashable>(
+    func fuse<ID: Hashable>(
         _ first: [(id: ID, score: Float)],
         firstWeight: Float,
         _ second: [(id: ID, score: Float)],

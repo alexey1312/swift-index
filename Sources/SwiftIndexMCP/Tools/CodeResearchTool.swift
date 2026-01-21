@@ -12,27 +12,27 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
     public let definition: MCPTool
 
     public init() {
-        self.definition = MCPTool(
+        definition = MCPTool(
             name: "code_research",
             description: """
-                Perform multi-hop code research and architectural analysis.
-                Follows references across the codebase to understand
-                relationships, dependencies, and patterns. Returns
-                comprehensive analysis with cross-references.
-                """,
+            Perform multi-hop code research and architectural analysis.
+            Follows references across the codebase to understand
+            relationships, dependencies, and patterns. Returns
+            comprehensive analysis with cross-references.
+            """,
             inputSchema: .object([
                 "type": "object",
                 "properties": .object([
                     "query": .object([
                         "type": "string",
-                        "description": "Research query or topic to investigate"
+                        "description": "Research query or topic to investigate",
                     ]),
                     "depth": .object([
                         "type": "integer",
                         "description": "Maximum depth for reference following (1-5)",
                         "default": 2,
                         "minimum": 1,
-                        "maximum": 5
+                        "maximum": 5,
                     ]),
                     "focus": .object([
                         "type": "string",
@@ -41,11 +41,11 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
                             .string("architecture"),
                             .string("dependencies"),
                             .string("patterns"),
-                            .string("flow")
-                        ])
-                    ])
+                            .string("flow"),
+                        ]),
+                    ]),
                 ]),
-                "required": .array([.string("query")])
+                "required": .array([.string("query")]),
             ])
         )
     }
@@ -64,7 +64,7 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
         let focus = arguments["focus"]?.stringValue
 
         // Validate depth
-        guard depth >= 1 && depth <= 5 else {
+        guard depth >= 1, depth <= 5 else {
             return .error("Depth must be between 1 and 5")
         }
 
@@ -126,13 +126,13 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
                     kind: "struct",
                     relationship: "return_type",
                     hopLevel: 1
-                )
+                ),
             ],
             relatedTopics: [
                 "Hybrid search implementation",
                 "BM25 scoring algorithm",
                 "Vector similarity search",
-                "Reciprocal Rank Fusion"
+                "Reciprocal Rank Fusion",
             ]
         )
     }
@@ -140,19 +140,19 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
     private func generatePlaceholderAnalysis(query: String, focus: String?) -> String {
         let focusContext = focus.map { " with focus on \($0)" } ?? ""
         return """
-            Analysis of "\(query)"\(focusContext):
+        Analysis of "\(query)"\(focusContext):
 
-            This is a placeholder analysis. When fully implemented, this tool will:
+        This is a placeholder analysis. When fully implemented, this tool will:
 
-            1. Perform initial semantic search for the query
-            2. Extract symbols and references from matching code
-            3. Follow references to related code (up to specified depth)
-            4. Analyze patterns and relationships
-            5. Generate comprehensive architectural insights
+        1. Perform initial semantic search for the query
+        2. Extract symbols and references from matching code
+        3. Follow references to related code (up to specified depth)
+        4. Analyze patterns and relationships
+        5. Generate comprehensive architectural insights
 
-            The multi-hop search follows code references to build
-            a complete picture of how components interact.
-            """
+        The multi-hop search follows code references to build
+        a complete picture of how components interact.
+        """
     }
 
     private func formatResult(_ result: ResearchResult) -> String {

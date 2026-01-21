@@ -65,13 +65,13 @@ public actor HybridSearchEngine: SearchEngine {
         rrfK: Int = 60
     ) {
         self.chunkStore = chunkStore
-        self.bm25Search = BM25Search(chunkStore: chunkStore)
-        self.semanticSearch = SemanticSearch(
+        bm25Search = BM25Search(chunkStore: chunkStore)
+        semanticSearch = SemanticSearch(
             vectorStore: vectorStore,
             chunkStore: chunkStore,
             embeddingProvider: embeddingProvider
         )
-        self.fusion = RRFFusion(k: rrfK)
+        fusion = RRFFusion(k: rrfK)
     }
 
     /// Performs a hybrid search combining BM25 and semantic results.
@@ -154,7 +154,7 @@ public actor HybridSearchEngine: SearchEngine {
         }
 
         // Optionally perform multi-hop search
-        if options.multiHop && options.multiHopDepth > 0 {
+        if options.multiHop, options.multiHopDepth > 0 {
             let multiHopResults = try await performMultiHop(
                 initialResults: results,
                 options: options,
@@ -186,7 +186,7 @@ public actor HybridSearchEngine: SearchEngine {
         }
 
         var hopResults: [SearchResult] = []
-        let seenIds = Set(initialResults.map { $0.chunk.id })
+        let seenIds = Set(initialResults.map(\.chunk.id))
 
         for result in initialResults.prefix(5) { // Limit hop sources
             // Follow references from this chunk
@@ -233,7 +233,7 @@ public actor HybridSearchEngine: SearchEngine {
         }
 
         // Recursively follow more hops if configured
-        if currentDepth < options.multiHopDepth && !hopResults.isEmpty {
+        if currentDepth < options.multiHopDepth, !hopResults.isEmpty {
             let nextHopResults = try await performMultiHop(
                 initialResults: hopResults,
                 options: options,
@@ -274,9 +274,9 @@ public actor HybridSearchEngine: SearchEngine {
 
 // MARK: - Search Strategy
 
-extension HybridSearchEngine {
+public extension HybridSearchEngine {
     /// Available search strategies.
-    public enum Strategy: Sendable {
+    enum Strategy: Sendable {
         /// Use only BM25 keyword search.
         case bm25Only
 
@@ -296,17 +296,17 @@ extension HybridSearchEngine {
     ///   - strategy: The search strategy to use.
     ///   - limit: Maximum results to return.
     /// - Returns: Configured search options.
-    public static func options(
+    static func options(
         for strategy: Strategy,
         limit: Int = 20
     ) -> SearchOptions {
         switch strategy {
         case .bm25Only:
-            return SearchOptions(limit: limit, semanticWeight: 0.0)
+            SearchOptions(limit: limit, semanticWeight: 0.0)
         case .semanticOnly:
-            return SearchOptions(limit: limit, semanticWeight: 1.0)
-        case .hybrid(let weight):
-            return SearchOptions(limit: limit, semanticWeight: weight)
+            SearchOptions(limit: limit, semanticWeight: 1.0)
+        case let .hybrid(weight):
+            SearchOptions(limit: limit, semanticWeight: weight)
         }
     }
 }

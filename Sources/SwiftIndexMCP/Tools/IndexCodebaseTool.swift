@@ -11,27 +11,27 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
     public let definition: MCPTool
 
     public init() {
-        self.definition = MCPTool(
+        definition = MCPTool(
             name: "index_codebase",
             description: """
-                Index a Swift codebase for semantic search.
-                Parses Swift files, extracts code chunks (functions, types, etc.),
-                generates embeddings, and stores them for later searching.
-                """,
+            Index a Swift codebase for semantic search.
+            Parses Swift files, extracts code chunks (functions, types, etc.),
+            generates embeddings, and stores them for later searching.
+            """,
             inputSchema: .object([
                 "type": "object",
                 "properties": .object([
                     "path": .object([
                         "type": "string",
-                        "description": "Absolute path to the directory to index"
+                        "description": "Absolute path to the directory to index",
                     ]),
                     "force": .object([
                         "type": "boolean",
                         "description": "Force re-indexing even if files haven't changed",
-                        "default": false
-                    ])
+                        "default": false,
+                    ]),
                 ]),
-                "required": .array([.string("path")])
+                "required": .array([.string("path")]),
             ])
         )
     }
@@ -48,7 +48,8 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         let fileManager = FileManager.default
         var isDirectory: ObjCBool = false
         guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
-              isDirectory.boolValue else {
+              isDirectory.boolValue
+        else {
             return .error("Path does not exist or is not a directory: \(path)")
         }
 
@@ -99,18 +100,18 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             "indexed_files": result.indexedFiles,
             "chunks": result.chunks,
             "path": result.path,
-            "forced": result.forced
+            "forced": result.forced,
         ]
 
         // Format as JSON manually since we need to control the output
         return """
-            {
-              "indexed_files": \(result.indexedFiles),
-              "chunks": \(result.chunks),
-              "path": "\(result.path)",
-              "forced": \(result.forced)
-            }
-            """
+        {
+          "indexed_files": \(result.indexedFiles),
+          "chunks": \(result.chunks),
+          "path": "\(result.path)",
+          "forced": \(result.forced)
+        }
+        """
     }
 }
 

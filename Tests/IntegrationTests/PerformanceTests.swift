@@ -16,111 +16,111 @@ struct PerformanceTests {
 
     /// Sample Swift code for parsing benchmarks.
     private let sampleCode = """
-        import Foundation
+    import Foundation
 
-        /// Represents a user in the system with authentication capabilities.
-        struct User: Identifiable, Codable, Sendable {
-            let id: UUID
-            var name: String
-            var email: String
-            var createdAt: Date
-            var preferences: [String: String]
+    /// Represents a user in the system with authentication capabilities.
+    struct User: Identifiable, Codable, Sendable {
+        let id: UUID
+        var name: String
+        var email: String
+        var createdAt: Date
+        var preferences: [String: String]
 
-            /// Creates a new user with the given details.
-            init(name: String, email: String) {
-                self.id = UUID()
-                self.name = name
-                self.email = email
-                self.createdAt = Date()
-                self.preferences = [:]
-            }
-
-            /// Validates the user's email format using regex.
-            func isValidEmail() -> Bool {
-                let pattern = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}"
-                return email.range(of: pattern, options: .regularExpression) != nil
-            }
-
-            /// Updates user preferences with new values.
-            mutating func updatePreferences(_ newPrefs: [String: String]) {
-                for (key, value) in newPrefs {
-                    preferences[key] = value
-                }
-            }
+        /// Creates a new user with the given details.
+        init(name: String, email: String) {
+            self.id = UUID()
+            self.name = name
+            self.email = email
+            self.createdAt = Date()
+            self.preferences = [:]
         }
 
-        /// Service handling user authentication.
-        actor AuthenticationService {
-            private var currentUser: User?
-            private var authToken: String?
-            private var tokenExpiry: Date?
-
-            /// Authenticates a user with email and password.
-            func login(email: String, password: String) async throws -> User {
-                guard !email.isEmpty, !password.isEmpty else {
-                    throw AuthError.invalidCredentials
-                }
-
-                // Simulate network call
-                try await Task.sleep(nanoseconds: 1_000_000)
-
-                let user = User(name: "Test User", email: email)
-                self.currentUser = user
-                self.authToken = UUID().uuidString
-                self.tokenExpiry = Date().addingTimeInterval(3600)
-
-                return user
-            }
-
-            /// Logs out the current user.
-            func logout() {
-                currentUser = nil
-                authToken = nil
-                tokenExpiry = nil
-            }
-
-            /// Returns the currently authenticated user.
-            func getCurrentUser() -> User? {
-                return currentUser
-            }
-
-            /// Checks if the current session is valid.
-            func isSessionValid() -> Bool {
-                guard let expiry = tokenExpiry else { return false }
-                return Date() < expiry
-            }
+        /// Validates the user's email format using regex.
+        func isValidEmail() -> Bool {
+            let pattern = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,64}"
+            return email.range(of: pattern, options: .regularExpression) != nil
         }
 
-        /// Authentication errors.
-        enum AuthError: Error {
-            case invalidCredentials
-            case sessionExpired
-            case networkError(String)
+        /// Updates user preferences with new values.
+        mutating func updatePreferences(_ newPrefs: [String: String]) {
+            for (key, value) in newPrefs {
+                preferences[key] = value
+            }
+        }
+    }
+
+    /// Service handling user authentication.
+    actor AuthenticationService {
+        private var currentUser: User?
+        private var authToken: String?
+        private var tokenExpiry: Date?
+
+        /// Authenticates a user with email and password.
+        func login(email: String, password: String) async throws -> User {
+            guard !email.isEmpty, !password.isEmpty else {
+                throw AuthError.invalidCredentials
+            }
+
+            // Simulate network call
+            try await Task.sleep(nanoseconds: 1_000_000)
+
+            let user = User(name: "Test User", email: email)
+            self.currentUser = user
+            self.authToken = UUID().uuidString
+            self.tokenExpiry = Date().addingTimeInterval(3600)
+
+            return user
         }
 
-        /// Protocol for network operations.
-        protocol NetworkClient {
-            func fetch<T: Decodable>(_ url: URL) async throws -> T
-            func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R
+        /// Logs out the current user.
+        func logout() {
+            currentUser = nil
+            authToken = nil
+            tokenExpiry = nil
         }
-        """
+
+        /// Returns the currently authenticated user.
+        func getCurrentUser() -> User? {
+            return currentUser
+        }
+
+        /// Checks if the current session is valid.
+        func isSessionValid() -> Bool {
+            guard let expiry = tokenExpiry else { return false }
+            return Date() < expiry
+        }
+    }
+
+    /// Authentication errors.
+    enum AuthError: Error {
+        case invalidCredentials
+        case sessionExpired
+        case networkError(String)
+    }
+
+    /// Protocol for network operations.
+    protocol NetworkClient {
+        func fetch<T: Decodable>(_ url: URL) async throws -> T
+        func post<T: Encodable, R: Decodable>(_ url: URL, body: T) async throws -> R
+    }
+    """
 
     // MARK: - Parser Performance Tests
 
     @Test("Parser throughput - single file")
-    func testParserThroughputSingleFile() throws {
+    func parserThroughputSingleFile() throws {
         let parser = HybridParser()
         let iterations = 100
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        for _ in 0..<iterations {
+        for _ in 0 ..< iterations {
             let result = parser.parse(content: sampleCode, path: "User.swift")
-            guard case .success(let chunks) = result else {
+            guard case let .success(chunks) = result else {
                 Issue.record("Parser should succeed")
                 return
             }
-            #expect(chunks.count > 0)
+            #expect(!chunks.isEmpty)
         }
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
@@ -135,12 +135,12 @@ struct PerformanceTests {
     }
 
     @Test("Parser throughput - large file")
-    func testParserThroughputLargeFile() throws {
+    func parserThroughputLargeFile() throws {
         let parser = HybridParser()
 
         // Generate a large file by repeating the sample code
         var largeCode = ""
-        for i in 0..<50 {
+        for i in 0 ..< 50 {
             largeCode += sampleCode.replacingOccurrences(of: "User", with: "User\(i)")
             largeCode += "\n\n"
         }
@@ -151,7 +151,7 @@ struct PerformanceTests {
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed for large file")
             return
         }
@@ -167,7 +167,7 @@ struct PerformanceTests {
     // MARK: - Indexing Performance Tests
 
     @Test("Indexing throughput with mock embeddings")
-    func testIndexingThroughput() async throws {
+    func indexingThroughput() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -181,7 +181,7 @@ struct PerformanceTests {
 
         // Parse sample code
         let result = parser.parse(content: sampleCode, path: "User.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
@@ -192,7 +192,7 @@ struct PerformanceTests {
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        for i in 0..<iterations {
+        for i in 0 ..< iterations {
             for chunk in chunks {
                 // Create unique chunk for each iteration
                 let uniqueChunk = CodeChunk(
@@ -225,7 +225,7 @@ struct PerformanceTests {
     }
 
     @Test("Batch indexing performance")
-    func testBatchIndexingPerformance() async throws {
+    func batchIndexingPerformance() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-batch-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -239,7 +239,7 @@ struct PerformanceTests {
 
         // Parse sample code
         let result = parser.parse(content: sampleCode, path: "User.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
@@ -248,7 +248,7 @@ struct PerformanceTests {
         var batch: [(chunk: CodeChunk, vector: [Float])] = []
         let batchSize = 1000
 
-        for i in 0..<batchSize {
+        for i in 0 ..< batchSize {
             let baseChunk = chunks[i % chunks.count]
             let uniqueChunk = CodeChunk(
                 id: "batch-\(i)",
@@ -283,7 +283,7 @@ struct PerformanceTests {
     // MARK: - Search Performance Tests
 
     @Test("Search latency with indexed data")
-    func testSearchLatency() async throws {
+    func searchLatency() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-search-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -297,13 +297,13 @@ struct PerformanceTests {
 
         // Index sample data
         let result = parser.parse(content: sampleCode, path: "User.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
 
         // Index 500 unique chunks
-        for i in 0..<500 {
+        for i in 0 ..< 500 {
             let baseChunk = chunks[i % chunks.count]
             let uniqueChunk = CodeChunk(
                 id: "search-\(i)",
@@ -335,13 +335,13 @@ struct PerformanceTests {
             "login function",
             "email validation",
             "error handling",
-            "network request"
+            "network request",
         ]
 
         var totalLatency: Double = 0
         let iterations = 20
 
-        for _ in 0..<iterations {
+        for _ in 0 ..< iterations {
             for query in queries {
                 let startTime = CFAbsoluteTimeGetCurrent()
                 let results = try await searchEngine.search(
@@ -351,7 +351,7 @@ struct PerformanceTests {
                 let elapsed = CFAbsoluteTimeGetCurrent() - startTime
                 totalLatency += elapsed
 
-                #expect(results.count > 0, "Search should return results")
+                #expect(!results.isEmpty, "Search should return results")
             }
         }
 
@@ -365,7 +365,7 @@ struct PerformanceTests {
     }
 
     @Test("BM25 FTS search performance")
-    func testBM25SearchPerformance() async throws {
+    func bM25SearchPerformance() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-bm25-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -379,13 +379,13 @@ struct PerformanceTests {
 
         // Index sample data
         let result = parser.parse(content: sampleCode, path: "User.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
 
         // Index 1000 unique chunks
-        for i in 0..<1000 {
+        for i in 0 ..< 1000 {
             let baseChunk = chunks[i % chunks.count]
             let uniqueChunk = CodeChunk(
                 id: "bm25-\(i)",
@@ -409,14 +409,14 @@ struct PerformanceTests {
         var totalLatency: Double = 0
         let iterations = 50
 
-        for _ in 0..<iterations {
+        for _ in 0 ..< iterations {
             for query in queries {
                 let startTime = CFAbsoluteTimeGetCurrent()
                 let results = try await chunkStore.searchFTS(query: query, limit: 10)
                 let elapsed = CFAbsoluteTimeGetCurrent() - startTime
                 totalLatency += elapsed
 
-                #expect(results.count > 0, "FTS should return results for '\(query)'")
+                #expect(!results.isEmpty, "FTS should return results for '\(query)'")
             }
         }
 
@@ -432,7 +432,7 @@ struct PerformanceTests {
     // MARK: - Vector Store Performance Tests
 
     @Test("Vector similarity search performance")
-    func testVectorSearchPerformance() async throws {
+    func vectorSearchPerformance() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-vector-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -446,7 +446,7 @@ struct PerformanceTests {
         // Add vectors
         let vectorCount = 5000
 
-        for i in 0..<vectorCount {
+        for i in 0 ..< vectorCount {
             let text = "Sample text for embedding \(i) with some variation"
             let embedding = try await mockProvider.embed(text)
             try await vectorStore.add(id: "vec-\(i)", vector: embedding)
@@ -456,7 +456,7 @@ struct PerformanceTests {
         let iterations = 100
         var totalLatency: Double = 0
 
-        for i in 0..<iterations {
+        for i in 0 ..< iterations {
             let queryVector = try await mockProvider.embed("Query text \(i)")
             let startTime = CFAbsoluteTimeGetCurrent()
             let results = try await vectorStore.search(vector: queryVector, limit: 10)
@@ -479,7 +479,7 @@ struct PerformanceTests {
     // MARK: - Memory Performance Tests
 
     @Test("Memory usage for large index")
-    func testMemoryUsageForLargeIndex() async throws {
+    func memoryUsageForLargeIndex() async throws {
         let tempDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-perf-memory-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: tempDir) }
@@ -493,7 +493,7 @@ struct PerformanceTests {
 
         // Parse sample code
         let result = parser.parse(content: sampleCode, path: "User.swift")
-        guard case .success(let chunks) = result else {
+        guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
         }
@@ -502,7 +502,7 @@ struct PerformanceTests {
         let itemCount = 2000
         var batch: [(chunk: CodeChunk, vector: [Float])] = []
 
-        for i in 0..<itemCount {
+        for i in 0 ..< itemCount {
             let baseChunk = chunks[i % chunks.count]
             let uniqueChunk = CodeChunk(
                 id: "memory-\(i)",
@@ -554,7 +554,7 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
     func embed(_ text: String) async throws -> [Float] {
         // Generate deterministic embedding based on text hash
         var generator = SeededRNG(seed: UInt64(bitPattern: Int64(text.hashValue)))
-        var embedding = (0..<dimension).map { _ in Float.random(in: -1...1, using: &generator) }
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         // Normalize
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
@@ -568,7 +568,7 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
     func embed(_ texts: [String]) async throws -> [[Float]] {
         var results: [[Float]] = []
         for text in texts {
-            results.append(try await embed(text))
+            try await results.append(embed(text))
         }
         return results
     }

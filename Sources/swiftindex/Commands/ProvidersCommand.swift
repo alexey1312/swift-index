@@ -15,13 +15,13 @@ struct ProvidersCommand: AsyncParsableCommand {
         commandName: "providers",
         abstract: "List available embedding providers and their status",
         discussion: """
-            Shows all registered embedding providers with their availability
-            status, dimensions, and configuration requirements.
+        Shows all registered embedding providers with their availability
+        status, dimensions, and configuration requirements.
 
-            Providers are checked for availability based on hardware support
-            (e.g., Apple Silicon for MLX), network connectivity, and API key
-            configuration.
-            """
+        Providers are checked for availability based on hardware support
+        (e.g., Apple Silicon for MLX), network connectivity, and API key
+        configuration.
+        """
     )
 
     // MARK: - Options

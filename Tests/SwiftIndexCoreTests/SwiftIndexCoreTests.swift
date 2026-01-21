@@ -1,10 +1,10 @@
-import Testing
 @testable import SwiftIndexCore
+import Testing
 
 @Suite("SwiftIndexCore Tests")
 struct SwiftIndexCoreTests {
     @Test("CodeChunk creation")
-    func testCodeChunkCreation() {
+    func codeChunkCreation() {
         let chunk = CodeChunk(
             path: "/test/file.swift",
             content: "func hello() {}",
@@ -21,7 +21,7 @@ struct SwiftIndexCoreTests {
     }
 
     @Test("ChunkKind properties")
-    func testChunkKindProperties() {
+    func chunkKindProperties() {
         #expect(ChunkKind.function.isSwift)
         #expect(ChunkKind.objcMethod.isObjC)
         #expect(ChunkKind.cFunction.isC)
@@ -30,7 +30,7 @@ struct SwiftIndexCoreTests {
     }
 
     @Test("Config default values")
-    func testConfigDefaults() {
+    func configDefaults() {
         let config = Config.default
 
         #expect(config.embeddingProvider == "auto")
@@ -40,7 +40,7 @@ struct SwiftIndexCoreTests {
     }
 
     @Test("Config merge priority")
-    func testConfigMergePriority() {
+    func configMergePriority() {
         let low = PartialConfig(semanticWeight: 0.5)
         let high = PartialConfig(semanticWeight: 0.9)
 
@@ -51,7 +51,7 @@ struct SwiftIndexCoreTests {
     }
 
     @Test("SearchOptions defaults")
-    func testSearchOptionsDefaults() {
+    func searchOptionsDefaults() {
         let options = SearchOptions.default
 
         #expect(options.limit == 20)

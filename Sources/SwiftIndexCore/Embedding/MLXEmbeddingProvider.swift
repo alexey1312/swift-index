@@ -52,7 +52,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         self.modelPath = modelPath
         self.dimension = dimension
         self.maxBatchSize = maxBatchSize
-        self.modelManager = ModelManager(
+        modelManager = ModelManager(
             modelName: modelName,
             modelPath: modelPath,
             dimension: dimension
@@ -64,15 +64,15 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     public func isAvailable() async -> Bool {
         // Check for Apple Silicon
         #if arch(arm64) && os(macOS)
-        // Verify MLX can be initialized
-        do {
-            _ = try await modelManager.ensureModelLoaded()
-            return true
-        } catch {
-            return false
-        }
+            // Verify MLX can be initialized
+            do {
+                _ = try await modelManager.ensureModelLoaded()
+                return true
+            } catch {
+                return false
+            }
         #else
-        return false
+            return false
         #endif
     }
 
@@ -82,9 +82,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         }
 
         #if !arch(arm64) || !os(macOS)
-        throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
+            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
         #else
-        return try await modelManager.embed(text)
+            return try await modelManager.embed(text)
         #endif
     }
 
@@ -98,9 +98,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         }
 
         #if !arch(arm64) || !os(macOS)
-        throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
+            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
         #else
-        return try await modelManager.embedBatch(texts, maxBatchSize: maxBatchSize)
+            return try await modelManager.embedBatch(texts, maxBatchSize: maxBatchSize)
         #endif
     }
 }
@@ -150,7 +150,7 @@ private actor ModelManager {
         }
 
         // Tokenize input
-        guard let tokenizer = tokenizer else {
+        guard let tokenizer else {
             throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
         }
 
@@ -177,7 +177,7 @@ private actor ModelManager {
         // Process in batches
         for batchStart in stride(from: 0, to: texts.count, by: maxBatchSize) {
             let batchEnd = min(batchStart + maxBatchSize, texts.count)
-            let batch = Array(texts[batchStart..<batchEnd])
+            let batch = Array(texts[batchStart ..< batchEnd])
 
             let batchEmbeddings = try processBatch(batch)
             results.append(contentsOf: batchEmbeddings)
@@ -198,7 +198,7 @@ private actor ModelManager {
     }
 
     private func processBatch(_ texts: [String]) throws -> [[Float]] {
-        guard let tokenizer = tokenizer else {
+        guard let tokenizer else {
             throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
         }
 
@@ -223,7 +223,7 @@ private actor ModelManager {
 
         // Placeholder: return normalized random vector
         // This will be replaced with actual MLX model inference
-        var embedding = (0..<dimension).map { _ in Float.random(in: -1...1) }
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1) }
 
         // L2 normalize
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })

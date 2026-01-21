@@ -49,13 +49,13 @@ public actor USearchVectorStore: VectorStore {
         metric: USearchMetric = .cos
     ) throws {
         self.dimension = dimension
-        self.idToKey = [:]
-        self.keyToId = [:]
-        self.nextKey = 0
+        idToKey = [:]
+        keyToId = [:]
+        nextKey = 0
 
-        if let path = path {
-            self.indexPath = path
-            self.mappingPath = path + ".mapping"
+        if let path {
+            indexPath = path
+            mappingPath = path + ".mapping"
 
             // Ensure directory exists
             let directory = (path as NSString).deletingLastPathComponent
@@ -64,12 +64,12 @@ public actor USearchVectorStore: VectorStore {
                 withIntermediateDirectories: true
             )
         } else {
-            self.indexPath = nil
-            self.mappingPath = nil
+            indexPath = nil
+            mappingPath = nil
         }
 
         // Create HNSW index with optimized parameters
-        self.index = try USearchIndex.make(
+        index = try USearchIndex.make(
             metric: metric,
             dimensions: UInt32(dimension),
             connectivity: 16, // M parameter - edges per node
@@ -154,7 +154,7 @@ public actor USearchVectorStore: VectorStore {
     }
 
     public func save() async throws {
-        guard let indexPath = indexPath, let mappingPath = mappingPath else {
+        guard let indexPath, let mappingPath else {
             throw VectorStoreError.noPersistencePath
         }
 
@@ -175,7 +175,7 @@ public actor USearchVectorStore: VectorStore {
     }
 
     public func load() async throws {
-        guard let indexPath = indexPath, let mappingPath = mappingPath else {
+        guard let indexPath, let mappingPath else {
             throw VectorStoreError.noPersistencePath
         }
 
@@ -193,13 +193,13 @@ public actor USearchVectorStore: VectorStore {
         let data = try Data(contentsOf: URL(fileURLWithPath: mappingPath))
         let mapping = try JSONDecoder().decode(VectorStoreMapping.self, from: data)
 
-        self.idToKey = mapping.idToKey
-        self.keyToId = mapping.keyToId.reduce(into: [:]) {
+        idToKey = mapping.idToKey
+        keyToId = mapping.keyToId.reduce(into: [:]) {
             if let key = USearchKey($1.key) {
                 $0[key] = $1.value
             }
         }
-        self.nextKey = mapping.nextKey
+        nextKey = mapping.nextKey
     }
 
     public func clear() async throws {
@@ -226,7 +226,7 @@ public actor USearchVectorStore: VectorStore {
     ///
     /// - Returns: True if the index file exists.
     public nonisolated func indexFileExists() -> Bool {
-        guard let indexPath = indexPath else { return false }
+        guard let indexPath else { return false }
         return FileManager.default.fileExists(atPath: indexPath)
     }
 
@@ -277,16 +277,16 @@ public enum VectorStoreError: Error, Sendable {
 extension VectorStoreError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .dimensionMismatch(let expected, let actual):
-            return "Vector dimension mismatch: expected \(expected), got \(actual)"
-        case .indexNotFound(let path):
-            return "Vector index not found at: \(path)"
+        case let .dimensionMismatch(expected, actual):
+            "Vector dimension mismatch: expected \(expected), got \(actual)"
+        case let .indexNotFound(path):
+            "Vector index not found at: \(path)"
         case .noPersistencePath:
-            return "No persistence path configured for vector store"
-        case .saveFailed(let message):
-            return "Failed to save vector index: \(message)"
-        case .loadFailed(let message):
-            return "Failed to load vector index: \(message)"
+            "No persistence path configured for vector store"
+        case let .saveFailed(message):
+            "Failed to save vector index: \(message)"
+        case let .loadFailed(message):
+            "Failed to load vector index: \(message)"
         }
     }
 }

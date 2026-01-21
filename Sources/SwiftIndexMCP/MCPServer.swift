@@ -34,10 +34,10 @@ public actor MCPServer {
     public init(logger: Logger = Logger(label: "SwiftIndexMCP")) {
         self.logger = logger
 
-        self.encoder = JSONEncoder()
-        self.encoder.outputFormatting = [.sortedKeys]
+        encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
 
-        self.decoder = JSONDecoder()
+        decoder = JSONDecoder()
 
         // Register default tools
         initializeDefaultTools()
@@ -78,7 +78,7 @@ public actor MCPServer {
 
             do {
                 let response = try await handleMessage(line)
-                if let response = response {
+                if let response {
                     try writeResponse(response)
                 }
             } catch {
@@ -195,7 +195,7 @@ public actor MCPServer {
     // MARK: - Tool Handlers
 
     private func handleToolsList(_ request: JSONRPCRequest) throws -> JSONRPCResponse {
-        let toolDefinitions = tools.values.map { $0.definition }
+        let toolDefinitions = tools.values.map(\.definition)
         let result = ToolsListResult(tools: toolDefinitions)
 
         let resultData = try encoder.encode(result)
@@ -279,16 +279,16 @@ public enum MCPError: Error, LocalizedError {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidMessage(let details):
-            return "Invalid message: \(details)"
+        case let .invalidMessage(details):
+            "Invalid message: \(details)"
         case .encodingFailed:
-            return "Failed to encode response"
-        case .toolNotFound(let name):
-            return "Tool not found: \(name)"
-        case .invalidArguments(let details):
-            return "Invalid arguments: \(details)"
-        case .executionFailed(let details):
-            return "Execution failed: \(details)"
+            "Failed to encode response"
+        case let .toolNotFound(name):
+            "Tool not found: \(name)"
+        case let .invalidArguments(details):
+            "Invalid arguments: \(details)"
+        case let .executionFailed(details):
+            "Execution failed: \(details)"
         }
     }
 }

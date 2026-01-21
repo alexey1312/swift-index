@@ -21,17 +21,20 @@ public protocol ConfigLoader: Sendable {
 /// Used during config merging to allow layered overrides.
 public struct PartialConfig: Sendable, Equatable {
     // MARK: - Embedding
+
     public var embeddingProvider: String?
     public var embeddingModel: String?
     public var embeddingDimension: Int?
 
     // MARK: - Search
+
     public var semanticWeight: Float?
     public var rrfK: Int?
     public var multiHopEnabled: Bool?
     public var multiHopDepth: Int?
 
     // MARK: - Indexing
+
     public var excludePatterns: [String]?
     public var includeExtensions: [String]?
     public var maxFileSize: Int?
@@ -39,17 +42,21 @@ public struct PartialConfig: Sendable, Equatable {
     public var chunkOverlap: Int?
 
     // MARK: - Storage
+
     public var indexPath: String?
     public var cachePath: String?
 
     // MARK: - API Keys (Cloud Providers)
+
     public var voyageAPIKey: String?
     public var openAIAPIKey: String?
 
     // MARK: - Watch Mode
+
     public var watchDebounceMs: Int?
 
     // MARK: - Logging
+
     public var logLevel: String?
 
     public init(

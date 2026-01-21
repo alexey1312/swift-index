@@ -46,20 +46,20 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
         public var dimension: Int {
             switch self {
             case .bgeSmall, .miniLM:
-                return 384
+                384
             case .bgeBase:
-                return 768
+                768
             }
         }
 
         public var huggingFaceId: String {
             switch self {
             case .bgeSmall:
-                return "BAAI/bge-small-en-v1.5"
+                "BAAI/bge-small-en-v1.5"
             case .bgeBase:
-                return "BAAI/bge-base-en-v1.5"
+                "BAAI/bge-base-en-v1.5"
             case .miniLM:
-                return "sentence-transformers/all-MiniLM-L6-v2"
+                "sentence-transformers/all-MiniLM-L6-v2"
             }
         }
     }
@@ -72,10 +72,10 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
     ///   - model: The embedding model to use.
     ///   - maxBatchSize: Maximum texts per batch (default: 32).
     public init(model: Model = .bgeSmall, maxBatchSize: Int = 32) {
-        self.modelName = model.rawValue
-        self.dimension = model.dimension
+        modelName = model.rawValue
+        dimension = model.dimension
         self.maxBatchSize = maxBatchSize
-        self.modelManager = EmbeddingsModelManager(model: model)
+        modelManager = EmbeddingsModelManager(model: model)
     }
 
     /// Creates a Swift embeddings provider with a custom model name.
@@ -88,7 +88,7 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
         self.modelName = modelName
         self.dimension = dimension
         self.maxBatchSize = maxBatchSize
-        self.modelManager = EmbeddingsModelManager(modelName: modelName, dimension: dimension)
+        modelManager = EmbeddingsModelManager(modelName: modelName, dimension: dimension)
     }
 
     // MARK: - EmbeddingProvider
@@ -138,15 +138,15 @@ private actor EmbeddingsModelManager {
     private var tokenizer: BertTokenizer?
 
     init(model: SwiftEmbeddingsProvider.Model) {
-        self.modelName = model.rawValue
-        self.dimension = model.dimension
-        self.huggingFaceId = model.huggingFaceId
+        modelName = model.rawValue
+        dimension = model.dimension
+        huggingFaceId = model.huggingFaceId
     }
 
     init(modelName: String, dimension: Int) {
         self.modelName = modelName
         self.dimension = dimension
-        self.huggingFaceId = nil
+        huggingFaceId = nil
     }
 
     func ensureModelLoaded() throws {
@@ -180,7 +180,7 @@ private actor EmbeddingsModelManager {
     func embed(_ text: String) throws -> [Float] {
         try ensureModelLoaded()
 
-        guard let tokenizer = tokenizer, let model = bertModel else {
+        guard let tokenizer, let model = bertModel else {
             throw ProviderError.notAvailable(reason: "Model not loaded")
         }
 
@@ -207,7 +207,7 @@ private actor EmbeddingsModelManager {
         // Process in batches for memory efficiency
         for batchStart in stride(from: 0, to: texts.count, by: maxBatchSize) {
             let batchEnd = min(batchStart + maxBatchSize, texts.count)
-            let batch = Array(texts[batchStart..<batchEnd])
+            let batch = Array(texts[batchStart ..< batchEnd])
 
             let batchEmbeddings = try processBatch(batch)
             results.append(contentsOf: batchEmbeddings)
@@ -236,7 +236,7 @@ private actor EmbeddingsModelManager {
     }
 
     private func processBatch(_ texts: [String]) throws -> [[Float]] {
-        guard let tokenizer = tokenizer, let model = bertModel else {
+        guard let tokenizer, let model = bertModel else {
             throw ProviderError.notAvailable(reason: "Model not loaded")
         }
 
@@ -263,7 +263,7 @@ private struct BertModel: Sendable {
     private let modelPath: URL
 
     init(modelPath: URL, config: BertConfig) throws {
-        self.hiddenSize = config.hiddenSize
+        hiddenSize = config.hiddenSize
         self.modelPath = modelPath
 
         // Verify model file exists
@@ -280,7 +280,7 @@ private struct BertModel: Sendable {
         let seed = tokens.inputIds.reduce(0) { $0 &+ $1 }
         var generator = SeededRandomNumberGenerator(seed: UInt64(bitPattern: Int64(seed)))
 
-        var embedding = (0..<hiddenSize).map { _ in Float.random(in: -1...1, using: &generator) }
+        var embedding = (0 ..< hiddenSize).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         // L2 normalize
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
@@ -330,7 +330,7 @@ private struct BertTokenizer: Sendable {
         // Load vocabulary from file
         guard FileManager.default.fileExists(atPath: vocabularyFile.path) else {
             // Use default vocabulary for testing
-            self.vocabulary = [:]
+            vocabulary = [:]
             return
         }
 
@@ -344,7 +344,7 @@ private struct BertTokenizer: Sendable {
             }
         }
 
-        self.vocabulary = vocab
+        vocabulary = vocab
     }
 
     func encode(_ text: String) -> EncodedInput {
@@ -352,8 +352,8 @@ private struct BertTokenizer: Sendable {
         let words = lowercased.components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
 
-        var inputIds: [Int] = [101] // [CLS]
-        var attentionMask: [Int] = [1]
+        var inputIds = [101] // [CLS]
+        var attentionMask = [1]
 
         for word in words.prefix(maxLength - 2) {
             let tokenId = vocabulary[word] ?? (abs(word.hashValue) % 30000)
@@ -383,7 +383,7 @@ private struct SeededRandomNumberGenerator: RandomNumberGenerator {
     private var state: UInt64
 
     init(seed: UInt64) {
-        self.state = seed
+        state = seed
     }
 
     mutating func next() -> UInt64 {

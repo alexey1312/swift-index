@@ -11,26 +11,26 @@ env:
   MISE_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 jobs:
-  # lint:
-  #   name: Lint
-  #   runs-on: macos-15
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #
-  #     - uses: jdx/mise-action@v3
-  #       with:
-  #         experimental: true
-  #
-  #     - name: Check formatting (Swift + Markdown)
-  #       run: mise run format-check
-  #
-  #     - name: Lint (SwiftLint)
-  #       run: mise run lint
+  lint:
+    name: Lint
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: jdx/mise-action@v3
+        with:
+          experimental: true
+
+      - name: Check formatting (Swift + Markdown)
+        run: mise run format-check
+
+      - name: Lint (SwiftLint)
+        run: mise run lint
 
   build:
     name: Build & Test
     runs-on: macos-15
-    # needs: lint
+    needs: lint
 
     steps:
       - uses: actions/checkout@v6

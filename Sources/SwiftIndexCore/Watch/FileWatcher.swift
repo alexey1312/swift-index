@@ -35,8 +35,8 @@ public actor FileWatcher {
         /// The path associated with this event.
         public var path: String {
             switch self {
-            case .created(let path), .modified(let path), .deleted(let path):
-                return path
+            case let .created(path), let .modified(path), let .deleted(path):
+                path
             }
         }
     }
@@ -90,7 +90,7 @@ public actor FileWatcher {
         excludePatterns: [String] = [".git", ".build", "DerivedData"],
         logger: Logger = Logger(label: "FileWatcher")
     ) {
-        self.watchPath = (path as NSString).standardizingPath
+        watchPath = (path as NSString).standardizingPath
         self.debounceMs = debounceMs
         self.extensions = extensions
         self.excludePatterns = excludePatterns
@@ -135,7 +135,7 @@ public actor FileWatcher {
     // MARK: - Private Methods
 
     private func setupContinuation(_ continuation: AsyncStream<Event>.Continuation) {
-        self.eventContinuation = continuation
+        eventContinuation = continuation
 
         continuation.onTermination = { _ in
             Task {
@@ -166,7 +166,7 @@ public actor FileWatcher {
 
             let watcher = Unmanaged<FileWatcherContext>.fromOpaque(contextInfo).takeUnretainedValue()
 
-            for i in 0..<numEvents {
+            for i in 0 ..< numEvents {
                 let path = paths[i]
                 let flags = eventFlags[i]
 
@@ -211,7 +211,7 @@ public actor FileWatcher {
         logger.info("FSEventStream started")
     }
 
-    fileprivate func handleEvent(path: String, flags: FSEventStreamEventFlags) {
+    private func handleEvent(path: String, flags: FSEventStreamEventFlags) {
         // Check if path should be excluded
         for pattern in excludePatterns {
             if path.contains(pattern) {

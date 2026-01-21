@@ -82,7 +82,7 @@ public actor IncrementalIndexer {
         self.embeddingProvider = embeddingProvider
         self.config = config
         self.logger = logger
-        self.stats = IndexingStats()
+        stats = IndexingStats()
     }
 
     // MARK: - Public Methods
@@ -103,7 +103,8 @@ public actor IncrementalIndexer {
         let fileWatcher = FileWatcher(
             path: resolvedPath,
             debounceMs: config.watchDebounceMs,
-            extensions: Set(config.includeExtensions.map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }),
+            extensions: Set(config.includeExtensions
+                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")) }),
             excludePatterns: config.excludePatterns,
             logger: logger
         )
@@ -146,15 +147,15 @@ public actor IncrementalIndexer {
 
     private func handleEvent(_ event: FileWatcher.Event) async throws {
         switch event {
-        case .created(let path):
+        case let .created(path):
             try await handleFileCreated(path)
             stats.filesCreated += 1
 
-        case .modified(let path):
+        case let .modified(path):
             try await handleFileModified(path)
             stats.filesModified += 1
 
-        case .deleted(let path):
+        case let .deleted(path):
             try await handleFileDeleted(path)
             stats.filesDeleted += 1
         }
@@ -174,8 +175,8 @@ public actor IncrementalIndexer {
         // Parse file
         let parseResult = parser.parse(content: content, path: path)
 
-        guard case .success(let chunks) = parseResult else {
-            if case .failure(let error) = parseResult {
+        guard case let .success(chunks) = parseResult else {
+            if case let .failure(error) = parseResult {
                 logger.warning("Parse failed", metadata: [
                     "path": "\(path)",
                     "error": "\(error)",
@@ -216,8 +217,8 @@ public actor IncrementalIndexer {
         // Parse file
         let parseResult = parser.parse(content: content, path: path)
 
-        guard case .success(let chunks) = parseResult else {
-            if case .failure(let error) = parseResult {
+        guard case let .success(chunks) = parseResult else {
+            if case let .failure(error) = parseResult {
                 logger.warning("Parse failed", metadata: [
                     "path": "\(path)",
                     "error": "\(error)",

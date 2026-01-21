@@ -14,19 +14,19 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
     private static let watcherState = WatcherState()
 
     public init() {
-        self.definition = MCPTool(
+        definition = MCPTool(
             name: "watch_codebase",
             description: """
-                Watch a codebase directory for file changes.
-                Automatically re-indexes modified, added, or deleted
-                Swift files to keep the search index up-to-date.
-                """,
+            Watch a codebase directory for file changes.
+            Automatically re-indexes modified, added, or deleted
+            Swift files to keep the search index up-to-date.
+            """,
             inputSchema: .object([
                 "type": "object",
                 "properties": .object([
                     "path": .object([
                         "type": "string",
-                        "description": "Absolute path to the directory to watch"
+                        "description": "Absolute path to the directory to watch",
                     ]),
                     "action": .object([
                         "type": "string",
@@ -34,12 +34,12 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
                         "enum": .array([
                             .string("start"),
                             .string("stop"),
-                            .string("status")
+                            .string("status"),
                         ]),
-                        "default": "start"
-                    ])
+                        "default": "start",
+                    ]),
                 ]),
-                "required": .array([.string("path")])
+                "required": .array([.string("path")]),
             ])
         )
     }
@@ -57,7 +57,8 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             let fileManager = FileManager.default
             var isDirectory: ObjCBool = false
             guard fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
-                  isDirectory.boolValue else {
+                  isDirectory.boolValue
+            else {
                 return .error("Path does not exist or is not a directory: \(path)")
             }
         }

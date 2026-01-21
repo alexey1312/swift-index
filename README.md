@@ -16,7 +16,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 ### From Source
 
 ```bash
-git clone https://github.com/yourusername/swift-index.git
+git clone https://github.com/alexey1312/swift-index.git
 cd swift-index
 swift build -c release
 cp .build/release/swiftindex /usr/local/bin/
@@ -172,14 +172,14 @@ Configuration is loaded from multiple sources with the following priority (highe
 
 ### Environment Variables
 
-| Variable | Description |
-|----------|-------------|
-| `SWIFTINDEX_PROVIDER` | Embedding provider |
-| `SWIFTINDEX_MODEL` | Embedding model name |
-| `SWIFTINDEX_DIMENSION` | Vector dimension |
-| `SWIFTINDEX_LIMIT` | Default search limit |
-| `OPENAI_API_KEY` | API key for OpenAI embeddings |
-| `VOYAGE_API_KEY` | API key for Voyage AI embeddings |
+| Variable               | Description                      |
+| ---------------------- | -------------------------------- |
+| `SWIFTINDEX_PROVIDER`  | Embedding provider               |
+| `SWIFTINDEX_MODEL`     | Embedding model name             |
+| `SWIFTINDEX_DIMENSION` | Vector dimension                 |
+| `SWIFTINDEX_LIMIT`     | Default search limit             |
+| `OPENAI_API_KEY`       | API key for OpenAI embeddings    |
+| `VOYAGE_API_KEY`       | API key for Voyage AI embeddings |
 
 ## MCP Tools
 
@@ -190,11 +190,13 @@ When running as an MCP server, SwiftIndex exposes the following tools:
 Search for code in the indexed codebase.
 
 **Parameters:**
+
 - `query` (required): Search query string
 - `limit` (optional): Maximum results (default: 20)
 - `semantic_weight` (optional): Weight for semantic search (0.0-1.0, default: 0.7)
 
 **Example:**
+
 ```json
 {
   "query": "user authentication flow",
@@ -208,6 +210,7 @@ Search for code in the indexed codebase.
 Trigger indexing of the codebase.
 
 **Parameters:**
+
 - `path` (optional): Path to index (default: current directory)
 - `force` (optional): Force re-index all files (default: false)
 
@@ -216,6 +219,7 @@ Trigger indexing of the codebase.
 Get the current index status.
 
 **Returns:**
+
 - Indexed file count
 - Total chunks
 - Last index time
