@@ -179,7 +179,7 @@
 - [x] D.4.4 Implement `VoyageProvider.swift`
 - [x] D.4.5 Implement `OpenAIProvider.swift`
 - [x] D.4.6 Implement `EmbeddingService.swift` (chain orchestrator)
-- [ ] D.4.7 Implement `ModelDownloader.swift`
+- [x] D.4.7 Implement `ModelDownloader.swift`
 
 ##### D.5 Gate: Embeddings Complete
 - [x] **GATE D:** All 8 embedding tests pass
@@ -303,9 +303,9 @@
 - [x] H.1.9 Implement `InitCommand.swift`
 
 ##### H.2 CLI Tests
-- [ ] H.2.1 Write `test_indexCommand()`
-- [ ] H.2.2 Write `test_searchCommand()`
-- [ ] H.2.3 Write `test_installClaudeCode()`
+- [x] H.2.1 Write `test_indexCommand()`
+- [x] H.2.2 Write `test_searchCommand()`
+- [x] H.2.3 Write `test_installClaudeCode()`
 
 ##### H.3 Gate: CLI Complete
 - [x] **GATE H:** `swiftindex index` works E2E
@@ -341,34 +341,34 @@
 ## Phase 5: Integration and Polish
 
 ### J.1 Integration Tests
-- [ ] J.1.1 Write E2E test: index → search flow
-- [ ] J.1.2 Write E2E test: watch → modify → search
-- [ ] J.1.3 Write E2E test: MCP server full workflow
-- [ ] J.1.4 Write E2E test: provider fallback chain
+- [x] J.1.1 Write E2E test: index → search flow
+- [x] J.1.2 Write E2E test: watch → modify → search
+- [x] J.1.3 Write E2E test: MCP server full workflow
+- [x] J.1.4 Write E2E test: provider fallback chain
 
 ### J.2 Performance Tests
-- [ ] J.2.1 Benchmark indexing 1K files
-- [ ] J.2.2 Benchmark indexing 10K files
-- [ ] J.2.3 Benchmark search latency
-- [ ] J.2.4 Profile memory usage
+- [x] J.2.1 Benchmark indexing 1K files
+- [x] J.2.2 Benchmark indexing 10K files
+- [x] J.2.3 Benchmark search latency
+- [x] J.2.4 Profile memory usage
 
 ### J.3 Documentation
-- [ ] J.3.1 Update README.md
-- [ ] J.3.2 Document configuration options
-- [ ] J.3.3 Document MCP tools
-- [ ] J.3.4 Add usage examples
+- [x] J.3.1 Update README.md
+- [x] J.3.2 Document configuration options
+- [x] J.3.3 Document MCP tools
+- [x] J.3.4 Add usage examples
 
 ### J.4 Distribution
 - [ ] J.4.1 Create Homebrew formula
-- [ ] J.4.2 Create release workflow
-- [ ] J.4.3 Add versioning
+- [x] J.4.2 Create release workflow
+- [x] J.4.3 Add versioning
 
 ### J.5 Final Gate
-- [ ] **FINAL GATE:** All 60+ tests pass
-- [ ] **FINAL GATE:** `swiftindex index` + `swiftindex search "auth"` works
-- [ ] **FINAL GATE:** `swiftindex install-claude-code` creates valid config
-- [ ] **FINAL GATE:** MCP server responds to all 4 tools
-- [ ] **FINAL GATE:** Watch mode detects and re-indexes changes
+- [x] **FINAL GATE:** All 60+ tests pass (260 tests passed)
+- [x] **FINAL GATE:** `swiftindex index` + `swiftindex search "auth"` works
+- [x] **FINAL GATE:** `swiftindex install-claude-code` creates valid config
+- [x] **FINAL GATE:** MCP server responds to all 4 tools
+- [x] **FINAL GATE:** Watch mode detects and re-indexes changes
 
 ---
 
@@ -386,7 +386,7 @@
 | 4 | H | 3 | CLI commands |
 | 4 | I | 5 | Watch mode |
 | 5 | J | 4 | Integration E2E |
-| **TOTAL** | | **76** | |
+| **TOTAL** | | **260** | (actual test count as of final gate) |
 
 ---
 
