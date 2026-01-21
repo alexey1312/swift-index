@@ -1,0 +1,37 @@
+# SwiftIndex configuration file
+
+[embedding]
+provider = "auto"
+model = "all-MiniLM-L6-v2"
+dimension = 384
+
+[search]
+semantic_weight = 0.7
+rrf_k = 60
+
+[search.multi_hop]
+enabled = false
+depth = 2
+
+[indexing]
+exclude_patterns = [
+    ".git",
+    ".build",
+    "DerivedData",
+    "Pods",
+    "Carthage",
+    ".swiftpm",
+]
+max_file_size = 1_000_000
+chunk_size = 1500
+chunk_overlap = 200
+
+[storage]
+index_path = ".swiftindex"
+cache_path = "~/.cache/swiftindex"
+
+[watch]
+debounce_ms = 500
+
+[logging]
+level = "info"

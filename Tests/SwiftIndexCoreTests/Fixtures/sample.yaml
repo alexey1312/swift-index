@@ -1,0 +1,41 @@
+# Sample YAML config for testing
+
+name: SwiftIndex
+version: "1.0.0"
+
+embedding:
+  provider: auto
+  model: all-MiniLM-L6-v2
+  dimension: 384
+
+search:
+  semantic_weight: 0.7
+  rrf_k: 60
+  multi_hop:
+    enabled: false
+    depth: 2
+
+indexing:
+  exclude_patterns:
+    - .git
+    - .build
+    - DerivedData
+    - Pods
+  max_file_size: 1000000
+  chunk_size: 1500
+  chunk_overlap: 200
+
+providers:
+  - name: mlx
+    priority: 1
+    local: true
+  - name: ollama
+    priority: 2
+    local: true
+  - name: swift-embeddings
+    priority: 3
+    local: true
+  - name: voyage
+    priority: 4
+    local: false
+    requires_api_key: true

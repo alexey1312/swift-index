@@ -1,0 +1,22 @@
+{
+  "name": "SwiftIndex",
+  "version": "1.0.0",
+  "description": "Semantic code search for Swift",
+  "features": [
+    "SwiftSyntax parsing",
+    "tree-sitter support",
+    "Hybrid search",
+    "MCP integration"
+  ],
+  "config": {
+    "embedding": {
+      "provider": "auto",
+      "model": "all-MiniLM-L6-v2",
+      "dimension": 384
+    },
+    "search": {
+      "semanticWeight": 0.7,
+      "rrfK": 60
+    }
+  }
+}

@@ -1,0 +1,23 @@
+# Sample SwiftIndex configuration
+
+[index]
+root = "."
+include = ["**/*.swift", "**/*.m", "**/*.h"]
+exclude = [".build", "DerivedData", "Pods"]
+
+[embedding]
+provider = "mlx"
+model = "nomic-embed-text-v1.5"
+batch_size = 32
+
+[embedding.fallback]
+provider = "swift-embeddings"
+model = "all-MiniLM-L6-v2"
+
+[search]
+semantic_weight = 0.7
+max_results = 50
+multi_hop_depth = 2
+
+[storage]
+path = ".swiftindex"
