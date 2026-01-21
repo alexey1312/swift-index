@@ -1,0 +1,127 @@
+amends "package://github.com/jdx/hk/releases/download/v1.28.0/hk@1.28.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.28.0/hk@1.28.0#/Builtins.pkl"
+
+// =============================================================================
+// hk Configuration for swift-index
+// =============================================================================
+// All hooks run in parallel for maximum performance
+// =============================================================================
+
+// Excludes for generated/binary files
+local generated_excludes = List(".build/**", "docs/**", "CHANGELOG.md")
+
+// SourceKit toolchain path for SwiftLint
+local sourcekit_env = new Mapping<String, String> {
+    ["TOOLCHAIN_DIR"] = read("env:HOME") + "/.local/share/mise/installs/swift/6.0.3"
+}
+
+// =============================================================================
+// Swift Linters (parallel, check_first optimization)
+// =============================================================================
+
+local swift_linters = new Mapping<String, Step> {
+    ["swiftformat"] {
+        glob = List("*.swift")
+        check = "swiftformat --lint {{files}}"
+        fix = "swiftformat {{files}}"
+        batch = true
+        stage = List("*.swift")
+        check_first = true
+        hide = true
+    }
+    ["swiftlint"] {
+        glob = List("*.swift")
+        fix = "swiftlint --fix {{files}}"
+        batch = true
+        stage = List("*.swift")
+        hide = true
+        env = sourcekit_env
+    }
+    // Strict check after fix to catch unfixable errors
+    ["swiftlint-strict"] {
+        glob = List("*.swift")
+        check = "swiftlint lint --strict --quiet {{files}}"
+        batch = true
+        depends = "swiftlint"
+        hide = true
+        env = sourcekit_env
+    }
+}
+
+// =============================================================================
+// dprint Formatter (Markdown) - Rust-based, fast
+// =============================================================================
+
+local dprint_checks = new Mapping<String, Step> {
+    ["dprint"] = (Builtins.dprint) {
+        exclude = List("CHANGELOG.md", ".claude/**", ".cursor/**")
+        stage = List("*.md")
+        check_first = true
+        hide = true
+    }
+}
+
+// =============================================================================
+// Builtin Checks (fast, parallel)
+// =============================================================================
+
+local builtin_checks = new Mapping<String, Step> {
+    ["trailing-whitespace"] = (Builtins.trailing_whitespace) {
+        exclude = generated_excludes
+        hide = true
+    }
+    ["check-merge-conflict"] = (Builtins.check_merge_conflict) {
+        hide = true
+    }
+    ["newlines"] = (Builtins.newlines) {
+        exclude = generated_excludes
+        hide = true
+    }
+    ["actionlint"] {
+        glob = List(".github/workflows/*.yml", ".github/workflows/*.yaml")
+        check = "actionlint {{files}}"
+        batch = true
+        hide = true
+    }
+}
+
+// =============================================================================
+// Combined Linters
+// =============================================================================
+
+local all_linters = new Mapping<String, Step> {
+    ...swift_linters
+    ...dprint_checks
+    ...builtin_checks
+}
+
+// =============================================================================
+// Hooks Configuration
+// =============================================================================
+
+hooks {
+    // Pre-commit: runs all linters with auto-fix
+    ["pre-commit"] {
+        fix = true
+        stash = "patch-file"
+        steps = all_linters
+    }
+
+    // Commit-msg: validate conventional commits format
+    ["commit-msg"] {
+        steps {
+            ["conventional-commit"] = Builtins.check_conventional_commit
+        }
+    }
+
+    // Helper: run all linters with fix
+    ["fix"] {
+        fix = true
+        steps = all_linters
+    }
+
+    // Helper: run all linters without fix
+    ["check"] {
+        steps = all_linters
+    }
+}

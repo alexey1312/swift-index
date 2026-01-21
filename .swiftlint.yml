@@ -1,0 +1,57 @@
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - Packages
+
+disabled_rules:
+  - trailing_comma
+  - todo
+  - opening_brace
+  - superfluous_disable_command
+  - blanket_disable_command
+  - trailing_whitespace
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+
+line_length:
+  warning: 120
+  error: 200
+  ignores_comments: true
+
+identifier_name:
+  min_length:
+    warning: 1
+  excluded:
+    - id
+    - to
+    - r
+    - g
+    - b
+    - a
+  allowed_symbols:
+    - _
+
+nesting:
+  type_level:
+    warning: 4
+
+large_tuple:
+  warning: 4
+  error: 5
+
+type_name:
+  excluded:
+    - iOS
+
+function_body_length:
+  warning: 60
+  error: 100
+
+type_body_length:
+  warning: 300
+  error: 800

@@ -1,0 +1,9 @@
+#!/bin/sh
+# Pre-commit hook - runs linters with auto-fix
+# Skip: HK=0 or during rebase
+test "${HK:-1}" = "0" && exit 0
+test -d "$(git rev-parse --git-dir)/rebase-merge" 2>/dev/null && exit 0
+test -d "$(git rev-parse --git-dir)/rebase-apply" 2>/dev/null && exit 0
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$REPO_ROOT/bin/mise" x -- hk run --silent pre-commit "$@"

@@ -1,0 +1,7 @@
+#!/bin/sh
+# Commit-msg hook - validates conventional commits format
+# Skip: HK=0
+test "${HK:-1}" = "0" && exit 0
+
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+exec "$REPO_ROOT/bin/mise" x -- hk run --silent commit-msg "$@"
