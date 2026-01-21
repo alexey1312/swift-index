@@ -48,3 +48,9 @@ backend = "aqua:realm/SwiftLint"
 "platforms.linux-x64" = { checksum = "sha256:20330b66b7385d3f8c90aed8b537fcc48c9e0411a626906f84ebdb407d4ee4d1", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/swiftlint_linux_amd64.zip"}
 "platforms.macos-arm64" = { checksum = "sha256:0e6369741b694b701e9bd4e4fe9b408a5946d4bb076b79ea6ec2bce428475739", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/portable_swiftlint.zip"}
 "platforms.macos-x64" = { checksum = "sha256:0e6369741b694b701e9bd4e4fe9b408a5946d4bb076b79ea6ec2bce428475739", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/portable_swiftlint.zip"}
+
+[[tools.xcsift]]
+version = "1.1.0"
+backend = "github:ldomaradzki/xcsift"
+"platforms.linux-x64" = { checksum = "sha256:584e6ba342f6140863be97b9a22a6fd0f6be7e19912ccc8843d93b5ff74fb889", url = "https://github.com/ldomaradzki/xcsift/releases/download/v1.1.0/xcsift-v1.1.0-linux-x64.tar.gz", url_api = "https://api.github.com/repos/ldomaradzki/xcsift/releases/assets/343884290"}
+"platforms.macos-arm64" = { checksum = "sha256:413207378e1dd6e7a2122005ba11dc6bad1ecc3e8a01b8c9be3d2baae9cfabad", url = "https://github.com/ldomaradzki/xcsift/releases/download/v1.1.0/xcsift-v1.1.0-macos-arm64.tar.gz", url_api = "https://api.github.com/repos/ldomaradzki/xcsift/releases/assets/343884289"}

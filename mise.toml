@@ -34,6 +34,7 @@ run = "git config core.hooksPath .githooks 2>/dev/null || true"
 [tools]
 # --- Swift Development ---
 swift = "6.2.3"        # Swift compiler and toolchain
+xcsift = "1.1.0"       # A Swift parses output
 swiftformat = "0.58.7" # Swift code formatting
 swiftlint = "0.63.1"   # Swift linting
 
@@ -53,19 +54,19 @@ pkl = "0.30.2" # Configuration language (for hk.pkl)
 
 [tasks.build]
 description = "Build the Swift package (debug)"
-run = "swift build"
+run = "swift build 2>&1 | xcsift"
 
 [tasks."build:release"]
 description = "Build the Swift package (release)"
-run = "swift build --configuration release"
+run = "swift build --configuration release 2>&1 | xcsift"
 
 [tasks.test]
 description = "Run all tests"
-run = "swift test"
+run = "swift test 2>&1 | xcsift"
 
 [tasks."test:filter"]
 description = "Run tests with filter (usage: mise run test:filter SwiftIndexCoreTests)"
-run = "swift test --filter {{arg(name='filter')}}"
+run = "swift test --filter {{arg(name='filter')}} 2>&1 | xcsift"
 
 [tasks.lint]
 description = "Run SwiftLint and actionlint"
@@ -106,8 +107,11 @@ hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
 """
 
 [tasks.setup]
-description = "Show git hooks status"
-run = "echo 'Git hooks:' && git config core.hooksPath && ls -la .githooks/"
+description = "Configure git hooks"
+run = """
+git config core.hooksPath .githooks
+echo "✓ Git hooks configured: $(git config core.hooksPath)"
+"""
 
 [tasks.pre-commit]
 description = "Run all pre-commit checks"
