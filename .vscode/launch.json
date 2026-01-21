@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:swift-index}",
+            "name": "Debug swiftindex",
+            "program": "${workspaceFolder:swift-index}/.build/debug/swiftindex",
+            "preLaunchTask": "swift: Build Debug swiftindex"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:swift-index}",
+            "name": "Release swiftindex",
+            "program": "${workspaceFolder:swift-index}/.build/release/swiftindex",
+            "preLaunchTask": "swift: Build Release swiftindex"
+        }
+    ]
+}
