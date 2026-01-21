@@ -1,0 +1,121 @@
+# =============================================================================
+# mise Configuration for swift-index
+# =============================================================================
+# This file defines project tools, tasks, and environment variables.
+#
+# Bootstrap Binary:
+# -----------------
+# Use ./bin/mise to run mise commands. It will auto-download mise if needed.
+#
+# Usage:
+#   ./bin/mise install    # Install all tools
+#   ./bin/mise run build  # Run build task
+#   ./bin/mise run test   # Run tests
+# =============================================================================
+
+[settings]
+lockfile = true
+experimental = true
+legacy_version_file = false
+
+# =============================================================================
+# Git Hooks (native git mechanism via core.hooksPath)
+# =============================================================================
+# Hooks are stored in .githooks/ directory (tracked in repo)
+# Auto-configures on directory entry via hooks.enter
+
+[hooks.enter]
+run = "git config core.hooksPath .githooks 2>/dev/null || true"
+
+# =============================================================================
+# Tools
+# =============================================================================
+
+[tools]
+# --- Swift Development ---
+swift = "6.0.3"        # Swift compiler and toolchain
+swiftformat = "0.55.3" # Swift code formatting
+swiftlint = "0.58.2"   # Swift linting
+
+# --- Documentation & Formatting ---
+dprint = "0.50.2" # MD/JSON/YAML formatting (Rust, fast)
+
+# --- Git & CI ---
+hk = "1.28.0"        # Git hooks manager
+actionlint = "1.7.9" # GitHub Actions linting
+
+# --- Configuration ---
+pkl = "0.30.2" # Configuration language (for hk.pkl)
+
+# =============================================================================
+# Tasks
+# =============================================================================
+
+[tasks.build]
+description = "Build the Swift package (debug)"
+run = "swift build"
+
+[tasks."build:release"]
+description = "Build the Swift package (release)"
+run = "swift build --configuration release"
+
+[tasks.test]
+description = "Run all tests"
+run = "swift test"
+
+[tasks."test:filter"]
+description = "Run tests with filter (usage: mise run test:filter SwiftIndexCoreTests)"
+run = "swift test --filter {{arg(name='filter')}}"
+
+[tasks.lint]
+description = "Run SwiftLint and actionlint"
+run = """
+swiftlint lint --strict Sources Tests
+actionlint
+"""
+
+[tasks."lint:fix"]
+description = "Run SwiftLint with auto-fix"
+run = "swiftlint lint --fix Sources Tests"
+
+[tasks."format:swift"]
+description = "Format Swift code"
+run = "swiftformat Sources Tests"
+
+[tasks."format-check:swift"]
+description = "Check Swift code formatting (CI)"
+run = "swiftformat Sources Tests --lint"
+
+[tasks."format:md"]
+description = "Format markdown files"
+run = "dprint fmt"
+
+[tasks."format-check:md"]
+description = "Check markdown formatting (CI)"
+run = "dprint check"
+
+[tasks.format]
+description = "Format all files (Swift + Markdown)"
+run = "hk fix --all 2>&1 | grep -E '^(✔|✗|hk )' || true"
+
+[tasks.format-check]
+description = "Check all formatting (CI)"
+run = """
+set -o pipefail
+hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
+"""
+
+[tasks.setup]
+description = "Show git hooks status"
+run = "echo 'Git hooks:' && git config core.hooksPath && ls -la .githooks/"
+
+[tasks.pre-commit]
+description = "Run all pre-commit checks"
+run = """
+set -o pipefail
+hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
+"""
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "swift package clean && rm -rf .build"
