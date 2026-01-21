@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "swift-index",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .library(
@@ -37,7 +37,7 @@ let package = Package(
         .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.23.0"),
 
         // Configuration
-        .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.6.0"),
+        .package(url: "https://github.com/alexey1312/swift-toml.git", branch: "alexey1312/pure-c-bridge"),
 
         // CLI
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
@@ -51,6 +51,7 @@ let package = Package(
     ],
     targets: [
         // MARK: - Core Library
+
         .target(
             name: "SwiftIndexCore",
             dependencies: [
@@ -71,7 +72,7 @@ let package = Package(
                 .product(name: "USearch", package: "usearch"),
 
                 // Configuration
-                .product(name: "TOMLKit", package: "TOMLKit"),
+                .product(name: "TOML", package: "swift-toml"),
 
                 // Crypto
                 .product(name: "Crypto", package: "swift-crypto"),
@@ -84,6 +85,7 @@ let package = Package(
         ),
 
         // MARK: - MCP Server
+
         .target(
             name: "SwiftIndexMCP",
             dependencies: [
@@ -94,6 +96,7 @@ let package = Package(
         ),
 
         // MARK: - CLI
+
         .executableTarget(
             name: "swiftindex",
             dependencies: [
@@ -106,12 +109,13 @@ let package = Package(
         ),
 
         // MARK: - Tests
+
         .testTarget(
             name: "SwiftIndexCoreTests",
             dependencies: ["SwiftIndexCore"],
             path: "Tests/SwiftIndexCoreTests",
             resources: [
-                .copy("Fixtures")
+                .copy("Fixtures"),
             ]
         ),
         .testTarget(
