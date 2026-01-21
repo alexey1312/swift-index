@@ -1,5 +1,5 @@
 {
-  "originHash" : "3152a293a27b746c74ed850bfbdc824527af486aaf92397650fb8795c78eb338",
+  "originHash" : "24a45699608af616cbd8a82144f80c18b67c6973befac310c7b4e9bfd6d4370c",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -130,10 +130,10 @@
     {
       "identity" : "swift-toml",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/mattt/swift-toml.git",
+      "location" : "https://github.com/alexey1312/swift-toml.git",
       "state" : {
-        "revision" : "1dfcf0e656e0bb4952a085eea0eb5c3bc6df0cce",
-        "version" : "1.0.0"
+        "branch" : "alexey1312/pure-c-bridge",
+        "revision" : "f658aa38268e37a0d1c6a59977e3322a69e15743"
       }
     },
     {
