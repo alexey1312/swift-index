@@ -1,0 +1,74 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+jobs:
+  build:
+    name: Build macOS Universal
+    runs-on: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
+
+      - name: Set version from tag
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/}"
+          sed -i '' "s/version: \".*\"/version: \"$VERSION\"/" Sources/swiftindex/SwiftIndexApp.swift
+
+      - name: Build release binary (Universal)
+        run: |
+          swift build -c release --arch arm64
+          swift build -c release --arch x86_64
+          mkdir -p .build/universal
+          lipo -create \
+            .build/arm64-apple-macosx/release/swiftindex \
+            .build/x86_64-apple-macosx/release/swiftindex \
+            -output .build/universal/swiftindex
+
+      - name: Create release archive
+        run: |
+          mkdir -p dist
+          cp .build/universal/swiftindex dist/
+          cp LICENSE dist/ 2>/dev/null || echo "No LICENSE file"
+          cp README.md dist/ 2>/dev/null || echo "No README file"
+          cd dist && zip -r ../swiftindex-macos.zip .
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: swiftindex-macos
+          path: swiftindex-macos.zip
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: swiftindex-macos
+          path: artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, '-') }}
+          files: artifacts/swiftindex-macos.zip
