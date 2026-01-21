@@ -1,5 +1,5 @@
 {
-  "originHash" : "493eefb817081a726ef54a225472becb5685e62c6a7ae46c849bafb4729c85e8",
+  "originHash" : "3152a293a27b746c74ed850bfbdc824527af486aaf92397650fb8795c78eb338",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -128,6 +128,15 @@
       }
     },
     {
+      "identity" : "swift-toml",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/swift-toml.git",
+      "state" : {
+        "revision" : "1dfcf0e656e0bb4952a085eea0eb5c3bc6df0cce",
+        "version" : "1.0.0"
+      }
+    },
+    {
       "identity" : "swift-transformers",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/huggingface/swift-transformers.git",
@@ -143,15 +152,6 @@
       "state" : {
         "revision" : "08ef81eb8620617b55b08868126707ad72bf754f",
         "version" : "0.25.0"
-      }
-    },
-    {
-      "identity" : "tomlkit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/LebJe/TOMLKit.git",
-      "state" : {
-        "revision" : "ec6198d37d495efc6acd4dffbd262cdca7ff9b3f",
-        "version" : "0.6.0"
       }
     },
     {
