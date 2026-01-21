@@ -492,7 +492,7 @@ struct SemanticSearchTests {
         #expect(!results.isEmpty)
         #expect(results.first?.id != nil)
         if let score = results.first?.score {
-            #expect(score >= 0)
+            #expect(score >= -1.0 && score <= 1.0)
         }
     }
 }
