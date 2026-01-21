@@ -31,6 +31,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// The embedding operation timed out.
     case timeout
 
+    /// The embedding operation failed.
+    case embeddingFailed(String)
+
     /// All providers in the chain failed.
     case allProvidersFailed([String: ProviderError])
 
@@ -61,6 +64,8 @@ extension ProviderError: LocalizedError {
             return "Dimension mismatch: expected \(expected), got \(actual)"
         case .timeout:
             return "Embedding operation timed out"
+        case .embeddingFailed(let message):
+            return "Embedding failed: \(message)"
         case .allProvidersFailed(let errors):
             let details = errors.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
             return "All providers failed: \(details)"

@@ -1,0 +1,477 @@
+// MARK: - TreeSitterParser
+
+import Crypto
+import Foundation
+import SwiftTreeSitter
+
+/// A parser for non-Swift files using tree-sitter or pattern-based parsing.
+///
+/// This parser handles multiple languages including:
+/// - Objective-C (.m, .mm, .h)
+/// - C/C++ (.c, .cpp, .cc, .cxx, .h, .hpp)
+/// - JSON (.json)
+/// - YAML (.yaml, .yml)
+/// - Markdown (.md, .markdown)
+///
+/// For languages where tree-sitter grammars are not available at runtime,
+/// it falls back to pattern-based parsing that extracts meaningful chunks.
+public struct TreeSitterParser: Parser, Sendable {
+    // MARK: - Parser Protocol
+
+    public var supportedExtensions: Set<String> {
+        [
+            // Objective-C
+            "m", "mm", "h",
+            // C/C++
+            "c", "cpp", "cc", "cxx", "hpp",
+            // Data formats
+            "json",
+            "yaml", "yml",
+            // Documentation
+            "md", "markdown",
+        ]
+    }
+
+    // MARK: - Initialization
+
+    public init() {}
+
+    // MARK: - Parsing
+
+    public func parse(content: String, path: String) -> ParseResult {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure(.emptyContent)
+        }
+
+        let ext = (path as NSString).pathExtension.lowercased()
+
+        // Route to specialized parser based on extension
+        switch ext {
+        case "m", "mm":
+            return parseObjectiveC(content: content, path: path)
+        case "h":
+            return parseHeader(content: content, path: path)
+        case "c":
+            return parseC(content: content, path: path)
+        case "cpp", "cc", "cxx", "hpp":
+            return parseCpp(content: content, path: path)
+        case "json":
+            return parseJSON(content: content, path: path)
+        case "yaml", "yml":
+            return parseYAML(content: content, path: path)
+        case "md", "markdown":
+            return parseMarkdown(content: content, path: path)
+        default:
+            return PlainTextParser().parse(content: content, path: path)
+        }
+    }
+
+    // MARK: - Objective-C Parsing
+
+    private func parseObjectiveC(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+        var chunks: [CodeChunk] = []
+
+        // Parse @implementation blocks
+        let implPattern = #"@implementation\s+(\w+)[\s\S]*?@end"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: implPattern,
+            content: content,
+            path: path,
+            kind: .class,
+            fileHash: fileHash
+        ))
+
+        // Parse method implementations within @implementation
+        let methodPattern = #"^[-+]\s*\([^)]+\)\s*\w+[^{]*\{[\s\S]*?^\}"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: methodPattern,
+            content: content,
+            path: path,
+            kind: .method,
+            fileHash: fileHash,
+            multiline: true
+        ))
+
+        // If no specific patterns matched, create a document chunk
+        if chunks.isEmpty {
+            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+        }
+
+        return .success(chunks)
+    }
+
+    private func parseHeader(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+        var chunks: [CodeChunk] = []
+
+        // Parse @interface declarations
+        let interfacePattern = #"@interface\s+(\w+)[\s\S]*?@end"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: interfacePattern,
+            content: content,
+            path: path,
+            kind: .interface,
+            fileHash: fileHash
+        ))
+
+        // Parse @protocol declarations
+        let protocolPattern = #"@protocol\s+(\w+)[\s\S]*?@end"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: protocolPattern,
+            content: content,
+            path: path,
+            kind: .protocol,
+            fileHash: fileHash
+        ))
+
+        // Parse C function declarations
+        let funcDeclPattern = #"^\w[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*;"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: funcDeclPattern,
+            content: content,
+            path: path,
+            kind: .function,
+            fileHash: fileHash,
+            multiline: true
+        ))
+
+        // Parse struct definitions
+        let structPattern = #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: structPattern,
+            content: content,
+            path: path,
+            kind: .struct,
+            fileHash: fileHash
+        ))
+
+        // If no specific patterns matched, create a document chunk
+        if chunks.isEmpty {
+            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+        }
+
+        return .success(chunks)
+    }
+
+    // MARK: - C Parsing
+
+    private func parseC(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+        var chunks: [CodeChunk] = []
+
+        // Parse function definitions
+        let funcPattern = #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: funcPattern,
+            content: content,
+            path: path,
+            kind: .function,
+            fileHash: fileHash,
+            multiline: true
+        ))
+
+        // Parse struct definitions
+        let structPattern = #"struct\s+(\w+)\s*\{[\s\S]*?\}\s*;"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: structPattern,
+            content: content,
+            path: path,
+            kind: .struct,
+            fileHash: fileHash
+        ))
+
+        // Parse typedef structs
+        let typedefStructPattern = #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: typedefStructPattern,
+            content: content,
+            path: path,
+            kind: .struct,
+            fileHash: fileHash
+        ))
+
+        // Parse enum definitions
+        let enumPattern = #"enum\s+(\w+)\s*\{[\s\S]*?\}\s*;"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: enumPattern,
+            content: content,
+            path: path,
+            kind: .enum,
+            fileHash: fileHash
+        ))
+
+        // If no specific patterns matched, create a document chunk
+        if chunks.isEmpty {
+            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+        }
+
+        return .success(chunks)
+    }
+
+    // MARK: - C++ Parsing
+
+    private func parseCpp(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+        var chunks: [CodeChunk] = []
+
+        // Parse class definitions
+        let classPattern = #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: classPattern,
+            content: content,
+            path: path,
+            kind: .class,
+            fileHash: fileHash,
+            multiline: true
+        ))
+
+        // Parse function definitions (including member functions)
+        let funcPattern = #"^[\w\s\*:&<>]+\s+(\w+::)?(\w+)\s*\([^)]*\)\s*(const)?\s*\{[\s\S]*?^\}"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: funcPattern,
+            content: content,
+            path: path,
+            kind: .function,
+            fileHash: fileHash,
+            multiline: true
+        ))
+
+        // Parse namespace definitions
+        let namespacePattern = #"namespace\s+(\w+)\s*\{"#
+        chunks.append(contentsOf: extractMatches(
+            pattern: namespacePattern,
+            content: content,
+            path: path,
+            kind: .namespace,
+            fileHash: fileHash
+        ))
+
+        // If no specific patterns matched, create a document chunk
+        if chunks.isEmpty {
+            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+        }
+
+        return .success(chunks)
+    }
+
+    // MARK: - JSON Parsing
+
+    private func parseJSON(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+
+        // For JSON, we treat the whole file as a document
+        // and extract top-level keys as symbols
+        var symbols: [String] = []
+
+        // Extract top-level keys from JSON objects
+        let keyPattern = #"^\s*"(\w+)"\s*:"#
+        if let regex = try? NSRegularExpression(pattern: keyPattern, options: .anchorsMatchLines) {
+            let range = NSRange(content.startIndex..., in: content)
+            let matches = regex.matches(in: content, options: [], range: range)
+
+            for match in matches.prefix(20) { // Limit to first 20 keys
+                if let keyRange = Range(match.range(at: 1), in: content) {
+                    symbols.append(String(content[keyRange]))
+                }
+            }
+        }
+
+        let chunk = CodeChunk(
+            id: generateChunkId(path: path, content: content),
+            path: path,
+            content: content,
+            startLine: 1,
+            endLine: content.components(separatedBy: "\n").count,
+            kind: .document,
+            symbols: symbols,
+            references: [],
+            fileHash: fileHash
+        )
+
+        return .success([chunk])
+    }
+
+    // MARK: - YAML Parsing
+
+    private func parseYAML(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+
+        // Extract top-level keys from YAML
+        var symbols: [String] = []
+
+        let keyPattern = #"^(\w+):"#
+        if let regex = try? NSRegularExpression(pattern: keyPattern, options: .anchorsMatchLines) {
+            let range = NSRange(content.startIndex..., in: content)
+            let matches = regex.matches(in: content, options: [], range: range)
+
+            for match in matches.prefix(20) { // Limit to first 20 keys
+                if let keyRange = Range(match.range(at: 1), in: content) {
+                    symbols.append(String(content[keyRange]))
+                }
+            }
+        }
+
+        let chunk = CodeChunk(
+            id: generateChunkId(path: path, content: content),
+            path: path,
+            content: content,
+            startLine: 1,
+            endLine: content.components(separatedBy: "\n").count,
+            kind: .document,
+            symbols: symbols,
+            references: [],
+            fileHash: fileHash
+        )
+
+        return .success([chunk])
+    }
+
+    // MARK: - Markdown Parsing
+
+    private func parseMarkdown(content: String, path: String) -> ParseResult {
+        let fileHash = computeHash(content)
+        var chunks: [CodeChunk] = []
+
+        let lines = content.components(separatedBy: "\n")
+        var currentSection = ""
+        var currentSectionStart = 1
+        var currentSectionTitle = ""
+
+        for (index, line) in lines.enumerated() {
+            let lineNumber = index + 1
+
+            // Check for headers
+            if line.hasPrefix("#") {
+                // Save previous section if it has content
+                if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let chunk = CodeChunk(
+                        id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
+                        path: path,
+                        content: currentSection,
+                        startLine: currentSectionStart,
+                        endLine: lineNumber - 1,
+                        kind: .section,
+                        symbols: currentSectionTitle.isEmpty ? [] : [currentSectionTitle],
+                        references: [],
+                        fileHash: fileHash
+                    )
+                    chunks.append(chunk)
+                }
+
+                // Start new section
+                currentSection = line + "\n"
+                currentSectionStart = lineNumber
+                currentSectionTitle = line.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+            } else {
+                currentSection += line + "\n"
+            }
+        }
+
+        // Don't forget the last section
+        if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let chunk = CodeChunk(
+                id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
+                path: path,
+                content: currentSection,
+                startLine: currentSectionStart,
+                endLine: lines.count,
+                kind: .section,
+                symbols: currentSectionTitle.isEmpty ? [] : [currentSectionTitle],
+                references: [],
+                fileHash: fileHash
+            )
+            chunks.append(chunk)
+        }
+
+        // If no sections found, create a single document chunk
+        if chunks.isEmpty {
+            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+        }
+
+        return .success(chunks)
+    }
+
+    // MARK: - Helper Methods
+
+    private func extractMatches(
+        pattern: String,
+        content: String,
+        path: String,
+        kind: ChunkKind,
+        fileHash: String,
+        multiline: Bool = false
+    ) -> [CodeChunk] {
+        var options: NSRegularExpression.Options = []
+        if multiline {
+            options.insert(.anchorsMatchLines)
+        }
+
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
+            return []
+        }
+
+        let range = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, options: [], range: range)
+
+        return matches.compactMap { match -> CodeChunk? in
+            guard let matchRange = Range(match.range, in: content) else {
+                return nil
+            }
+
+            let matchedContent = String(content[matchRange])
+
+            // Calculate line numbers
+            let beforeMatch = String(content[..<matchRange.lowerBound])
+            let startLine = beforeMatch.components(separatedBy: "\n").count
+            let endLine = startLine + matchedContent.components(separatedBy: "\n").count - 1
+
+            // Extract symbol name if captured
+            var symbols: [String] = []
+            if match.numberOfRanges > 1, let symbolRange = Range(match.range(at: 1), in: content) {
+                symbols.append(String(content[symbolRange]))
+            }
+
+            return CodeChunk(
+                id: generateChunkId(path: path, content: matchedContent, startLine: startLine),
+                path: path,
+                content: matchedContent,
+                startLine: startLine,
+                endLine: endLine,
+                kind: kind,
+                symbols: symbols,
+                references: [],
+                fileHash: fileHash
+            )
+        }
+    }
+
+    private func createDocumentChunk(content: String, path: String, fileHash: String) -> CodeChunk {
+        CodeChunk(
+            id: generateChunkId(path: path, content: content),
+            path: path,
+            content: content,
+            startLine: 1,
+            endLine: content.components(separatedBy: "\n").count,
+            kind: .document,
+            symbols: [],
+            references: [],
+            fileHash: fileHash
+        )
+    }
+
+    private func computeHash(_ content: String) -> String {
+        let data = Data(content.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func generateChunkId(path: String, content: String, startLine: Int = 1) -> String {
+        let components = [path, String(startLine), String(content.prefix(100).hashValue)]
+        let joined = components.joined(separator: ":")
+        let data = Data(joined.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+}

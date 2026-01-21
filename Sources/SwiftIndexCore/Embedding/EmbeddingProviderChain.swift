@@ -279,6 +279,53 @@ extension EmbeddingProviderChain {
             return self
         }
 
+        /// Adds the Ollama provider for local server embeddings.
+        @discardableResult
+        public func addOllama(
+            baseURL: URL = URL(string: "http://localhost:11434")!,
+            modelName: String = "nomic-embed-text",
+            dimension: Int = 768
+        ) -> Builder {
+            providers.append(OllamaEmbeddingProvider(
+                baseURL: baseURL,
+                modelName: modelName,
+                dimension: dimension
+            ))
+            return self
+        }
+
+        /// Adds the Voyage AI provider for cloud embeddings.
+        @discardableResult
+        public func addVoyage(
+            apiKey: String,
+            modelName: String = "voyage-code-2",
+            dimension: Int = 1024
+        ) -> Builder {
+            guard !apiKey.isEmpty else { return self }
+            providers.append(VoyageProvider(
+                apiKey: apiKey,
+                modelName: modelName,
+                dimension: dimension
+            ))
+            return self
+        }
+
+        /// Adds the OpenAI provider for cloud embeddings.
+        @discardableResult
+        public func addOpenAI(
+            apiKey: String,
+            model: OpenAIProvider.Model = .textEmbedding3Small,
+            dimension: Int? = nil
+        ) -> Builder {
+            guard !apiKey.isEmpty else { return self }
+            providers.append(OpenAIProvider(
+                apiKey: apiKey,
+                model: model,
+                dimension: dimension
+            ))
+            return self
+        }
+
         /// Sets the chain identifier.
         @discardableResult
         public func id(_ id: String) -> Builder {

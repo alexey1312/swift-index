@@ -1,0 +1,544 @@
+import Foundation
+import Testing
+@testable import SwiftIndexCore
+
+// MARK: - TreeSitterParser Tests
+
+@Suite("TreeSitterParser Tests")
+struct TreeSitterParserTests {
+    // MARK: - C Function Tests
+
+    @Test("Parse C function declaration")
+    func testParseCFunction() {
+        let parser = TreeSitterParser()
+        let content = """
+        int calculateSum(int a, int b) {
+            return a + b;
+        }
+        """
+
+        let result = parser.parse(content: content, path: "helpers.c")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.contains { $0.content.contains("calculateSum") })
+    }
+
+    @Test("Parse C struct definition")
+    func testParseCStruct() {
+        let parser = TreeSitterParser()
+        let content = """
+        struct Point {
+            int x;
+            int y;
+        };
+        """
+
+        let result = parser.parse(content: content, path: "types.c")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.contains { $0.content.contains("Point") })
+    }
+
+    // MARK: - JSON Tests
+
+    @Test("Parse JSON object")
+    func testParseJSONObject() {
+        let parser = TreeSitterParser()
+        let content = """
+        {
+            "name": "swift-index",
+            "version": "1.0.0",
+            "dependencies": {
+                "swift-syntax": "600.0.0"
+            }
+        }
+        """
+
+        let result = parser.parse(content: content, path: "package.json")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.first?.kind == .document)
+    }
+
+    @Test("Parse JSON array")
+    func testParseJSONArray() {
+        let parser = TreeSitterParser()
+        let content = """
+        [
+            {"id": 1, "name": "item1"},
+            {"id": 2, "name": "item2"}
+        ]
+        """
+
+        let result = parser.parse(content: content, path: "items.json")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    // MARK: - YAML Tests
+
+    @Test("Parse YAML mapping")
+    func testParseYAMLMapping() {
+        let parser = TreeSitterParser()
+        let content = """
+        name: SwiftIndex
+        version: 1.0.0
+        settings:
+          debug: true
+          timeout: 30
+        """
+
+        let result = parser.parse(content: content, path: "config.yaml")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.first?.kind == .document)
+    }
+
+    @Test("Parse YAML sequence")
+    func testParseYAMLSequence() {
+        let parser = TreeSitterParser()
+        let content = """
+        - item1
+        - item2
+        - nested:
+            key: value
+        """
+
+        let result = parser.parse(content: content, path: "list.yml")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    // MARK: - Markdown Tests
+
+    @Test("Parse Markdown sections")
+    func testParseMarkdownSection() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Introduction
+
+        This is the introduction section.
+
+        ## Getting Started
+
+        Here's how to get started.
+
+        ### Installation
+
+        Run the following command.
+        """
+
+        let result = parser.parse(content: content, path: "README.md")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        // Should have chunks for different sections
+        #expect(chunks.contains { $0.content.contains("Introduction") })
+    }
+
+    @Test("Parse Markdown code block")
+    func testParseMarkdownCodeBlock() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Example
+
+        ```swift
+        let x = 42
+        print(x)
+        ```
+
+        Some text after code.
+        """
+
+        let result = parser.parse(content: content, path: "example.md")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    // MARK: - Objective-C Tests
+
+    @Test("Parse Objective-C interface")
+    func testParseObjCInterface() {
+        let parser = TreeSitterParser()
+        let content = """
+        @interface MyClass : NSObject
+
+        @property (nonatomic, strong) NSString *name;
+
+        - (void)doSomething;
+
+        @end
+        """
+
+        let result = parser.parse(content: content, path: "MyClass.h")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.contains { $0.content.contains("MyClass") })
+    }
+
+    @Test("Parse Objective-C implementation")
+    func testParseObjCImplementation() {
+        let parser = TreeSitterParser()
+        let content = """
+        @implementation MyClass
+
+        - (void)doSomething {
+            NSLog(@"Doing something");
+        }
+
+        @end
+        """
+
+        let result = parser.parse(content: content, path: "MyClass.m")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Parse Objective-C method definition")
+    func testParseObjCMethodDefinition() {
+        let parser = TreeSitterParser()
+        let content = """
+        @implementation Calculator
+
+        - (int)addA:(int)a toB:(int)b {
+            return a + b;
+        }
+
+        + (instancetype)sharedInstance {
+            static Calculator *instance = nil;
+            static dispatch_once_t onceToken;
+            dispatch_once(&onceToken, ^{
+                instance = [[Calculator alloc] init];
+            });
+            return instance;
+        }
+
+        @end
+        """
+
+        let result = parser.parse(content: content, path: "Calculator.m")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.contains { $0.content.contains("addA") || $0.content.contains("sharedInstance") })
+    }
+
+    // MARK: - Edge Cases
+
+    @Test("Handle empty content")
+    func testEmptyContent() {
+        let parser = TreeSitterParser()
+        let result = parser.parse(content: "", path: "empty.c")
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected failure for empty content")
+            return
+        }
+
+        #expect(error == .emptyContent)
+    }
+
+    @Test("Handle whitespace-only content")
+    func testWhitespaceOnlyContent() {
+        let parser = TreeSitterParser()
+        let result = parser.parse(content: "   \n\n  \t  ", path: "whitespace.c")
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected failure for whitespace-only content")
+            return
+        }
+
+        #expect(error == .emptyContent)
+    }
+}
+
+// MARK: - HybridParser Tests
+
+@Suite("HybridParser Tests")
+struct HybridParserTests {
+    @Test("Routes Swift files to SwiftSyntaxParser")
+    func testRoutesSwiftToSwiftSyntax() {
+        let parser = HybridParser()
+        let content = """
+        func hello() {
+            print("Hello")
+        }
+        """
+
+        let result = parser.parse(content: content, path: "test.swift")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.first?.kind == .function)
+    }
+
+    @Test("Routes Objective-C files to TreeSitterParser")
+    func testRoutesObjCToTreeSitter() {
+        let parser = HybridParser()
+        let content = """
+        @interface Test : NSObject
+        @end
+        """
+
+        let result = parser.parse(content: content, path: "Test.h")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Routes unknown extensions to PlainTextParser")
+    func testRoutesUnknownToPlainText() {
+        let parser = HybridParser()
+        let content = """
+        Some random content
+        in an unknown file format.
+        """
+
+        let result = parser.parse(content: content, path: "unknown.xyz")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse with plain text fallback")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+        #expect(chunks.first?.kind == .unknown)
+    }
+
+    @Test("Routes C files correctly")
+    func testRoutesCFiles() {
+        let parser = HybridParser()
+        let content = """
+        int main() {
+            return 0;
+        }
+        """
+
+        let result = parser.parse(content: content, path: "main.c")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Routes JSON files correctly")
+    func testRoutesJSONFiles() {
+        let parser = HybridParser()
+        let content = """
+        {"key": "value"}
+        """
+
+        let result = parser.parse(content: content, path: "config.json")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Routes YAML files correctly")
+    func testRoutesYAMLFiles() {
+        let parser = HybridParser()
+        let content = """
+        key: value
+        """
+
+        let result = parser.parse(content: content, path: "config.yaml")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Routes Markdown files correctly")
+    func testRoutesMarkdownFiles() {
+        let parser = HybridParser()
+        let content = """
+        # Title
+        Some content.
+        """
+
+        let result = parser.parse(content: content, path: "README.md")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(!chunks.isEmpty)
+    }
+
+    @Test("Supported extensions includes all expected types")
+    func testSupportedExtensions() {
+        let parser = HybridParser()
+        let extensions = parser.supportedExtensions
+
+        // Swift
+        #expect(extensions.contains("swift"))
+
+        // Objective-C
+        #expect(extensions.contains("m"))
+        #expect(extensions.contains("mm"))
+        #expect(extensions.contains("h"))
+
+        // C/C++
+        #expect(extensions.contains("c"))
+        #expect(extensions.contains("cpp"))
+        #expect(extensions.contains("cc"))
+
+        // Data formats
+        #expect(extensions.contains("json"))
+        #expect(extensions.contains("yaml"))
+        #expect(extensions.contains("yml"))
+
+        // Documentation
+        #expect(extensions.contains("md"))
+        #expect(extensions.contains("markdown"))
+    }
+}
+
+// MARK: - PlainTextParser Tests
+
+@Suite("PlainTextParser Tests")
+struct PlainTextParserTests {
+    @Test("Creates single chunk for small content")
+    func testSmallContent() {
+        let parser = PlainTextParser()
+        let content = "Small content."
+
+        let result = parser.parse(content: content, path: "test.txt")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.count == 1)
+        #expect(chunks.first?.kind == .unknown)
+    }
+
+    @Test("Creates multiple chunks for large content")
+    func testLargeContent() {
+        let parser = PlainTextParser(maxChunkSize: 100, overlapSize: 20)
+        // Create content larger than maxChunkSize (100) with multiple lines
+        // Each line is ~15 chars, so 20 lines = 300 chars
+        var lines: [String] = []
+        for i in 1...20 {
+            lines.append("Line \(i) text.")
+        }
+        let content = lines.joined(separator: "\n")
+
+        let result = parser.parse(content: content, path: "large.txt")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.count > 1, "Content of \(content.count) chars should produce multiple chunks with maxChunkSize=100")
+    }
+
+    @Test("Preserves line numbers")
+    func testLineNumbers() {
+        let parser = PlainTextParser()
+        let content = """
+        Line 1
+        Line 2
+        Line 3
+        Line 4
+        Line 5
+        """
+
+        let result = parser.parse(content: content, path: "test.txt")
+
+        guard case .success(let chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.startLine == 1)
+        #expect(chunks.first?.endLine == 5)
+    }
+
+    @Test("Handles empty content")
+    func testEmptyContent() {
+        let parser = PlainTextParser()
+        let result = parser.parse(content: "", path: "empty.txt")
+
+        guard case .failure(let error) = result else {
+            Issue.record("Expected failure for empty content")
+            return
+        }
+
+        #expect(error == .emptyContent)
+    }
+}

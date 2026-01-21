@@ -44,9 +44,15 @@ public enum ChunkKind: String, Sendable, Equatable, Codable, CaseIterable {
     case markdownSection
     case markdownCodeBlock
     case comment
+    case section
+    case document
+
+    // MARK: - C++ Types
+    case namespace
 
     // MARK: - Generic
     case file
+    case interface
     case unknown
 }
 

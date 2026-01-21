@@ -58,24 +58,24 @@
 > **TDD:** Write tests first, then implement
 
 ##### A.1 Configuration Tests
-- [ ] A.1.1 Write `test_loadDefaultConfig()`
-- [ ] A.1.2 Write `test_loadProjectConfig()`
-- [ ] A.1.3 Write `test_envOverridesProject()`
-- [ ] A.1.4 Write `test_cliOverridesEnv()`
-- [ ] A.1.5 Write `test_mergesPriority()`
-- [ ] A.1.6 Write `test_missingConfigUsesDefaults()`
+- [x] A.1.1 Write `test_loadDefaultConfig()`
+- [x] A.1.2 Write `test_loadProjectConfig()`
+- [x] A.1.3 Write `test_envOverridesProject()`
+- [x] A.1.4 Write `test_cliOverridesEnv()`
+- [x] A.1.5 Write `test_mergesPriority()`
+- [x] A.1.6 Write `test_missingConfigUsesDefaults()`
 
 ##### A.2 Configuration Implementation
-- [ ] A.2.1 Implement `Config.swift` with all TOML fields
-- [ ] A.2.2 Implement `TOMLConfigLoader.swift`
-- [ ] A.2.3 Implement `EnvironmentLoader.swift`
-- [ ] A.2.4 Implement `ConfigMerger.swift`
-- [ ] A.2.5 Implement CLI config parsing
+- [x] A.2.1 Implement `Config.swift` with all TOML fields
+- [x] A.2.2 Implement `TOMLConfigLoader.swift`
+- [x] A.2.3 Implement `EnvironmentLoader.swift`
+- [x] A.2.4 Implement `ConfigMerger.swift`
+- [x] A.2.5 Implement CLI config parsing
 
 ##### A.3 Gate: Configuration Complete
-- [ ] **GATE A:** All 6 config tests pass
-- [ ] **GATE A:** Can load `.swiftindex.toml` file
-- [ ] **GATE A:** Environment variables override config
+- [x] **GATE A:** All 6 config tests pass
+- [x] **GATE A:** Can load `.swiftindex.toml` file
+- [x] **GATE A:** Environment variables override config
 
 ---
 
@@ -118,37 +118,38 @@
 > **TDD:** Write tests first, then implement
 
 ##### C.1 tree-sitter Tests
-- [ ] C.1.1 Write `test_parseObjCInterface()`
-- [ ] C.1.2 Write `test_parseObjCImplementation()`
-- [ ] C.1.3 Write `test_parseObjCMethodDefinition()`
-- [ ] C.1.4 Write `test_parseCFunction()`
-- [ ] C.1.5 Write `test_parseCStruct()`
-- [ ] C.1.6 Write `test_parseJSONObject()`
-- [ ] C.1.7 Write `test_parseJSONArray()`
-- [ ] C.1.8 Write `test_parseYAMLMapping()`
-- [ ] C.1.9 Write `test_parseYAMLSequence()`
-- [ ] C.1.10 Write `test_parseMarkdownSection()`
-- [ ] C.1.11 Write `test_parseMarkdownCodeBlock()`
+- [x] C.1.1 Write `test_parseObjCInterface()`
+- [x] C.1.2 Write `test_parseObjCImplementation()`
+- [x] C.1.3 Write `test_parseObjCMethodDefinition()`
+- [x] C.1.4 Write `test_parseCFunction()`
+- [x] C.1.5 Write `test_parseCStruct()`
+- [x] C.1.6 Write `test_parseJSONObject()`
+- [x] C.1.7 Write `test_parseJSONArray()`
+- [x] C.1.8 Write `test_parseYAMLMapping()`
+- [x] C.1.9 Write `test_parseYAMLSequence()`
+- [x] C.1.10 Write `test_parseMarkdownSection()`
+- [x] C.1.11 Write `test_parseMarkdownCodeBlock()`
 
 ##### C.2 HybridParser Tests
-- [ ] C.2.1 Write `test_routesSwiftToSwiftSyntax()`
-- [ ] C.2.2 Write `test_routesObjCToTreeSitter()`
-- [ ] C.2.3 Write `test_routesUnknownToPlainText()`
+- [x] C.2.1 Write `test_routesSwiftToSwiftSyntax()`
+- [x] C.2.2 Write `test_routesObjCToTreeSitter()`
+- [x] C.2.3 Write `test_routesUnknownToPlainText()`
 
 ##### C.3 tree-sitter Implementation
-- [ ] C.3.1 Implement `LanguageRegistry.swift`
-- [ ] C.3.2 Implement `TreeSitterParser.swift` base
-- [ ] C.3.3 Add ObjC grammar support
-- [ ] C.3.4 Add C/C++ grammar support
-- [ ] C.3.5 Add JSON grammar support
-- [ ] C.3.6 Add YAML grammar support
-- [ ] C.3.7 Add Markdown grammar support
-- [ ] C.3.8 Implement `HybridParser.swift` router
+- [x] C.3.1 Implement `LanguageRegistry.swift` (pattern-based fallback)
+- [x] C.3.2 Implement `TreeSitterParser.swift` base
+- [x] C.3.3 Add ObjC grammar support
+- [x] C.3.4 Add C/C++ grammar support
+- [x] C.3.5 Add JSON grammar support
+- [x] C.3.6 Add YAML grammar support
+- [x] C.3.7 Add Markdown grammar support
+- [x] C.3.8 Implement `HybridParser.swift` router
+- [x] C.3.9 Implement `PlainTextParser.swift` fallback
 
 ##### C.4 Gate: tree-sitter Complete
-- [ ] **GATE C:** All 14 tree-sitter tests pass
-- [ ] **GATE C:** HybridParser routes correctly by extension
-- [ ] **GATE C:** Unknown extensions fallback to plain text
+- [x] **GATE C:** All 14 tree-sitter tests pass
+- [x] **GATE C:** HybridParser routes correctly by extension
+- [x] **GATE C:** Unknown extensions fallback to plain text
 
 ---
 
@@ -173,10 +174,10 @@
 
 ##### D.4 Provider Implementations
 - [x] D.4.1 Implement `MLXEmbeddingProvider.swift`
-- [ ] D.4.2 Implement `OllamaEmbeddingProvider.swift`
+- [x] D.4.2 Implement `OllamaEmbeddingProvider.swift`
 - [x] D.4.3 Implement `SwiftEmbeddingsProvider.swift`
-- [ ] D.4.4 Implement `VoyageProvider.swift`
-- [ ] D.4.5 Implement `OpenAIProvider.swift`
+- [x] D.4.4 Implement `VoyageProvider.swift`
+- [x] D.4.5 Implement `OpenAIProvider.swift`
 - [x] D.4.6 Implement `EmbeddingService.swift` (chain orchestrator)
 - [ ] D.4.7 Implement `ModelDownloader.swift`
 
@@ -299,7 +300,7 @@
 - [x] H.1.6 Implement `InstallClaudeCodeCommand.swift`
 - [x] H.1.7 Implement `InstallCodexCommand.swift`
 - [x] H.1.8 Implement `InstallCursorCommand.swift`
-- [ ] H.1.9 Implement `InitCommand.swift`
+- [x] H.1.9 Implement `InitCommand.swift`
 
 ##### H.2 CLI Tests
 - [ ] H.2.1 Write `test_indexCommand()`
@@ -318,22 +319,22 @@
 #### Track I: Watch Mode (Agent 2)
 
 ##### I.1 Watch Tests
-- [ ] I.1.1 Write `test_detectsFileCreation()`
-- [ ] I.1.2 Write `test_detectsFileModification()`
-- [ ] I.1.3 Write `test_detectsFileDeletion()`
-- [ ] I.1.4 Write `test_debounces_rapidChanges()`
-- [ ] I.1.5 Write `test_incrementalReindex()`
+- [x] I.1.1 Write `test_detectsFileCreation()`
+- [x] I.1.2 Write `test_detectsFileModification()`
+- [x] I.1.3 Write `test_detectsFileDeletion()`
+- [x] I.1.4 Write `test_debounces_rapidChanges()`
+- [x] I.1.5 Write `test_incrementalReindex()`
 
 ##### I.2 Watch Implementation
-- [ ] I.2.1 Implement `FileWatcher.swift`
-- [ ] I.2.2 Implement debouncing logic
-- [ ] I.2.3 Implement `IncrementalIndexer.swift`
-- [ ] I.2.4 Integrate with WatchCommand
+- [x] I.2.1 Implement `FileWatcher.swift`
+- [x] I.2.2 Implement debouncing logic
+- [x] I.2.3 Implement `IncrementalIndexer.swift`
+- [x] I.2.4 Integrate with WatchCommand
 
 ##### I.3 Gate: Watch Complete
-- [ ] **GATE I:** File changes detected within 500ms
-- [ ] **GATE I:** Debouncing prevents rapid re-indexes
-- [ ] **GATE I:** Incremental re-index updates only changed files
+- [x] **GATE I:** File changes detected within 500ms
+- [x] **GATE I:** Debouncing prevents rapid re-indexes
+- [x] **GATE I:** Incremental re-index updates only changed files
 
 ---
 
