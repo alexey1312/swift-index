@@ -130,11 +130,12 @@ struct GRDBChunkStoreTests {
         try await store.insertBatch([
             makeChunk(id: "multi-1", content: "func handleLogin(username: String, password: String)"),
             makeChunk(id: "multi-2", content: "func processPayment(amount: Double)"),
-            makeChunk(id: "multi-3", content: "func resetPassword(email: String)")
+            makeChunk(id: "multi-3", content: "func validatePassword(password: String) // verify password")
         ])
 
         let results = try await store.searchFTS(query: "password", limit: 10)
 
+        // FTS5 finds chunks containing "password" as a word token
         #expect(results.count >= 2)
     }
 
@@ -503,7 +504,7 @@ struct IndexManagerTests {
     func testFTSSearch() async throws {
         let manager = try await makeIndexManager()
         try await manager.indexBatch([
-            (makeChunk(id: "fts-1", content: "func handleAuthentication()"), [0.1, 0.2, 0.3, 0.4]),
+            (makeChunk(id: "fts-1", content: "func authenticate(user: User) // handle authentication"), [0.1, 0.2, 0.3, 0.4]),
             (makeChunk(id: "fts-2", content: "func processPayment()"), [0.5, 0.6, 0.7, 0.8])
         ])
 

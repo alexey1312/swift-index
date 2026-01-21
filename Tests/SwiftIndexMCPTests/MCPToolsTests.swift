@@ -32,7 +32,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with missing path returns error")
-        async throws {
+        func executeWithMissingPathReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
             #expect(result.isError == true || result.content.first.map { content in
                 if case .text(let text) = content {
@@ -43,7 +43,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with invalid path returns error")
-        async throws {
+        func executeWithInvalidPathReturnsError() async throws {
             let result = try await tool.execute(
                 arguments: .object(["path": "/nonexistent/path/that/does/not/exist"])
             )
@@ -54,7 +54,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with valid path returns result")
-        async throws {
+        func executeWithValidPathReturnsResult() async throws {
             // Use the current project directory as test path
             let testPath = FileManager.default.currentDirectoryPath
 
@@ -93,7 +93,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with missing query returns error")
-        async throws {
+        func executeWithMissingQueryReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
             if case .text(let content) = result.content.first {
@@ -102,7 +102,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with empty query returns error")
-        async throws {
+        func executeWithEmptyQueryReturnsError() async throws {
             let result = try await tool.execute(
                 arguments: .object(["query": "   "])
             )
@@ -113,7 +113,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with valid query returns results")
-        async throws {
+        func executeWithValidQueryReturnsResults() async throws {
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "authentication",
@@ -155,7 +155,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with missing query returns error")
-        async throws {
+        func executeWithMissingQueryReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
             if case .text(let content) = result.content.first {
@@ -164,7 +164,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with invalid depth returns error")
-        async throws {
+        func executeWithInvalidDepthReturnsError() async throws {
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "test query",
@@ -178,7 +178,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with valid parameters returns analysis")
-        async throws {
+        func executeWithValidParametersReturnsAnalysis() async throws {
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "how does search work",
@@ -220,7 +220,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with missing path returns error")
-        async throws {
+        func executeWithMissingPathReturnsError() async throws {
             let result = try await tool.execute(arguments: .object([:]))
 
             if case .text(let content) = result.content.first {
@@ -229,7 +229,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute with invalid action returns error")
-        async throws {
+        func executeWithInvalidActionReturnsError() async throws {
             let result = try await tool.execute(
                 arguments: .object([
                     "path": "/tmp",
@@ -243,7 +243,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute start action returns watching true")
-        async throws {
+        func executeStartActionReturnsWatchingTrue() async throws {
             let testPath = FileManager.default.currentDirectoryPath
 
             let result = try await tool.execute(
@@ -260,7 +260,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute status action returns stats")
-        async throws {
+        func executeStatusActionReturnsStats() async throws {
             let testPath = FileManager.default.currentDirectoryPath
 
             let result = try await tool.execute(
@@ -277,7 +277,7 @@ struct MCPToolsTests {
         }
 
         @Test("Execute stop action returns watching false")
-        async throws {
+        func executeStopActionReturnsWatchingFalse() async throws {
             let testPath = FileManager.default.currentDirectoryPath
 
             let result = try await tool.execute(

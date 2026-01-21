@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SwiftIndexCore
 
@@ -174,8 +175,8 @@ actor MockVectorStore: VectorStore {
     }
 }
 
-/// Mock embedding provider for testing.
-actor MockEmbeddingProvider: EmbeddingProvider {
+/// Mock embedding provider for search engine testing.
+actor SearchTestMockEmbeddingProvider: EmbeddingProvider {
     nonisolated let id = "mock"
     nonisolated let name = "Mock Provider"
     nonisolated let dimension = 384
@@ -417,7 +418,7 @@ struct SemanticSearchTests {
         chunks: [CodeChunk],
         chunkStore: MockChunkStore,
         vectorStore: MockVectorStore,
-        embeddingProvider: MockEmbeddingProvider
+        embeddingProvider: SearchTestMockEmbeddingProvider
     ) {
         let chunks = [
             CodeChunk(
@@ -446,7 +447,7 @@ struct SemanticSearchTests {
 
         let chunkStore = MockChunkStore(chunks: chunks)
         let vectorStore = MockVectorStore(dimension: 384)
-        let embeddingProvider = MockEmbeddingProvider()
+        let embeddingProvider = SearchTestMockEmbeddingProvider()
 
         // Add vectors for chunks
         let vector1 = try await embeddingProvider.embed("func login user authentication")
@@ -490,7 +491,9 @@ struct SemanticSearchTests {
 
         #expect(!results.isEmpty)
         #expect(results.first?.id != nil)
-        #expect(results.first?.score >= 0)
+        if let score = results.first?.score {
+            #expect(score >= 0)
+        }
     }
 }
 
@@ -501,7 +504,7 @@ struct HybridSearchTests {
     func makeTestSetup() async throws -> (
         chunkStore: MockChunkStore,
         vectorStore: MockVectorStore,
-        embeddingProvider: MockEmbeddingProvider
+        embeddingProvider: SearchTestMockEmbeddingProvider
     ) {
         let chunks = [
             CodeChunk(
@@ -541,7 +544,7 @@ struct HybridSearchTests {
 
         let chunkStore = MockChunkStore(chunks: chunks)
         let vectorStore = MockVectorStore(dimension: 384)
-        let embeddingProvider = MockEmbeddingProvider()
+        let embeddingProvider = SearchTestMockEmbeddingProvider()
 
         // Add vectors for chunks
         for chunk in chunks {
@@ -619,7 +622,7 @@ struct HybridSearchTests {
         #expect(!results.isEmpty)
 
         // Check if any multi-hop results were found
-        let multiHopResults = results.filter { $0.isMultiHop }
+        _ = results.filter { $0.isMultiHop }
         // Multi-hop may or may not find results depending on mock behavior
         // Just verify the search completes without error
     }

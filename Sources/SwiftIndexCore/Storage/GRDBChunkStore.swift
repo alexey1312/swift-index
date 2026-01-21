@@ -13,8 +13,8 @@ import GRDB
 public actor GRDBChunkStore: ChunkStore {
     // MARK: - Properties
 
-    /// The database connection pool.
-    private let dbPool: DatabasePool
+    /// The database writer (can be DatabasePool or DatabaseQueue).
+    private let dbWriter: any DatabaseWriter
 
     /// The path to the database file.
     public let databasePath: String
@@ -44,7 +44,7 @@ public actor GRDBChunkStore: ChunkStore {
             try db.execute(sql: "PRAGMA journal_mode = WAL")
         }
 
-        self.dbPool = try DatabasePool(path: path, configuration: config)
+        self.dbWriter = try DatabasePool(path: path, configuration: config)
         try migrate()
     }
 
@@ -53,7 +53,12 @@ public actor GRDBChunkStore: ChunkStore {
     /// - Throws: If database creation fails.
     public init() throws {
         self.databasePath = ":memory:"
-        self.dbPool = try DatabasePool(path: ":memory:")
+        // Use DatabaseQueue for in-memory databases (WAL not supported)
+        var config = Configuration()
+        config.prepareDatabase { db in
+            try db.execute(sql: "PRAGMA foreign_keys = ON")
+        }
+        self.dbWriter = try DatabaseQueue(configuration: config)
         try migrate()
     }
 
@@ -123,13 +128,13 @@ public actor GRDBChunkStore: ChunkStore {
             }
         }
 
-        try migrator.migrate(dbPool)
+        try migrator.migrate(dbWriter)
     }
 
     // MARK: - ChunkStore Protocol
 
     public func insert(_ chunk: CodeChunk) async throws {
-        try await dbPool.write { db in
+        try await dbWriter.write { db in
             try ChunkRecord(chunk: chunk).insert(db)
         }
     }
@@ -137,7 +142,7 @@ public actor GRDBChunkStore: ChunkStore {
     public func insertBatch(_ chunks: [CodeChunk]) async throws {
         guard !chunks.isEmpty else { return }
 
-        try await dbPool.write { db in
+        try await dbWriter.write { db in
             for chunk in chunks {
                 try ChunkRecord(chunk: chunk).insert(db)
             }
@@ -145,7 +150,7 @@ public actor GRDBChunkStore: ChunkStore {
     }
 
     public func get(id: String) async throws -> CodeChunk? {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try ChunkRecord
                 .filter(Column("id") == id)
                 .fetchOne(db)?
@@ -154,7 +159,7 @@ public actor GRDBChunkStore: ChunkStore {
     }
 
     public func getByPath(_ path: String) async throws -> [CodeChunk] {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try ChunkRecord
                 .filter(Column("path") == path)
                 .order(Column("start_line"))
@@ -164,19 +169,19 @@ public actor GRDBChunkStore: ChunkStore {
     }
 
     public func update(_ chunk: CodeChunk) async throws {
-        try await dbPool.write { db in
+        try await dbWriter.write { db in
             try ChunkRecord(chunk: chunk).update(db)
         }
     }
 
     public func delete(id: String) async throws {
-        _ = try await dbPool.write { db in
+        _ = try await dbWriter.write { db in
             try ChunkRecord.deleteOne(db, key: id)
         }
     }
 
     public func deleteByPath(_ path: String) async throws {
-        _ = try await dbPool.write { db in
+        _ = try await dbWriter.write { db in
             try ChunkRecord
                 .filter(Column("path") == path)
                 .deleteAll(db)
@@ -192,7 +197,7 @@ public actor GRDBChunkStore: ChunkStore {
         // Escape special FTS5 characters and prepare query
         let sanitizedQuery = sanitizeFTSQuery(query)
 
-        return try await dbPool.read { db in
+        return try await dbWriter.read { db in
             let sql = """
                 SELECT chunks.*, bm25(chunks_fts) AS score
                 FROM chunks_fts
@@ -216,31 +221,31 @@ public actor GRDBChunkStore: ChunkStore {
     }
 
     public func allIDs() async throws -> [String] {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try String.fetchAll(db, sql: "SELECT id FROM chunks")
         }
     }
 
     public func count() async throws -> Int {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try ChunkRecord.fetchCount(db)
         }
     }
 
     public func hasFileHash(_ hash: String) async throws -> Bool {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try FileHashRecord.exists(db, key: hash)
         }
     }
 
     public func recordFileHash(_ hash: String, path: String) async throws {
-        try await dbPool.write { db in
+        try await dbWriter.write { db in
             try FileHashRecord(hash: hash, path: path, indexedAt: Date()).insert(db)
         }
     }
 
     public func clear() async throws {
-        try await dbPool.write { db in
+        try await dbWriter.write { db in
             try db.execute(sql: "DELETE FROM chunks")
             try db.execute(sql: "DELETE FROM file_hashes")
         }
@@ -252,7 +257,7 @@ public actor GRDBChunkStore: ChunkStore {
     ///
     /// - Parameter path: The file path.
     public func deleteFileHash(path: String) async throws {
-        _ = try await dbPool.write { db in
+        _ = try await dbWriter.write { db in
             try FileHashRecord
                 .filter(Column("path") == path)
                 .deleteAll(db)
@@ -263,7 +268,7 @@ public actor GRDBChunkStore: ChunkStore {
     ///
     /// - Returns: Array of file paths.
     public func allPaths() async throws -> [String] {
-        try await dbPool.read { db in
+        try await dbWriter.read { db in
             try String.fetchAll(db, sql: "SELECT DISTINCT path FROM chunks")
         }
     }
@@ -275,7 +280,7 @@ public actor GRDBChunkStore: ChunkStore {
     public func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
         guard !ids.isEmpty else { return [] }
 
-        return try await dbPool.read { db in
+        return try await dbWriter.read { db in
             try ChunkRecord
                 .filter(ids.contains(Column("id")))
                 .fetchAll(db)
