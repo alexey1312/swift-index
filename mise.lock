@@ -1,0 +1,50 @@
+[[tools.actionlint]]
+version = "1.7.10"
+backend = "aqua:rhysd/actionlint"
+"platforms.linux-arm64" = { checksum = "sha256:cd3dfe5f66887ec6b987752d8d9614e59fd22f39415c5ad9f28374623f41773a", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_linux_arm64.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:f4c76b71db5755a713e6055cbb0857ed07e103e028bda117817660ebadb4386f", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_linux_amd64.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:004ca87b367b37f4d75c55ab6cf80f9b8c043adbfbd440f31c604d417939c442", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_darwin_arm64.tar.gz"}
+"platforms.macos-x64" = { checksum = "sha256:16782c41f2af264db80f855ee5d09164ca98fc78edf3bcd0f46eecff279682ba", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_darwin_amd64.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:283467f9d6202a8cb8c00ad8dd0ee4e685b71fb86a6a56c68fcbb9ae8ed91237", url = "https://github.com/rhysd/actionlint/releases/download/v1.7.10/actionlint_1.7.10_windows_amd64.zip"}
+
+[[tools.dprint]]
+version = "0.51.1"
+backend = "aqua:dprint/dprint"
+"platforms.linux-arm64" = { checksum = "sha256:8cd2a46ff5d6940db5e708c9a5be8abc9f68e6324d6fd51c8977addd2188648a", url = "https://github.com/dprint/dprint/releases/download/0.51.1/dprint-aarch64-unknown-linux-musl.zip"}
+"platforms.linux-x64" = { checksum = "sha256:0bc7904de86cc70384a4d295902c69fc5239ed45ab19a7361216263d1a8cb572", url = "https://github.com/dprint/dprint/releases/download/0.51.1/dprint-x86_64-unknown-linux-musl.zip"}
+"platforms.macos-arm64" = { checksum = "sha256:cc1321a524d8e1312d376ce2c51343f43f8f5489c2e265f11aea5a6af4de52ad", url = "https://github.com/dprint/dprint/releases/download/0.51.1/dprint-aarch64-apple-darwin.zip"}
+"platforms.macos-x64" = { checksum = "sha256:d7afcb650f4a6e7d60dc46924dede9a44f276a4f044600de7babad67c0479876", url = "https://github.com/dprint/dprint/releases/download/0.51.1/dprint-x86_64-apple-darwin.zip"}
+"platforms.windows-x64" = { checksum = "sha256:e3f6604c7fec54cc737e2be215e467d194d912141de7b9569436503c6edd2195", url = "https://github.com/dprint/dprint/releases/download/0.51.1/dprint-x86_64-pc-windows-msvc.zip"}
+
+[[tools.hk]]
+version = "1.32.0"
+backend = "aqua:jdx/hk"
+"platforms.linux-arm64" = { checksum = "sha256:ce5bea80a8f76b9ed6f7b622a20c89ef5a9711c7636eec3c33640ec2353c0821", url = "https://github.com/jdx/hk/releases/download/v1.32.0/hk-aarch64-unknown-linux-gnu.tar.gz"}
+"platforms.linux-x64" = { checksum = "sha256:a9be5dfe77e707ae1d27c54349b47d53059279f2125d7e55eeb56c4bb312d70a", url = "https://github.com/jdx/hk/releases/download/v1.32.0/hk-x86_64-unknown-linux-gnu.tar.gz"}
+"platforms.macos-arm64" = { checksum = "sha256:4c3afc7acbcb7ee70aa6389a4af6835ff96c5771acd211b4da20080339eae014", url = "https://github.com/jdx/hk/releases/download/v1.32.0/hk-aarch64-apple-darwin.tar.gz"}
+"platforms.windows-x64" = { checksum = "sha256:580b37a53c42bcae68a0f970ffeb08825503684bf270656510c2fde44f86cad8", url = "https://github.com/jdx/hk/releases/download/v1.32.0/hk-x86_64-pc-windows-msvc.zip"}
+
+[[tools.pkl]]
+version = "0.30.2"
+backend = "aqua:apple/pkl"
+"platforms.linux-arm64" = { checksum = "sha256:8da3ae65104eb7058e35dc4a9fe46bd8ece2b6faf4b65d0b1054cadb2ede0246", url = "https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-aarch64"}
+"platforms.linux-x64" = { checksum = "sha256:474e5137d60a9e2320fde19a526f42c36d8e9d3b245139d59a9b8dff85283c76", url = "https://github.com/apple/pkl/releases/download/0.30.2/pkl-linux-amd64"}
+"platforms.macos-arm64" = { checksum = "sha256:f1db44c0f6f859aee88c9d7d272f2371ae40ac95ec9957ae78eff51665158e04", url = "https://github.com/apple/pkl/releases/download/0.30.2/pkl-macos-aarch64"}
+"platforms.macos-x64" = { checksum = "sha256:5f62ae7a7a34c15b3a83af17bda8e6b98516953f383a492340d4aa090caaa6d9", url = "https://github.com/apple/pkl/releases/download/0.30.2/pkl-macos-amd64"}
+"platforms.windows-x64" = { checksum = "sha256:19e92aa59bcf4e54963b6e3b419af7e1b939f5793b44f4a08d60bab1217106f4", url = "https://github.com/apple/pkl/releases/download/0.30.2/pkl-windows-amd64.exe"}
+
+[[tools.swift]]
+version = "6.2.3"
+backend = "core:swift"
+
+[[tools.swiftformat]]
+version = "0.58.7"
+backend = "asdf:swiftformat"
+
+[[tools.swiftlint]]
+version = "0.63.1"
+backend = "aqua:realm/SwiftLint"
+"platforms.linux-arm64" = { checksum = "sha256:c9360b3c6610c03bb11e175e33cc645a34c4b61244c7b1fdca63821a87929e9e", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/swiftlint_linux_arm64.zip"}
+"platforms.linux-x64" = { checksum = "sha256:20330b66b7385d3f8c90aed8b537fcc48c9e0411a626906f84ebdb407d4ee4d1", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/swiftlint_linux_amd64.zip"}
+"platforms.macos-arm64" = { checksum = "sha256:0e6369741b694b701e9bd4e4fe9b408a5946d4bb076b79ea6ec2bce428475739", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/portable_swiftlint.zip"}
+"platforms.macos-x64" = { checksum = "sha256:0e6369741b694b701e9bd4e4fe9b408a5946d4bb076b79ea6ec2bce428475739", url = "https://github.com/realm/SwiftLint/releases/download/0.63.1/portable_swiftlint.zip"}

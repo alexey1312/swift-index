@@ -29,25 +29,25 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter.git", from: "0.9.0"),
 
         // Embeddings
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.21.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.0"),
         .package(url: "https://github.com/jkrukowski/swift-embeddings.git", from: "0.0.25"),
 
         // Storage
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0"),
-        .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.16.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.9.0"),
+        .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.23.0"),
 
         // Configuration
         .package(url: "https://github.com/LebJe/TOMLKit.git", from: "0.6.0"),
 
         // CLI
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.5.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.9.0"),
 
         // Async utilities
-        .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.0"),
 
         // Crypto (for file hashing)
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "3.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
     ],
     targets: [
         // MARK: - Core Library
