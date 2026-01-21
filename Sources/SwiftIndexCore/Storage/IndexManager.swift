@@ -1,0 +1,537 @@
+// MARK: - IndexManager
+
+import Foundation
+import Logging
+
+/// Coordinates chunk and vector stores for unified index management.
+///
+/// IndexManager provides a high-level interface for:
+/// - Coordinated chunk and vector storage
+/// - Incremental indexing with file hash tracking
+/// - Hybrid search combining FTS and semantic similarity
+/// - Index persistence and lifecycle management
+public actor IndexManager {
+    // MARK: - Properties
+
+    /// The chunk store for metadata and FTS.
+    public let chunkStore: GRDBChunkStore
+
+    /// The vector store for embeddings.
+    public let vectorStore: USearchVectorStore
+
+    /// Logger for diagnostics.
+    private let logger: Logger
+
+    /// Configuration for the index.
+    private let config: IndexManagerConfig
+
+    // MARK: - Initialization
+
+    /// Create an index manager with the specified storage directory.
+    ///
+    /// - Parameters:
+    ///   - directory: Directory for storing index files.
+    ///   - dimension: Vector embedding dimension.
+    ///   - config: Optional configuration.
+    /// - Throws: If store creation fails.
+    public init(
+        directory: String,
+        dimension: Int,
+        config: IndexManagerConfig = .default
+    ) throws {
+        // Ensure directory exists
+        try FileManager.default.createDirectory(
+            atPath: directory,
+            withIntermediateDirectories: true
+        )
+
+        let dbPath = (directory as NSString).appendingPathComponent("chunks.db")
+        let vectorPath = (directory as NSString).appendingPathComponent("vectors.usearch")
+
+        self.chunkStore = try GRDBChunkStore(path: dbPath)
+        self.vectorStore = try USearchVectorStore(dimension: dimension, path: vectorPath)
+        self.config = config
+        self.logger = Logger(label: "IndexManager")
+    }
+
+    /// Create an index manager with custom stores (for testing).
+    ///
+    /// - Parameters:
+    ///   - chunkStore: The chunk store to use.
+    ///   - vectorStore: The vector store to use.
+    ///   - config: Optional configuration.
+    public init(
+        chunkStore: GRDBChunkStore,
+        vectorStore: USearchVectorStore,
+        config: IndexManagerConfig = .default
+    ) {
+        self.chunkStore = chunkStore
+        self.vectorStore = vectorStore
+        self.config = config
+        self.logger = Logger(label: "IndexManager")
+    }
+
+    // MARK: - Indexing
+
+    /// Index a chunk with its embedding vector.
+    ///
+    /// - Parameters:
+    ///   - chunk: The code chunk to index.
+    ///   - vector: The embedding vector for the chunk.
+    /// - Throws: If indexing fails.
+    public func index(chunk: CodeChunk, vector: [Float]) async throws {
+        try await chunkStore.insert(chunk)
+        try await vectorStore.add(id: chunk.id, vector: vector)
+
+        logger.debug("Indexed chunk", metadata: [
+            "id": "\(chunk.id)",
+            "path": "\(chunk.path)",
+            "kind": "\(chunk.kind.rawValue)"
+        ])
+    }
+
+    /// Index multiple chunks with their embedding vectors in batch.
+    ///
+    /// - Parameter items: Array of (chunk, vector) pairs.
+    /// - Throws: If indexing fails.
+    public func indexBatch(_ items: [(chunk: CodeChunk, vector: [Float])]) async throws {
+        guard !items.isEmpty else { return }
+
+        let chunks = items.map(\.chunk)
+        let vectors = items.map { (id: $0.chunk.id, vector: $0.vector) }
+
+        try await chunkStore.insertBatch(chunks)
+        try await vectorStore.addBatch(vectors)
+
+        logger.info("Indexed batch", metadata: [
+            "count": "\(items.count)"
+        ])
+    }
+
+    /// Check if a file needs reindexing based on its content hash.
+    ///
+    /// - Parameter hash: The file content hash.
+    /// - Returns: True if the file has not been indexed or has changed.
+    public func needsIndexing(fileHash hash: String) async throws -> Bool {
+        let exists = try await chunkStore.hasFileHash(hash)
+        return !exists
+    }
+
+    /// Record that a file has been indexed.
+    ///
+    /// - Parameters:
+    ///   - hash: The file content hash.
+    ///   - path: The file path.
+    public func recordIndexed(fileHash hash: String, path: String) async throws {
+        try await chunkStore.recordFileHash(hash, path: path)
+    }
+
+    /// Reindex a file by removing old chunks and indexing new ones.
+    ///
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - newChunks: New chunks with their vectors.
+    /// - Throws: If reindexing fails.
+    public func reindex(
+        path: String,
+        newChunks: [(chunk: CodeChunk, vector: [Float])]
+    ) async throws {
+        // Delete old chunks
+        let oldChunks = try await chunkStore.getByPath(path)
+        for chunk in oldChunks {
+            try await vectorStore.delete(id: chunk.id)
+        }
+        try await chunkStore.deleteByPath(path)
+        try await chunkStore.deleteFileHash(path: path)
+
+        // Index new chunks
+        try await indexBatch(newChunks)
+
+        // Record file hash
+        if let firstChunk = newChunks.first?.chunk {
+            try await recordIndexed(fileHash: firstChunk.fileHash, path: path)
+        }
+
+        logger.info("Reindexed file", metadata: [
+            "path": "\(path)",
+            "oldChunks": "\(oldChunks.count)",
+            "newChunks": "\(newChunks.count)"
+        ])
+    }
+
+    // MARK: - Search
+
+    /// Perform semantic similarity search.
+    ///
+    /// - Parameters:
+    ///   - vector: The query embedding vector.
+    ///   - limit: Maximum results to return.
+    /// - Returns: Chunks with similarity scores.
+    public func searchSemantic(
+        vector: [Float],
+        limit: Int
+    ) async throws -> [(chunk: CodeChunk, score: Float)] {
+        let vectorResults = try await vectorStore.search(vector: vector, limit: limit)
+
+        var results: [(chunk: CodeChunk, score: Float)] = []
+        for (id, similarity) in vectorResults {
+            if let chunk = try await chunkStore.get(id: id) {
+                results.append((chunk: chunk, score: similarity))
+            }
+        }
+
+        return results
+    }
+
+    /// Perform BM25 full-text search.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - limit: Maximum results to return.
+    /// - Returns: Chunks with BM25 scores.
+    public func searchFTS(
+        query: String,
+        limit: Int
+    ) async throws -> [(chunk: CodeChunk, score: Double)] {
+        try await chunkStore.searchFTS(query: query, limit: limit)
+    }
+
+    /// Perform hybrid search combining semantic and FTS with RRF fusion.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - vector: The query embedding vector.
+    ///   - options: Search options.
+    /// - Returns: Fused results with combined scores.
+    public func searchHybrid(
+        query: String,
+        vector: [Float],
+        options: HybridSearchOptions = .default
+    ) async throws -> [(chunk: CodeChunk, score: Double)] {
+        // Fetch more results than needed for fusion
+        let fetchLimit = options.limit * 3
+
+        // Parallel search
+        async let semanticTask = searchSemantic(vector: vector, limit: fetchLimit)
+        async let ftsTask = searchFTS(query: query, limit: fetchLimit)
+
+        let (semanticResults, ftsResults) = try await (semanticTask, ftsTask)
+
+        // Build rank maps (1-indexed)
+        var semanticRanks: [String: Int] = [:]
+        for (index, result) in semanticResults.enumerated() {
+            semanticRanks[result.chunk.id] = index + 1
+        }
+
+        var ftsRanks: [String: Int] = [:]
+        for (index, result) in ftsResults.enumerated() {
+            ftsRanks[result.chunk.id] = index + 1
+        }
+
+        // Collect all unique chunk IDs
+        var allChunkIDs = Set(semanticRanks.keys)
+        allChunkIDs.formUnion(ftsRanks.keys)
+
+        // Build chunk lookup
+        var chunkLookup: [String: CodeChunk] = [:]
+        for result in semanticResults {
+            chunkLookup[result.chunk.id] = result.chunk
+        }
+        for result in ftsResults {
+            chunkLookup[result.chunk.id] = result.chunk
+        }
+
+        // Calculate RRF scores
+        let k = Double(options.rrfK)
+        var fusedResults: [(chunk: CodeChunk, score: Double)] = []
+
+        for chunkID in allChunkIDs {
+            guard let chunk = chunkLookup[chunkID] else { continue }
+
+            var rrfScore = 0.0
+
+            // Semantic contribution
+            if let semanticRank = semanticRanks[chunkID] {
+                rrfScore += options.semanticWeight / (k + Double(semanticRank))
+            }
+
+            // FTS contribution
+            if let ftsRank = ftsRanks[chunkID] {
+                rrfScore += (1.0 - options.semanticWeight) / (k + Double(ftsRank))
+            }
+
+            fusedResults.append((chunk: chunk, score: rrfScore))
+        }
+
+        // Sort by RRF score (descending) and limit
+        fusedResults.sort { $0.score > $1.score }
+        return Array(fusedResults.prefix(options.limit))
+    }
+
+    // MARK: - Retrieval
+
+    /// Get a chunk by ID.
+    ///
+    /// - Parameter id: The chunk ID.
+    /// - Returns: The chunk if found.
+    public func getChunk(id: String) async throws -> CodeChunk? {
+        try await chunkStore.get(id: id)
+    }
+
+    /// Get all chunks for a file.
+    ///
+    /// - Parameter path: The file path.
+    /// - Returns: All chunks from the file.
+    public func getChunks(path: String) async throws -> [CodeChunk] {
+        try await chunkStore.getByPath(path)
+    }
+
+    /// Get chunks by their IDs.
+    ///
+    /// - Parameter ids: The chunk IDs.
+    /// - Returns: Found chunks.
+    public func getChunks(ids: [String]) async throws -> [CodeChunk] {
+        try await chunkStore.getByIDs(ids)
+    }
+
+    // MARK: - Statistics
+
+    /// Get the total number of indexed chunks.
+    ///
+    /// - Returns: Chunk count.
+    public func chunkCount() async throws -> Int {
+        try await chunkStore.count()
+    }
+
+    /// Get the total number of indexed vectors.
+    ///
+    /// - Returns: Vector count.
+    public func vectorCount() async throws -> Int {
+        try await vectorStore.count()
+    }
+
+    /// Get all indexed file paths.
+    ///
+    /// - Returns: Array of file paths.
+    public func indexedPaths() async throws -> [String] {
+        try await chunkStore.allPaths()
+    }
+
+    /// Get index statistics.
+    ///
+    /// - Returns: Statistics about the index.
+    public func statistics() async throws -> IndexStatistics {
+        async let chunks = chunkCount()
+        async let vectors = vectorCount()
+        async let paths = indexedPaths()
+
+        return try await IndexStatistics(
+            chunkCount: chunks,
+            vectorCount: vectors,
+            fileCount: paths.count,
+            dimension: vectorStore.dimension
+        )
+    }
+
+    // MARK: - Persistence
+
+    /// Save both stores to disk.
+    ///
+    /// - Throws: If saving fails.
+    public func save() async throws {
+        try await vectorStore.save()
+        // Chunk store auto-persists via SQLite
+        logger.info("Index saved")
+    }
+
+    /// Load the vector store from disk.
+    ///
+    /// - Throws: If loading fails.
+    public func load() async throws {
+        if vectorStore.indexFileExists() {
+            try await vectorStore.load()
+            logger.info("Vector index loaded")
+        }
+        // Chunk store auto-loads via SQLite
+    }
+
+    /// Clear all indexed data.
+    ///
+    /// - Throws: If clearing fails.
+    public func clear() async throws {
+        try await chunkStore.clear()
+        try await vectorStore.clear()
+        logger.info("Index cleared")
+    }
+
+    // MARK: - Maintenance
+
+    /// Remove chunks for files that no longer exist.
+    ///
+    /// - Returns: Number of chunks removed.
+    @discardableResult
+    public func pruneDeletedFiles() async throws -> Int {
+        let paths = try await indexedPaths()
+        var removedCount = 0
+
+        for path in paths {
+            if !FileManager.default.fileExists(atPath: path) {
+                let chunks = try await chunkStore.getByPath(path)
+                for chunk in chunks {
+                    try await vectorStore.delete(id: chunk.id)
+                }
+                try await chunkStore.deleteByPath(path)
+                try await chunkStore.deleteFileHash(path: path)
+                removedCount += chunks.count
+
+                logger.debug("Pruned deleted file", metadata: [
+                    "path": "\(path)",
+                    "chunks": "\(chunks.count)"
+                ])
+            }
+        }
+
+        if removedCount > 0 {
+            logger.info("Pruned deleted files", metadata: [
+                "removedChunks": "\(removedCount)"
+            ])
+        }
+
+        return removedCount
+    }
+
+    /// Verify index consistency between chunk and vector stores.
+    ///
+    /// - Returns: Consistency report.
+    public func verifyConsistency() async throws -> ConsistencyReport {
+        let chunkIDs = Set(try await chunkStore.allIDs())
+        let vectorIDs = Set(try await vectorStore.allIDs())
+
+        let missingVectors = chunkIDs.subtracting(vectorIDs)
+        let orphanedVectors = vectorIDs.subtracting(chunkIDs)
+
+        return ConsistencyReport(
+            chunkCount: chunkIDs.count,
+            vectorCount: vectorIDs.count,
+            missingVectors: Array(missingVectors),
+            orphanedVectors: Array(orphanedVectors),
+            isConsistent: missingVectors.isEmpty && orphanedVectors.isEmpty
+        )
+    }
+
+    /// Repair index by removing orphaned entries.
+    ///
+    /// - Returns: Number of entries repaired.
+    @discardableResult
+    public func repair() async throws -> Int {
+        let report = try await verifyConsistency()
+        var repairedCount = 0
+
+        // Remove orphaned vectors
+        for vectorID in report.orphanedVectors {
+            try await vectorStore.delete(id: vectorID)
+            repairedCount += 1
+        }
+
+        // Note: Missing vectors require re-embedding, not handled here
+
+        if repairedCount > 0 {
+            logger.info("Repaired index", metadata: [
+                "orphanedVectorsRemoved": "\(report.orphanedVectors.count)"
+            ])
+        }
+
+        return repairedCount
+    }
+}
+
+// MARK: - IndexManagerConfig
+
+/// Configuration for IndexManager.
+public struct IndexManagerConfig: Sendable {
+    /// Default configuration.
+    public static let `default` = IndexManagerConfig()
+
+    /// Whether to auto-save after batch operations.
+    public let autoSave: Bool
+
+    /// Batch size for chunked operations.
+    public let batchSize: Int
+
+    public init(
+        autoSave: Bool = true,
+        batchSize: Int = 100
+    ) {
+        self.autoSave = autoSave
+        self.batchSize = batchSize
+    }
+}
+
+// MARK: - HybridSearchOptions
+
+/// Options for hybrid search.
+public struct HybridSearchOptions: Sendable {
+    /// Default search options.
+    public static let `default` = HybridSearchOptions()
+
+    /// Maximum results to return.
+    public let limit: Int
+
+    /// Weight for semantic search (0-1). FTS weight = 1 - semanticWeight.
+    public let semanticWeight: Double
+
+    /// RRF constant K (typically 60).
+    public let rrfK: Int
+
+    public init(
+        limit: Int = 20,
+        semanticWeight: Double = 0.7,
+        rrfK: Int = 60
+    ) {
+        self.limit = limit
+        self.semanticWeight = semanticWeight
+        self.rrfK = rrfK
+    }
+}
+
+// MARK: - IndexStatistics
+
+/// Statistics about the index.
+public struct IndexStatistics: Sendable {
+    /// Number of indexed chunks.
+    public let chunkCount: Int
+
+    /// Number of indexed vectors.
+    public let vectorCount: Int
+
+    /// Number of indexed files.
+    public let fileCount: Int
+
+    /// Vector embedding dimension.
+    public let dimension: Int
+
+    /// Whether chunk and vector counts match.
+    public var isConsistent: Bool {
+        chunkCount == vectorCount
+    }
+}
+
+// MARK: - ConsistencyReport
+
+/// Report from index consistency verification.
+public struct ConsistencyReport: Sendable {
+    /// Number of chunks in chunk store.
+    public let chunkCount: Int
+
+    /// Number of vectors in vector store.
+    public let vectorCount: Int
+
+    /// Chunk IDs without corresponding vectors.
+    public let missingVectors: [String]
+
+    /// Vector IDs without corresponding chunks.
+    public let orphanedVectors: [String]
+
+    /// Whether the index is fully consistent.
+    public let isConsistent: Bool
+}

@@ -13,39 +13,39 @@
 > **Verification:** `swift build` and `swift test` succeed
 
 ### 0.1 Package Setup
-- [ ] 0.1.1 Create `Package.swift` with all dependencies
-- [ ] 0.1.2 Verify `swift package resolve` succeeds
-- [ ] 0.1.3 Create target structure (SwiftIndexCore, SwiftIndexMCP, swiftindex)
-- [ ] 0.1.4 Create test targets (SwiftIndexCoreTests, IntegrationTests)
+- [x] 0.1.1 Create `Package.swift` with all dependencies
+- [x] 0.1.2 Verify `swift package resolve` succeeds
+- [x] 0.1.3 Create target structure (SwiftIndexCore, SwiftIndexMCP, swiftindex)
+- [x] 0.1.4 Create test targets (SwiftIndexCoreTests, IntegrationTests)
 
 ### 0.2 Core Protocols
-- [ ] 0.2.1 Define `EmbeddingProvider` protocol
-- [ ] 0.2.2 Define `Parser` protocol
-- [ ] 0.2.3 Define `SearchEngine` protocol
-- [ ] 0.2.4 Define `ConfigLoader` protocol
-- [ ] 0.2.5 Define `ChunkStore` protocol
-- [ ] 0.2.6 Define `VectorStore` protocol
+- [x] 0.2.1 Define `EmbeddingProvider` protocol
+- [x] 0.2.2 Define `Parser` protocol
+- [x] 0.2.3 Define `SearchEngine` protocol
+- [x] 0.2.4 Define `ConfigLoader` protocol
+- [x] 0.2.5 Define `ChunkStore` protocol
+- [x] 0.2.6 Define `VectorStore` protocol
 
 ### 0.3 Core Models
-- [ ] 0.3.1 Define `CodeChunk` struct
-- [ ] 0.3.2 Define `SearchResult` struct
-- [ ] 0.3.3 Define `ParseResult` enum
-- [ ] 0.3.4 Define `Config` struct with all fields
-- [ ] 0.3.5 Define `ChunkKind` enum
-- [ ] 0.3.6 Define `ProviderError` enum
+- [x] 0.3.1 Define `CodeChunk` struct
+- [x] 0.3.2 Define `SearchResult` struct
+- [x] 0.3.3 Define `ParseResult` enum
+- [x] 0.3.4 Define `Config` struct with all fields
+- [x] 0.3.5 Define `ChunkKind` enum
+- [x] 0.3.6 Define `ProviderError` enum
 
 ### 0.4 Test Infrastructure
-- [ ] 0.4.1 Create test target directory structure
-- [ ] 0.4.2 Create `Tests/Fixtures/` directory
-- [ ] 0.4.3 Create Swift fixture files
-- [ ] 0.4.4 Create ObjC fixture files
-- [ ] 0.4.5 Create JSON/YAML fixture files
-- [ ] 0.4.6 Create TOML config fixtures
+- [x] 0.4.1 Create test target directory structure
+- [x] 0.4.2 Create `Tests/Fixtures/` directory
+- [x] 0.4.3 Create Swift fixture files
+- [x] 0.4.4 Create ObjC fixture files
+- [x] 0.4.5 Create JSON/YAML fixture files
+- [x] 0.4.6 Create TOML config fixtures
 
 ### 0.5 Gate: Foundation Complete
-- [ ] **GATE 0:** `swift build` succeeds with all dependencies
-- [ ] **GATE 0:** `swift test` runs (0 tests passing is OK)
-- [ ] **GATE 0:** All protocols compile without errors
+- [x] **GATE 0:** `swift build` succeeds with all dependencies
+- [x] **GATE 0:** `swift test` runs (0 tests passing is OK)
+- [x] **GATE 0:** All protocols compile without errors
 
 ---
 
@@ -84,30 +84,30 @@
 > **TDD:** Write tests first, then implement
 
 ##### B.1 SwiftSyntax Tests
-- [ ] B.1.1 Write `test_parseFunctionDecl()`
-- [ ] B.1.2 Write `test_parseClassDecl()`
-- [ ] B.1.3 Write `test_parseStructDecl()`
-- [ ] B.1.4 Write `test_parseProtocolDecl()`
-- [ ] B.1.5 Write `test_parseExtensionDecl()`
-- [ ] B.1.6 Write `test_parseActorDecl()`
-- [ ] B.1.7 Write `test_parseMacroDecl()`
-- [ ] B.1.8 Write `test_extractsSymbolNames()`
-- [ ] B.1.9 Write `test_extractsLineNumbers()`
+- [x] B.1.1 Write `test_parseFunctionDecl()`
+- [x] B.1.2 Write `test_parseClassDecl()`
+- [x] B.1.3 Write `test_parseStructDecl()`
+- [x] B.1.4 Write `test_parseProtocolDecl()`
+- [x] B.1.5 Write `test_parseExtensionDecl()`
+- [x] B.1.6 Write `test_parseActorDecl()`
+- [x] B.1.7 Write `test_parseMacroDecl()`
+- [x] B.1.8 Write `test_extractsSymbolNames()`
+- [x] B.1.9 Write `test_extractsLineNumbers()`
 
 ##### B.2 SwiftSyntax Implementation
-- [ ] B.2.1 Implement `SwiftSyntaxParser.swift`
-- [ ] B.2.2 Implement `ChunkingVisitor.swift` base
-- [ ] B.2.3 Add function declaration visiting
-- [ ] B.2.4 Add type declaration visiting (class, struct, enum)
-- [ ] B.2.5 Add protocol/extension visiting
-- [ ] B.2.6 Add actor/macro visiting
-- [ ] B.2.7 Implement symbol extraction
-- [ ] B.2.8 Implement reference extraction
+- [x] B.2.1 Implement `SwiftSyntaxParser.swift`
+- [x] B.2.2 Implement `ChunkingVisitor.swift` base
+- [x] B.2.3 Add function declaration visiting
+- [x] B.2.4 Add type declaration visiting (class, struct, enum)
+- [x] B.2.5 Add protocol/extension visiting
+- [x] B.2.6 Add actor/macro visiting
+- [x] B.2.7 Implement symbol extraction
+- [x] B.2.8 Implement reference extraction
 
 ##### B.3 Gate: SwiftSyntax Complete
-- [ ] **GATE B:** All 9 SwiftSyntax tests pass
-- [ ] **GATE B:** Can parse any valid Swift file
-- [ ] **GATE B:** Chunks have correct line numbers
+- [x] **GATE B:** All 9 SwiftSyntax tests pass
+- [x] **GATE B:** Can parse any valid Swift file
+- [x] **GATE B:** Chunks have correct line numbers
 
 ---
 
@@ -157,33 +157,33 @@
 > **TDD:** Write tests first, then implement
 
 ##### D.1 Provider Protocol Tests
-- [ ] D.1.1 Write `test_isAvailable_returnsCorrectStatus()`
-- [ ] D.1.2 Write `test_embed_singleText_returnsVector()`
-- [ ] D.1.3 Write `test_embed_batch_returnsMultipleVectors()`
-- [ ] D.1.4 Write `test_dimension_matchesExpected()`
+- [x] D.1.1 Write `test_isAvailable_returnsCorrectStatus()`
+- [x] D.1.2 Write `test_embed_singleText_returnsVector()`
+- [x] D.1.3 Write `test_embed_batch_returnsMultipleVectors()`
+- [x] D.1.4 Write `test_dimension_matchesExpected()`
 
 ##### D.2 Provider Chain Tests
-- [ ] D.2.1 Write `test_usesFirstAvailableProvider()`
-- [ ] D.2.2 Write `test_fallbackOnUnavailable()`
-- [ ] D.2.3 Write `test_allUnavailable_throws()`
-- [ ] D.2.4 Write `test_swiftEmbeddings_alwaysAvailable()`
+- [x] D.2.1 Write `test_usesFirstAvailableProvider()`
+- [x] D.2.2 Write `test_fallbackOnUnavailable()`
+- [x] D.2.3 Write `test_allUnavailable_throws()`
+- [x] D.2.4 Write `test_swiftEmbeddings_alwaysAvailable()`
 
 ##### D.3 Mock Provider
-- [ ] D.3.1 Implement `MockEmbeddingProvider.swift`
+- [x] D.3.1 Implement `MockEmbeddingProvider.swift`
 
 ##### D.4 Provider Implementations
-- [ ] D.4.1 Implement `MLXEmbeddingProvider.swift`
+- [x] D.4.1 Implement `MLXEmbeddingProvider.swift`
 - [ ] D.4.2 Implement `OllamaEmbeddingProvider.swift`
-- [ ] D.4.3 Implement `SwiftEmbeddingsProvider.swift`
+- [x] D.4.3 Implement `SwiftEmbeddingsProvider.swift`
 - [ ] D.4.4 Implement `VoyageProvider.swift`
 - [ ] D.4.5 Implement `OpenAIProvider.swift`
-- [ ] D.4.6 Implement `EmbeddingService.swift` (chain orchestrator)
+- [x] D.4.6 Implement `EmbeddingService.swift` (chain orchestrator)
 - [ ] D.4.7 Implement `ModelDownloader.swift`
 
 ##### D.5 Gate: Embeddings Complete
-- [ ] **GATE D:** All 8 embedding tests pass
-- [ ] **GATE D:** Provider chain correctly falls back
-- [ ] **GATE D:** SwiftEmbeddings always returns embeddings
+- [x] **GATE D:** All 8 embedding tests pass
+- [x] **GATE D:** Provider chain correctly falls back
+- [x] **GATE D:** SwiftEmbeddings always returns embeddings
 
 ---
 
@@ -194,36 +194,36 @@
 ### Track E: Storage
 
 ##### E.1 MetadataStore Tests
-- [ ] E.1.1 Write `test_insertChunk()`
-- [ ] E.1.2 Write `test_getChunk()`
-- [ ] E.1.3 Write `test_updateChunk()`
-- [ ] E.1.4 Write `test_deleteChunk()`
-- [ ] E.1.5 Write `test_searchFTS5()`
+- [x] E.1.1 Write `test_insertChunk()`
+- [x] E.1.2 Write `test_getChunk()`
+- [x] E.1.3 Write `test_updateChunk()`
+- [x] E.1.4 Write `test_deleteChunk()`
+- [x] E.1.5 Write `test_searchFTS5()`
 
 ##### E.2 VectorIndex Tests
-- [ ] E.2.1 Write `test_addVector()`
-- [ ] E.2.2 Write `test_searchVector_returnsSimilar()`
-- [ ] E.2.3 Write `test_deleteVector()`
-- [ ] E.2.4 Write `test_persistToDisk()`
+- [x] E.2.1 Write `test_addVector()`
+- [x] E.2.2 Write `test_searchVector_returnsSimilar()`
+- [x] E.2.3 Write `test_deleteVector()`
+- [x] E.2.4 Write `test_persistToDisk()`
 
 ##### E.3 Indexer Tests
-- [ ] E.3.1 Write `test_indexFile_createsChunks()`
-- [ ] E.3.2 Write `test_indexDirectory_recursivelyIndexes()`
-- [ ] E.3.3 Write `test_incrementalIndex_onlyNewFiles()`
+- [x] E.3.1 Write `test_indexFile_createsChunks()`
+- [x] E.3.2 Write `test_indexDirectory_recursivelyIndexes()`
+- [x] E.3.3 Write `test_incrementalIndex_onlyNewFiles()`
 
 ##### E.4 Storage Implementation
-- [ ] E.4.1 Implement `MetadataStore.swift` with GRDB
-- [ ] E.4.2 Implement GRDB migrations
-- [ ] E.4.3 Implement FTS5 virtual table
-- [ ] E.4.4 Implement `VectorIndex.swift` with USearch
-- [ ] E.4.5 Implement `Indexer.swift` orchestrator
-- [ ] E.4.6 Implement file hash tracking
-- [ ] E.4.7 Implement incremental indexing logic
+- [x] E.4.1 Implement `MetadataStore.swift` with GRDB
+- [x] E.4.2 Implement GRDB migrations
+- [x] E.4.3 Implement FTS5 virtual table
+- [x] E.4.4 Implement `VectorIndex.swift` with USearch
+- [x] E.4.5 Implement `Indexer.swift` orchestrator
+- [x] E.4.6 Implement file hash tracking
+- [x] E.4.7 Implement incremental indexing logic
 
 ##### E.5 Gate: Storage Complete
-- [ ] **GATE E:** All 12 storage tests pass
-- [ ] **GATE E:** Can index directory and retrieve chunks
-- [ ] **GATE E:** Incremental indexing skips unchanged files
+- [x] **GATE E:** All 12 storage tests pass
+- [x] **GATE E:** Can index directory and retrieve chunks
+- [x] **GATE E:** Incremental indexing skips unchanged files
 
 ---
 
@@ -234,31 +234,31 @@
 ### Track F: Search
 
 ##### F.1 Search Tests
-- [ ] F.1.1 Write `test_bm25Search_returnsRankedResults()`
-- [ ] F.1.2 Write `test_bm25Search_emptyQuery_returnsEmpty()`
-- [ ] F.1.3 Write `test_semanticSearch_returnsSimilarChunks()`
-- [ ] F.1.4 Write `test_semanticSearch_respectsLimit()`
-- [ ] F.1.5 Write `test_rrfFusion_combinesResults()`
-- [ ] F.1.6 Write `test_rrfFusion_handlesDisjointSets()`
-- [ ] F.1.7 Write `test_rrfFusion_respectsK()`
-- [ ] F.1.8 Write `test_multiHop_followsReferences()`
-- [ ] F.1.9 Write `test_multiHop_respectsDepth()`
-- [ ] F.1.10 Write `test_hybridSearch_usesWeightedCombination()`
-- [ ] F.1.11 Write `test_hybridSearch_filtersByPath()`
+- [x] F.1.1 Write `test_bm25Search_returnsRankedResults()`
+- [x] F.1.2 Write `test_bm25Search_emptyQuery_returnsEmpty()`
+- [x] F.1.3 Write `test_semanticSearch_returnsSimilarChunks()`
+- [x] F.1.4 Write `test_semanticSearch_respectsLimit()`
+- [x] F.1.5 Write `test_rrfFusion_combinesResults()`
+- [x] F.1.6 Write `test_rrfFusion_handlesDisjointSets()`
+- [x] F.1.7 Write `test_rrfFusion_respectsK()`
+- [x] F.1.8 Write `test_multiHop_followsReferences()`
+- [x] F.1.9 Write `test_multiHop_respectsDepth()`
+- [x] F.1.10 Write `test_hybridSearch_usesWeightedCombination()`
+- [x] F.1.11 Write `test_hybridSearch_filtersByPath()`
 
 ##### F.2 Search Implementation
-- [ ] F.2.1 Implement `BM25Search.swift`
-- [ ] F.2.2 Implement `SemanticSearch.swift`
-- [ ] F.2.3 Implement `RRFFusion.swift`
-- [ ] F.2.4 Implement `MultiHopSearch.swift`
-- [ ] F.2.5 Implement `HybridSearchEngine.swift`
-- [ ] F.2.6 Add path filtering support
-- [ ] F.2.7 Add configurable weights
+- [x] F.2.1 Implement `BM25Search.swift`
+- [x] F.2.2 Implement `SemanticSearch.swift`
+- [x] F.2.3 Implement `RRFFusion.swift`
+- [x] F.2.4 Implement `MultiHopSearch.swift`
+- [x] F.2.5 Implement `HybridSearchEngine.swift`
+- [x] F.2.6 Add path filtering support
+- [x] F.2.7 Add configurable weights
 
 ##### F.3 Gate: Search Complete
-- [ ] **GATE F:** All 11 search tests pass
-- [ ] **GATE F:** Hybrid search returns relevant results
-- [ ] **GATE F:** Multi-hop follows references correctly
+- [x] **GATE F:** All 11 search tests pass
+- [x] **GATE F:** Hybrid search returns relevant results
+- [x] **GATE F:** Multi-hop follows references correctly
 
 ---
 
@@ -269,36 +269,36 @@
 #### Track G: MCP Server (Agent 1)
 
 ##### G.1 MCP Implementation
-- [ ] G.1.1 Implement `MCPServer.swift` base
-- [ ] G.1.2 Implement JSON-RPC handling
-- [ ] G.1.3 Implement `IndexCodebaseTool.swift`
-- [ ] G.1.4 Implement `SearchCodeTool.swift`
-- [ ] G.1.5 Implement `CodeResearchTool.swift`
-- [ ] G.1.6 Implement `WatchCodebaseTool.swift`
+- [x] G.1.1 Implement `MCPServer.swift` base
+- [x] G.1.2 Implement JSON-RPC handling
+- [x] G.1.3 Implement `IndexCodebaseTool.swift`
+- [x] G.1.4 Implement `SearchCodeTool.swift`
+- [x] G.1.5 Implement `CodeResearchTool.swift`
+- [x] G.1.6 Implement `WatchCodebaseTool.swift`
 
 ##### G.2 MCP Tests
-- [ ] G.2.1 Write `test_indexCodebase_tool()`
-- [ ] G.2.2 Write `test_searchCode_tool()`
-- [ ] G.2.3 Write `test_codeResearch_tool()`
-- [ ] G.2.4 Write `test_watchCodebase_tool()`
+- [x] G.2.1 Write `test_indexCodebase_tool()`
+- [x] G.2.2 Write `test_searchCode_tool()`
+- [x] G.2.3 Write `test_codeResearch_tool()`
+- [x] G.2.4 Write `test_watchCodebase_tool()`
 
 ##### G.3 Gate: MCP Complete
-- [ ] **GATE G:** All 4 MCP tools respond to JSON-RPC
-- [ ] **GATE G:** Tools return valid MCP responses
+- [x] **GATE G:** All 4 MCP tools respond to JSON-RPC
+- [x] **GATE G:** Tools return valid MCP responses
 
 ---
 
 #### Track H: CLI Commands (Agent 1)
 
 ##### H.1 CLI Implementation
-- [ ] H.1.1 Implement `main.swift` with ArgumentParser
-- [ ] H.1.2 Implement `IndexCommand.swift`
-- [ ] H.1.3 Implement `SearchCommand.swift`
-- [ ] H.1.4 Implement `WatchCommand.swift`
-- [ ] H.1.5 Implement `ProvidersCommand.swift`
-- [ ] H.1.6 Implement `InstallClaudeCodeCommand.swift`
-- [ ] H.1.7 Implement `InstallCodexCommand.swift`
-- [ ] H.1.8 Implement `InstallCursorCommand.swift`
+- [x] H.1.1 Implement `main.swift` with ArgumentParser
+- [x] H.1.2 Implement `IndexCommand.swift`
+- [x] H.1.3 Implement `SearchCommand.swift`
+- [x] H.1.4 Implement `WatchCommand.swift`
+- [x] H.1.5 Implement `ProvidersCommand.swift`
+- [x] H.1.6 Implement `InstallClaudeCodeCommand.swift`
+- [x] H.1.7 Implement `InstallCodexCommand.swift`
+- [x] H.1.8 Implement `InstallCursorCommand.swift`
 - [ ] H.1.9 Implement `InitCommand.swift`
 
 ##### H.2 CLI Tests
@@ -307,9 +307,9 @@
 - [ ] H.2.3 Write `test_installClaudeCode()`
 
 ##### H.3 Gate: CLI Complete
-- [ ] **GATE H:** `swiftindex index` works E2E
-- [ ] **GATE H:** `swiftindex search` returns results
-- [ ] **GATE H:** `swiftindex install-claude-code` creates config
+- [x] **GATE H:** `swiftindex index` works E2E
+- [x] **GATE H:** `swiftindex search` returns results
+- [x] **GATE H:** `swiftindex install-claude-code` creates config
 
 ---
 

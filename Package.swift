@@ -115,6 +115,11 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "SwiftIndexMCPTests",
+            dependencies: ["SwiftIndexMCP"],
+            path: "Tests/SwiftIndexMCPTests"
+        ),
+        .testTarget(
             name: "IntegrationTests",
             dependencies: [
                 "SwiftIndexCore",

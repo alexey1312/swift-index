@@ -1,0 +1,159 @@
+// MARK: - BM25 Search Engine
+
+import Foundation
+
+/// A keyword-based search engine using BM25 via FTS5.
+///
+/// BM25Search leverages the ChunkStore's FTS5 full-text search capabilities
+/// to perform keyword-based relevance ranking. It serves as one half of the
+/// hybrid search strategy.
+///
+/// ## Features
+///
+/// - Full-text keyword search using SQLite FTS5
+/// - BM25 ranking algorithm for relevance scoring
+/// - Optional path and extension filtering
+/// - Score normalization for fusion compatibility
+///
+/// ## Usage
+///
+/// ```swift
+/// let search = BM25Search(chunkStore: store)
+/// let results = try await search.search(
+///     query: "authentication",
+///     options: .default
+/// )
+/// ```
+public actor BM25Search: SearchEngine {
+    /// The chunk store providing FTS5 search capabilities.
+    private let chunkStore: any ChunkStore
+
+    /// Creates a new BM25 search engine.
+    ///
+    /// - Parameter chunkStore: The chunk store with FTS5 support.
+    public init(chunkStore: any ChunkStore) {
+        self.chunkStore = chunkStore
+    }
+
+    /// Performs a BM25 keyword search.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - options: Search configuration options.
+    /// - Returns: Array of search results with BM25 scores.
+    public func search(query: String, options: SearchOptions) async throws -> [SearchResult] {
+        // Perform FTS5 search
+        let ftsResults = try await chunkStore.searchFTS(
+            query: prepareQuery(query),
+            limit: options.limit * 2 // Fetch extra for filtering
+        )
+
+        // Filter and transform results
+        var results: [SearchResult] = []
+
+        for (rank, (chunk, score)) in ftsResults.enumerated() {
+            // Apply path filter
+            if let pathFilter = options.pathFilter {
+                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                    continue
+                }
+            }
+
+            // Apply extension filter
+            if let extensionFilter = options.extensionFilter, !extensionFilter.isEmpty {
+                let ext = (chunk.path as NSString).pathExtension.lowercased()
+                guard extensionFilter.contains(ext) else {
+                    continue
+                }
+            }
+
+            let result = SearchResult(
+                chunk: chunk,
+                score: Float(score),
+                bm25Score: Float(score),
+                semanticScore: nil,
+                bm25Rank: rank + 1,
+                semanticRank: nil,
+                isMultiHop: false,
+                hopDepth: 0
+            )
+            results.append(result)
+
+            if results.count >= options.limit {
+                break
+            }
+        }
+
+        return results
+    }
+
+    /// Performs a raw BM25 search returning chunk IDs and scores.
+    ///
+    /// This method is used internally by HybridSearchEngine for fusion.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - limit: Maximum number of results.
+    /// - Returns: Array of (chunk ID, BM25 score) pairs.
+    public func searchRaw(
+        query: String,
+        limit: Int
+    ) async throws -> [(id: String, score: Float)] {
+        let ftsResults = try await chunkStore.searchFTS(
+            query: prepareQuery(query),
+            limit: limit
+        )
+
+        return ftsResults.map { (id: $0.chunk.id, score: Float($0.score)) }
+    }
+
+    // MARK: - Private Helpers
+
+    /// Prepares a query for FTS5 search.
+    ///
+    /// - Parameter query: The raw query string.
+    /// - Returns: FTS5-compatible query string.
+    private func prepareQuery(_ query: String) -> String {
+        // Split into terms and join with AND for FTS5
+        let terms = query
+            .components(separatedBy: .whitespaces)
+            .filter { !$0.isEmpty }
+            .map { term -> String in
+                // Escape special FTS5 characters
+                let escaped = term
+                    .replacingOccurrences(of: "\"", with: "\"\"")
+                // Use prefix matching for partial words
+                if term.count >= 3 {
+                    return "\"\(escaped)\"*"
+                }
+                return "\"\(escaped)\""
+            }
+
+        return terms.joined(separator: " ")
+    }
+
+    /// Checks if a path matches a glob pattern.
+    ///
+    /// - Parameters:
+    ///   - path: The file path to check.
+    ///   - pattern: The glob pattern.
+    /// - Returns: True if the path matches the pattern.
+    private func matchesGlob(_ path: String, pattern: String) -> Bool {
+        // Convert glob pattern to regex
+        var regexPattern = pattern
+            .replacingOccurrences(of: ".", with: "\\.")
+            .replacingOccurrences(of: "**/", with: "(.*/)?")
+            .replacingOccurrences(of: "**", with: ".*")
+            .replacingOccurrences(of: "*", with: "[^/]*")
+            .replacingOccurrences(of: "?", with: ".")
+
+        regexPattern = "^" + regexPattern + "$"
+
+        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
+            return false
+        }
+
+        let range = NSRange(path.startIndex..., in: path)
+        return regex.firstMatch(in: path, range: range) != nil
+    }
+}
