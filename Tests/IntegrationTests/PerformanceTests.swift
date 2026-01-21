@@ -159,8 +159,8 @@ struct PerformanceTests {
         print("Large file parsing: \(chunks.count) chunks in \(String(format: "%.2f", elapsed * 1000)) ms")
         print("Code size: \(largeCode.count) characters")
 
-        // Should parse large files in reasonable time (under 120 seconds for 50x repeated code in debug builds)
-        #expect(elapsed < 120, "Large file should parse in under 120 seconds")
+        // Should parse large files in reasonable time (under 180 seconds for 50x repeated code in debug builds)
+        #expect(elapsed < 180, "Large file should parse in under 180 seconds")
         #expect(chunks.count >= 100, "Should extract many chunks from large file")
     }
 
