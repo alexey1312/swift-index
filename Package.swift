@@ -39,7 +39,7 @@ let package = Package(
         .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.23.0"),
 
         // Configuration
-        .package(url: "https://github.com/alexey1312/swift-toml.git", branch: "alexey1312/pure-c-bridge"),
+        .package(url: "https://github.com/alexey1312/swift-toml.git", from: "1.0.0"),
 
         // CLI
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
