@@ -33,14 +33,14 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### Build & Test Commands
 
-| Command                             | Description        |
-| ----------------------------------- | ------------------ |
-| `./bin/mise run build`              | Debug build        |
-| `./bin/mise run build:release`      | Release build      |
-| `./bin/mise run test`               | Run all tests      |
-| `./bin/mise run test:filter <name>` | Run filtered tests |
-| `./bin/mise run lint`               | Run linters        |
-| `./bin/mise run format`             | Format all code    |
+| Command                             | Description                  |
+| ----------------------------------- | ---------------------------- |
+| `./bin/mise run build`              | Debug build                  |
+| `./bin/mise run build:release`      | Release build + MLX metallib |
+| `./bin/mise run test`               | Run all tests                |
+| `./bin/mise run test:filter <name>` | Run filtered tests           |
+| `./bin/mise run lint`               | Run linters                  |
+| `./bin/mise run format`             | Format all code              |
 
 ### CLI Commands
 
@@ -133,6 +133,20 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 ./bin/mise run test                              # All tests
 ./bin/mise run test:filter SwiftIndexCoreTests   # Specific suite
 ```
+
+### MLX Release Artifacts
+
+- `./bin/mise run build:release` runs `scripts/build-mlx-metallib` to create
+  `default.metallib` and `mlx.metallib` next to the release binary.
+- Requires MetalToolchain (`xcrun --find metal` and `xcrun --find metallib`).
+
+### Init Behavior Notes
+
+- `swiftindex init` writes MLX defaults by default and includes commented examples.
+- If MetalToolchain is missing and MLX is selected, it prompts to install and can
+  fall back to Swift Embeddings defaults.
+- Tests can override MetalToolchain detection with
+  `SWIFTINDEX_METALTOOLCHAIN_OVERRIDE=present|missing`.
 
 ## Distribution
 

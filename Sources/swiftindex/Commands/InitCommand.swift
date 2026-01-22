@@ -73,10 +73,37 @@ struct InitCommand: AsyncParsableCommand {
         let projectInfo = detectProjectInfo()
         logger.debug("Detected project info: \(projectInfo)")
 
+        var resolvedProvider = provider ?? "mlx"
+        var resolvedModel = model ?? defaultModel(for: resolvedProvider)
+
+        if usesMLX(provider: resolvedProvider), !isMetalToolchainAvailable() {
+            print("MetalToolchain not found. MLX requires Metal shader tools.")
+            let wantsInstall = promptYesNo(
+                "Install MetalToolchain now? (run: xcode-select --install) [Y/n]",
+                defaultYes: true
+            )
+            if !wantsInstall {
+                let wantsFallback = promptYesNo(
+                    "Switch to Swift Embeddings (CPU) defaults instead? [Y/n]",
+                    defaultYes: true
+                )
+                if wantsFallback {
+                    resolvedProvider = "swift"
+                    resolvedModel = defaultModel(for: resolvedProvider)
+                    print("Using Swift Embeddings defaults instead of MLX.")
+                } else {
+                    print("Cannot continue without MetalToolchain for MLX.")
+                    throw ExitCode.failure
+                }
+            } else {
+                print("Please install MetalToolchain and re-run if MLX fails to load.")
+            }
+        }
+
         // Generate configuration content
         let configContent = generateConfigContent(
-            provider: provider,
-            model: model,
+            provider: resolvedProvider,
+            model: resolvedModel,
             projectInfo: projectInfo
         )
 
@@ -85,7 +112,7 @@ struct InitCommand: AsyncParsableCommand {
             try configContent.write(toFile: fullPath, atomically: true, encoding: .utf8)
             print("Created configuration file: \(configPath)")
             print("")
-            printConfigSummary(provider: provider, model: model)
+            printConfigSummary(provider: resolvedProvider, model: resolvedModel)
         } catch {
             logger.error("Failed to write configuration: \(error.localizedDescription)")
             throw error
@@ -133,7 +160,7 @@ struct InitCommand: AsyncParsableCommand {
     }
 
     private func generateConfigContent(
-        provider: String?,
+        provider: String,
         model: String?,
         projectInfo: ProjectInfo
     ) -> String {
@@ -146,21 +173,39 @@ struct InitCommand: AsyncParsableCommand {
 
         // Embedding section
         lines.append("[embedding]")
-        if let provider {
-            lines.append("provider = \"\(provider)\"")
-        } else {
-            lines.append("# Provider options: mlx, ollama, voyage, openai, swift")
-            lines.append("# Default: auto-detect based on availability")
-            lines.append("# provider = \"mlx\"")
-        }
-
+        lines.append("# Provider options: mlx, swift, ollama, voyage, openai")
+        lines.append("provider = \"\(provider)\"")
         if let model {
             lines.append("model = \"\(model)\"")
         } else {
-            lines.append("# model = \"bge-small-en-v1.5\"")
+            lines.append("# model = \"\(suggestedModel(for: provider))\"")
         }
-
-        lines.append("# dimension = 384")
+        if let dimension = defaultDimension(for: provider, model: model) {
+            if self.model == nil {
+                lines.append("dimension = \(dimension)")
+            } else {
+                lines.append("# dimension = \(dimension)")
+            }
+        } else {
+            lines.append("# dimension = 384")
+        }
+        lines.append("")
+        lines.append("# Provider examples and defaults:")
+        lines.append("# MLX (Apple Silicon + Metal toolchain)")
+        lines.append("# provider = \"mlx\"")
+        lines.append("# model = \"\(suggestedModel(for: "mlx"))\"")
+        lines.append("# Swift Embeddings (CPU)")
+        lines.append("# provider = \"swift\"")
+        lines.append("# model = \"\(suggestedModel(for: "swift"))\"")
+        lines.append("# Ollama (local server)")
+        lines.append("# provider = \"ollama\"")
+        lines.append("# model = \"nomic-embed-text\"")
+        lines.append("# Voyage (cloud)")
+        lines.append("# provider = \"voyage\"")
+        lines.append("# model = \"voyage-large-2\"")
+        lines.append("# OpenAI (cloud)")
+        lines.append("# provider = \"openai\"")
+        lines.append("# model = \"text-embedding-3-large\"")
         lines.append("")
 
         // Search section
@@ -224,6 +269,96 @@ struct InitCommand: AsyncParsableCommand {
         print("  Provider: \(provider ?? "auto-detect")")
         print("  Model: \(model ?? "default")")
         print("  Index path: .swiftindex/")
+    }
+
+    private func usesMLX(provider: String) -> Bool {
+        provider.lowercased() == "mlx"
+    }
+
+    private func defaultModel(for provider: String) -> String? {
+        switch provider.lowercased() {
+        case "mlx":
+            "mlx-community/bge-small-en-v1.5-4bit"
+        case "swift", "swift-embeddings", "swiftembeddings":
+            "all-MiniLM-L6-v2"
+        default:
+            nil
+        }
+    }
+
+    private func suggestedModel(for provider: String) -> String {
+        if let defaultModel = defaultModel(for: provider) {
+            return defaultModel
+        }
+        switch provider.lowercased() {
+        case "ollama":
+            return "nomic-embed-text"
+        case "voyage":
+            return "voyage-large-2"
+        case "openai":
+            return "text-embedding-3-large"
+        default:
+            return "bge-small-en-v1.5"
+        }
+    }
+
+    private func defaultDimension(for provider: String, model: String?) -> Int? {
+        let resolvedModel = model ?? defaultModel(for: provider)
+        guard let resolvedModel else {
+            return nil
+        }
+        switch resolvedModel {
+        case "mlx-community/bge-small-en-v1.5-4bit",
+             "all-MiniLM-L6-v2",
+             "bge-small-en-v1.5":
+            return 384
+        case "mlx-community/bge-large-en-v1.5-4bit":
+            return 1024
+        case "mlx-community/nomic-embed-text-v1.5-4bit":
+            return 768
+        default:
+            return nil
+        }
+    }
+
+    private func isMetalToolchainAvailable() -> Bool {
+        if let override = ProcessInfo.processInfo.environment["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE"]?.lowercased() {
+            switch override {
+            case "present":
+                return true
+            case "missing":
+                return false
+            default:
+                break
+            }
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
+        process.arguments = ["--find", "metal"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    private func promptYesNo(_ prompt: String, defaultYes: Bool) -> Bool {
+        print(prompt, terminator: " ")
+        guard let response = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !response.isEmpty
+        else {
+            return defaultYes
+        }
+        let lower = response.lowercased()
+        if lower.hasPrefix("y") { return true }
+        if lower.hasPrefix("n") { return false }
+        return defaultYes
     }
 }
 

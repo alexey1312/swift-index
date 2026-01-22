@@ -58,7 +58,11 @@ run = "swift build 2>&1 | xcsift"
 
 [tasks."build:release"]
 description = "Build the Swift package (release)"
-run = "swift build --configuration release 2>&1 | xcsift"
+run = """
+set -euo pipefail
+swift build --configuration release -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
+./scripts/build-mlx-metallib
+"""
 
 [tasks.test]
 description = "Run all tests"

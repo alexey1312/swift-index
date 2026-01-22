@@ -32,18 +32,21 @@ jobs:
 
       - name: Build release binary (Universal)
         run: |
-          swift build -c release --arch arm64
-          swift build -c release --arch x86_64
+          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization
+          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization
           mkdir -p .build/universal
           lipo -create \
             .build/arm64-apple-macosx/release/swiftindex \
             .build/x86_64-apple-macosx/release/swiftindex \
             -output .build/universal/swiftindex
+          ./scripts/build-mlx-metallib
 
       - name: Create release archive
         run: |
           mkdir -p dist
           cp .build/universal/swiftindex dist/
+          cp .build/release/default.metallib dist/ 2>/dev/null || echo "No default.metallib"
+          cp .build/release/mlx.metallib dist/ 2>/dev/null || echo "No mlx.metallib"
           cp LICENSE dist/ 2>/dev/null || echo "No LICENSE file"
           cp README.md dist/ 2>/dev/null || echo "No README file"
           cd dist && zip -r ../swiftindex-macos.zip .

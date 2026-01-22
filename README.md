@@ -138,6 +138,10 @@ Initialize configuration for a project.
 swiftindex init
 ```
 
+By default this writes MLX settings and commented examples for other providers.
+If MetalToolchain is missing and MLX is selected, the CLI prompts to install it
+and can fall back to Swift Embeddings defaults.
+
 ### `swiftindex install-claude-code [target]`
 
 Install SwiftIndex as an MCP server.
@@ -176,11 +180,11 @@ exclude = [
 extensions = ["swift", "m", "mm", "h", "c", "cpp"]
 
 [embedding]
-# Embedding provider: "mlx", "swift-embeddings", "ollama", "openai", "voyage"
+# Embedding provider: "mlx", "swift" (alias: swift-embeddings), "ollama", "openai", "voyage"
 provider = "mlx"
 
 # Model to use (provider-specific)
-model = "bge-small-en-v1.5"
+model = "mlx-community/bge-small-en-v1.5-4bit"
 
 # Vector dimension
 dimension = 384
@@ -211,14 +215,14 @@ Configuration is loaded from multiple sources with the following priority (highe
 
 ### Environment Variables
 
-| Variable               | Description                      |
-| ---------------------- | -------------------------------- |
-| `SWIFTINDEX_PROVIDER`  | Embedding provider               |
-| `SWIFTINDEX_MODEL`     | Embedding model name             |
-| `SWIFTINDEX_DIMENSION` | Vector dimension                 |
-| `SWIFTINDEX_LIMIT`     | Default search limit             |
-| `OPENAI_API_KEY`       | API key for OpenAI embeddings    |
-| `VOYAGE_API_KEY`       | API key for Voyage AI embeddings |
+| Variable                        | Description                      |
+| ------------------------------- | -------------------------------- |
+| `SWIFTINDEX_EMBEDDING_PROVIDER` | Embedding provider               |
+| `SWIFTINDEX_EMBEDDING_MODEL`    | Embedding model name             |
+| `SWIFTINDEX_LIMIT`              | Default search limit             |
+| `OPENAI_API_KEY`                | API key for OpenAI embeddings    |
+| `VOYAGE_API_KEY`                | API key for Voyage embeddings    |
+| `VOYAGE_API_KEY`                | API key for Voyage AI embeddings |
 
 ## MCP Tools
 
@@ -275,7 +279,7 @@ Hardware-accelerated embeddings on Apple Silicon. Fastest option for local use.
 ```toml
 [embedding]
 provider = "mlx"
-model = "bge-small-en-v1.5"
+model = "mlx-community/bge-small-en-v1.5-4bit"
 ```
 
 ### Swift Embeddings
@@ -284,8 +288,8 @@ Pure Swift implementation, works on all platforms. Fallback when MLX is unavaila
 
 ```toml
 [embedding]
-provider = "swift-embeddings"
-model = "bge-small"
+provider = "swift" # alias: swift-embeddings
+model = "all-MiniLM-L6-v2"
 ```
 
 ### Ollama
@@ -394,18 +398,24 @@ swift-index/
 
 ### MLX not available on Intel Macs
 
-SwiftIndex automatically falls back to `swift-embeddings` on Intel Macs. You can explicitly set the provider:
+SwiftIndex automatically falls back to Swift Embeddings on Intel Macs. You can explicitly set the provider:
 
 ```bash
-export SWIFTINDEX_PROVIDER=swift-embeddings
+export SWIFTINDEX_EMBEDDING_PROVIDER=swift
 ```
 
 Or in `.swiftindex.toml`:
 
 ```toml
 [embedding]
-provider = "swift-embeddings"
+provider = "swift"
 ```
+
+### MLX Metal library missing
+
+Release builds expect `default.metallib` (and `mlx.metallib`) next to the
+`swiftindex` binary. `./bin/mise run build:release` generates these using
+MetalToolchain.
 
 ### Build errors with Xcode
 

@@ -47,7 +47,8 @@ struct CLITests {
     private func runCommand(
         _ arguments: [String],
         workingDirectory: String? = nil,
-        environment: [String: String]? = nil
+        environment: [String: String]? = nil,
+        stdin: String? = nil
     ) throws -> (stdout: String, stderr: String, exitCode: Int32) {
         let process = Process()
 
@@ -74,6 +75,12 @@ struct CLITests {
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        if let stdin {
+            let stdinPipe = Pipe()
+            stdinPipe.fileHandleForWriting.write(Data(stdin.utf8))
+            stdinPipe.fileHandleForWriting.closeFile()
+            process.standardInput = stdinPipe
+        }
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
@@ -126,6 +133,47 @@ struct CLITests {
     }
 
     // MARK: - Index Command Tests
+
+    @Test("init command writes MLX defaults with examples")
+    func initCommandWritesMLXDefaults() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (_, _, exitCode) = try runCommand(
+            ["init"],
+            workingDirectory: fixtureDir.path,
+            environment: ["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "present"]
+        )
+
+        #expect(exitCode == 0, "Init should succeed")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"mlx\""))
+        #expect(contents.contains("model = \"mlx-community/bge-small-en-v1.5-4bit\""))
+        #expect(contents.contains("# provider = \"ollama\""))
+        #expect(contents.contains("# provider = \"openai\""))
+    }
+
+    @Test("init command falls back to Swift Embeddings when MetalToolchain missing")
+    func initCommandFallsBackToSwiftEmbeddings() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (_, _, exitCode) = try runCommand(
+            ["init"],
+            workingDirectory: fixtureDir.path,
+            environment: ["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "missing"],
+            stdin: "n\ny\n"
+        )
+
+        #expect(exitCode == 0, "Init should succeed with fallback")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"swift\""))
+        #expect(contents.contains("model = \"all-MiniLM-L6-v2\""))
+    }
 
     @Test("index command shows help with --help")
     func indexCommandHelp() throws {

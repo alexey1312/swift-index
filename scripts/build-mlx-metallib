@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+CHECKOUT="${ROOT_DIR}/.build/checkouts/mlx-swift"
+METAL_SRC="${CHECKOUT}/Source/Cmlx/mlx-generated/metal"
+BUILD_DIR="${ROOT_DIR}/.build/mlx-metal"
+AIR_DIR="${BUILD_DIR}/air"
+OUT_LIB="${BUILD_DIR}/default.metallib"
+
+if [ ! -d "$CHECKOUT" ]; then
+  echo "mlx-swift checkout not found at ${CHECKOUT}" >&2
+  exit 1
+fi
+
+if ! /usr/bin/xcrun --find metal >/dev/null 2>&1; then
+  echo "MetalToolchain not found (xcrun metal)" >&2
+  exit 1
+fi
+
+if ! /usr/bin/xcrun --find metallib >/dev/null 2>&1; then
+  echo "MetalToolchain not found (xcrun metallib)" >&2
+  exit 1
+fi
+
+if [ ! -d "$METAL_SRC" ]; then
+  echo "Metal sources not found at ${METAL_SRC}" >&2
+  exit 1
+fi
+
+rm -rf "$AIR_DIR"
+mkdir -p "$AIR_DIR"
+
+while IFS= read -r -d '' src; do
+  rel="${src#"$METAL_SRC"/}"
+  out="${AIR_DIR}/${rel%.metal}.air"
+  mkdir -p "$(dirname "$out")"
+  /usr/bin/xcrun -sdk macosx metal -x metal -Wall -Wextra -fno-fast-math \
+    -Wno-c++17-extensions -Wno-c++20-extensions -c "$src" -I"$METAL_SRC" -o "$out"
+done < <(find "$METAL_SRC" -name "*.metal" -print0)
+
+find "$AIR_DIR" -name "*.air" -print0 \
+  | xargs -0 /usr/bin/xcrun -sdk macosx metallib -o "$OUT_LIB"
+
+if [ ! -f "$OUT_LIB" ]; then
+  echo "Failed to build ${OUT_LIB}" >&2
+  exit 1
+fi
+
+RELEASE_DIR="${ROOT_DIR}/.build/release"
+mkdir -p "$RELEASE_DIR"
+cp -f "$OUT_LIB" "${RELEASE_DIR}/default.metallib"
+cp -f "$OUT_LIB" "${RELEASE_DIR}/mlx.metallib"
+
+echo "Built Metal library: ${RELEASE_DIR}/default.metallib"
