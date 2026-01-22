@@ -33,14 +33,14 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### Build & Test Commands
 
-| Command                             | Description                  |
-| ----------------------------------- | ---------------------------- |
-| `./bin/mise run build`              | Debug build                  |
-| `./bin/mise run build:release`      | Release build + MLX metallib |
-| `./bin/mise run test`               | Run all tests                |
-| `./bin/mise run test:filter <name>` | Run filtered tests           |
-| `./bin/mise run lint`               | Run linters                  |
-| `./bin/mise run format`             | Format all code              |
+| Command                             | Description                           |
+| ----------------------------------- | ------------------------------------- |
+| `./bin/mise run build`              | Debug build                           |
+| `./bin/mise run build:release`      | Release build (no WMO) + MLX metallib |
+| `./bin/mise run test`               | Run all tests                         |
+| `./bin/mise run test:filter <name>` | Run filtered tests                    |
+| `./bin/mise run lint`               | Run linters                           |
+| `./bin/mise run format`             | Format all code                       |
 
 ### CLI Commands
 
@@ -138,6 +138,8 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 - `./bin/mise run build:release` runs `scripts/build-mlx-metallib` to create
   `default.metallib` and `mlx.metallib` next to the release binary.
+- Release builds disable Whole-Module Optimization to avoid swift-frontend
+  crashes in `swift-transformers` (Tokenizers).
 - Requires MetalToolchain (`xcrun --find metal` and `xcrun --find metallib`).
 
 ### Init Behavior Notes

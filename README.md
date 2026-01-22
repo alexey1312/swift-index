@@ -36,6 +36,7 @@ curl -L -O https://github.com/alexey1312/swift-index/releases/latest/download/sw
 # Extract and install
 unzip swiftindex-macos.zip
 mv dist/swiftindex /usr/local/bin/
+mv dist/default.metallib dist/mlx.metallib /usr/local/bin/
 ```
 
 ### From Source
@@ -43,8 +44,9 @@ mv dist/swiftindex /usr/local/bin/
 ```bash
 git clone https://github.com/alexey1312/swift-index.git
 cd swift-index
-swift build -c release
+./bin/mise run build:release
 cp .build/release/swiftindex /usr/local/bin/
+cp .build/release/default.metallib .build/release/mlx.metallib /usr/local/bin/
 ```
 
 ### Verify Installation
