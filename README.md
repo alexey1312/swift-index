@@ -67,17 +67,21 @@ swiftindex providers  # Check available embedding providers
 ### Install for AI Assistants
 
 ```bash
-# Claude Code
+# Claude Code (project-local .mcp.json)
 swiftindex install-claude-code
 
-# Cursor
+# Claude Code (global ~/.claude.json)
+swiftindex install-claude-code --global
+
+# Cursor (project-local .mcp.json)
 swiftindex install-cursor
 
-# Codex
+# Codex (project-local .mcp.json)
 swiftindex install-codex
 ```
 
-This adds SwiftIndex as an MCP server to your AI assistant's configuration.
+By default, install commands create a project-local `.mcp.json` configuration.
+Use `--global` to install to the user-wide configuration file instead.
 
 ## Quick Start
 
@@ -152,20 +156,24 @@ By default this writes MLX settings and commented examples for other providers.
 If MetalToolchain is missing and MLX is selected, the CLI prompts to install it
 and can fall back to Swift Embeddings defaults.
 
-### `swiftindex install-claude-code [target]`
+### `swiftindex install-claude-code`
 
-Install SwiftIndex as an MCP server.
+Install SwiftIndex as an MCP server for Claude Code.
 
 ```bash
-# Install for Claude Code (default)
+# Project-local installation (creates .mcp.json)
 swiftindex install-claude-code
 
-# Install for Cursor
-swiftindex install-claude-code cursor
+# Global installation (writes to ~/.claude.json)
+swiftindex install-claude-code --global
 
 # Dry run to see what would be configured
 swiftindex install-claude-code --dry-run
 ```
+
+Similar commands exist for other AI assistants:
+- `swiftindex install-cursor` — Cursor IDE (local: `.mcp.json`, global: `~/.cursor/mcp.json`)
+- `swiftindex install-codex` — Codex CLI (local: `.mcp.json`, global: `~/.codex/config.toml`)
 
 ## Configuration
 
