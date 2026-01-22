@@ -250,10 +250,10 @@ struct CLITests {
         cleanupFixtures(tempDir)
     }
 
-    @Test("install-claude-code supports cursor target")
-    func installCommandCursorTarget() throws {
+    @Test("install-cursor command works")
+    func installCursorCommand() throws {
         let (stdout, _, exitCode) = try runCommand([
-            "install-claude-code", "cursor", "--dry-run",
+            "install-cursor", "--dry-run",
         ])
 
         #expect(exitCode == 0, "Should succeed")

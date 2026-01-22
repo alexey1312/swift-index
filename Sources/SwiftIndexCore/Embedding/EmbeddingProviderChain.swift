@@ -261,11 +261,10 @@ public extension EmbeddingProviderChain {
         /// Adds the MLX provider if available on Apple Silicon.
         @discardableResult
         public func addMLX(
-            modelName: String = "bge-small-en-v1.5",
-            dimension: Int = 384
+            model: MLXEmbeddingProvider.Model = .bgeSmall
         ) -> Builder {
             #if arch(arm64) && os(macOS)
-                providers.append(MLXEmbeddingProvider(modelName: modelName, dimension: dimension))
+                providers.append(MLXEmbeddingProvider(model: model))
             #endif
             return self
         }

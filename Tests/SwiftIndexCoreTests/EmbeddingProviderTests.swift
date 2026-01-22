@@ -92,7 +92,7 @@ struct MLXEmbeddingProviderTests {
     @Test("Provider with custom configuration")
     func customConfiguration() {
         let provider = MLXEmbeddingProvider(
-            modelName: "custom-model",
+            huggingFaceId: "custom-model",
             dimension: 768,
             maxBatchSize: 16
         )
@@ -177,7 +177,7 @@ struct SwiftEmbeddingsProviderTests {
     @Test("Custom model configuration")
     func customModelConfiguration() {
         let provider = SwiftEmbeddingsProvider(
-            modelName: "custom-model",
+            huggingFaceId: "custom-model",
             dimension: 512,
             maxBatchSize: 64
         )

@@ -32,7 +32,9 @@ struct SwiftIndex: AsyncParsableCommand {
             WatchCommand.self,
             ProvidersCommand.self,
             ServeCommand.self,
-            InstallCommand.self,
+            InstallClaudeCodeCommand.self,
+            InstallCursorCommand.self,
+            InstallCodexCommand.self,
         ],
         defaultSubcommand: IndexCommand.self
     )

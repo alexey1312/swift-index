@@ -1,10 +1,12 @@
 // MARK: - MLXEmbeddingProvider
 
 import Foundation
-import Hub
-import MLX
-import MLXNN
-import Tokenizers
+
+#if canImport(MLX) && canImport(MLXEmbedders)
+    import MLX
+    import MLXEmbedders
+    import Tokenizers
+#endif
 
 /// Embedding provider using Apple MLX for native Apple Silicon acceleration.
 ///
@@ -19,8 +21,10 @@ import Tokenizers
 ///
 /// ## Models
 ///
-/// Supports BERT-based models converted to MLX format. Models are loaded
-/// lazily on first use and cached for subsequent calls.
+/// Uses MLXEmbedders from mlx-swift-lm package. Supported models:
+/// - `nomic-ai/nomic-embed-text-v1.5` (768 dim, default)
+/// - `BAAI/bge-small-en-v1.5` (384 dim)
+/// - `BAAI/bge-base-en-v1.5` (768 dim)
 public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
     // MARK: - Properties
 
@@ -28,47 +32,82 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     public let name: String = "MLX Embeddings"
     public let dimension: Int
 
-    private let modelName: String
-    private let modelPath: URL?
+    private let modelId: String
     private let maxBatchSize: Int
 
-    /// Actor to manage thread-safe model loading and inference.
-    private let modelManager: ModelManager
+    #if canImport(MLX) && canImport(MLXEmbedders)
+        /// Actor to manage thread-safe model loading and inference.
+        private let modelManager: MLXModelManager
+    #endif
+
+    // MARK: - Supported Models
+
+    /// Available MLX embedding models.
+    public enum Model: String, Sendable, CaseIterable {
+        case nomicEmbedText = "nomic-embed-text-v1.5"
+        case bgeSmall = "bge-small-en-v1.5"
+        case bgeBase = "bge-base-en-v1.5"
+
+        public var dimension: Int {
+            switch self {
+            case .nomicEmbedText, .bgeBase:
+                768
+            case .bgeSmall:
+                384
+            }
+        }
+
+        public var huggingFaceId: String {
+            switch self {
+            case .nomicEmbedText:
+                "nomic-ai/nomic-embed-text-v1.5"
+            case .bgeSmall:
+                "BAAI/bge-small-en-v1.5"
+            case .bgeBase:
+                "BAAI/bge-base-en-v1.5"
+            }
+        }
+    }
 
     // MARK: - Initialization
 
-    /// Creates an MLX embedding provider.
+    /// Creates an MLX embedding provider with a specific model.
     ///
     /// - Parameters:
-    ///   - modelName: Name of the model to use (default: "bge-small-en-v1.5").
-    ///   - modelPath: Optional custom path to model weights.
-    ///   - dimension: Embedding dimension (default: 384 for BGE small).
+    ///   - model: The embedding model to use (default: nomicEmbedText).
     ///   - maxBatchSize: Maximum batch size for embedding (default: 32).
-    public init(
-        modelName: String = "bge-small-en-v1.5",
-        modelPath: URL? = nil,
-        dimension: Int = 384,
-        maxBatchSize: Int = 32
-    ) {
-        self.modelName = modelName
-        self.modelPath = modelPath
+    public init(model: Model = .nomicEmbedText, maxBatchSize: Int = 32) {
+        modelId = model.huggingFaceId
+        dimension = model.dimension
+        self.maxBatchSize = maxBatchSize
+        #if canImport(MLX) && canImport(MLXEmbedders)
+            modelManager = MLXModelManager(modelId: model.huggingFaceId, dimension: model.dimension)
+        #endif
+    }
+
+    /// Creates an MLX embedding provider with a custom HuggingFace model ID.
+    ///
+    /// - Parameters:
+    ///   - huggingFaceId: The HuggingFace model ID.
+    ///   - dimension: Embedding dimension (default: 768).
+    ///   - maxBatchSize: Maximum batch size for embedding (default: 32).
+    public init(huggingFaceId: String, dimension: Int = 768, maxBatchSize: Int = 32) {
+        modelId = huggingFaceId
         self.dimension = dimension
         self.maxBatchSize = maxBatchSize
-        modelManager = ModelManager(
-            modelName: modelName,
-            modelPath: modelPath,
-            dimension: dimension
-        )
+        #if canImport(MLX) && canImport(MLXEmbedders)
+            modelManager = MLXModelManager(modelId: huggingFaceId, dimension: dimension)
+        #endif
     }
 
     // MARK: - EmbeddingProvider
 
     public func isAvailable() async -> Bool {
         // Check for Apple Silicon
-        #if arch(arm64) && os(macOS)
+        #if arch(arm64) && os(macOS) && canImport(MLX) && canImport(MLXEmbedders)
             // Verify MLX can be initialized
             do {
-                _ = try await modelManager.ensureModelLoaded()
+                try await modelManager.ensureModelLoaded()
                 return true
             } catch {
                 return false
@@ -83,8 +122,8 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             throw ProviderError.invalidInput("Text cannot be empty")
         }
 
-        #if !arch(arm64) || !os(macOS)
-            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
+        #if !arch(arm64) || !os(macOS) || !canImport(MLX) || !canImport(MLXEmbedders)
+            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS with mlx-swift-lm")
         #else
             return try await modelManager.embed(text)
         #endif
@@ -99,152 +138,141 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             throw ProviderError.invalidInput("Text at index \(index) cannot be empty")
         }
 
-        #if !arch(arm64) || !os(macOS)
-            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS")
+        #if !arch(arm64) || !os(macOS) || !canImport(MLX) || !canImport(MLXEmbedders)
+            throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS with mlx-swift-lm")
         #else
             return try await modelManager.embedBatch(texts, maxBatchSize: maxBatchSize)
         #endif
     }
 }
 
-// MARK: - ModelManager Actor
+// MARK: - MLXModelManager Actor
 
-/// Actor managing thread-safe model loading and inference.
-private actor ModelManager {
-    private let modelName: String
-    private let modelPath: URL?
-    private let dimension: Int
+#if canImport(MLX) && canImport(MLXEmbedders)
 
-    private let hubManager: HubModelManager
-    private var isLoaded: Bool = false
-    private var modelWeights: MLXArray?
-    private var tokenizer: (any Tokenizer)?
+    /// Actor managing thread-safe MLX model loading and inference using MLXEmbedders.
+    private actor MLXModelManager {
+        private let modelId: String
+        private let expectedDimension: Int
 
-    init(modelName: String, modelPath: URL?, dimension: Int) {
-        self.modelName = modelName
-        self.modelPath = modelPath
-        self.dimension = dimension
-        hubManager = HubModelManager()
-    }
+        private var isLoaded: Bool = false
+        private var modelContainer: ModelContainer?
 
-    func ensureModelLoaded() async throws -> Bool {
-        if isLoaded {
-            return true
+        init(modelId: String, dimension: Int) {
+            self.modelId = modelId
+            expectedDimension = dimension
         }
 
-        // Determine which model to use based on modelName
-        let model = hubModel(for: modelName)
-
-        // Use custom path if provided, otherwise download from Hub
-        if let customPath = modelPath {
-            guard FileManager.default.fileExists(atPath: customPath.path) else {
-                throw ProviderError.modelNotFound(name: modelName)
+        func ensureModelLoaded() async throws {
+            if isLoaded, modelContainer != nil {
+                return
             }
-        } else {
-            _ = try await hubManager.ensureModel(model, progress: nil)
+
+            do {
+                // Load embedding model using MLXEmbedders
+                let configuration = ModelConfiguration(id: modelId)
+                modelContainer = try await MLXEmbedders.loadModelContainer(configuration: configuration)
+                isLoaded = true
+            } catch {
+                throw ProviderError.modelNotFound(name: modelId)
+            }
         }
 
-        // Load tokenizer from swift-transformers
-        tokenizer = try await hubManager.loadTokenizer(for: model)
+        func embed(_ text: String) async throws -> [Float] {
+            try await ensureModelLoaded()
 
-        // Load model weights (simplified - real implementation would use MLX load functions)
-        // modelWeights = try MLX.load(path.appendingPathComponent("model.safetensors"))
-        isLoaded = true
+            guard let container = modelContainer else {
+                throw ProviderError.notAvailable(reason: "Model not loaded")
+            }
 
-        return true
+            let embedding = await container.perform { model, tokenizer, pooler -> [Float] in
+                // Tokenize input
+                let tokens = tokenizer.encode(text: text, addSpecialTokens: true)
+
+                // Create input tensor
+                let inputArray = MLXArray(tokens)
+                let padded = inputArray.reshaped([1, tokens.count])
+                let mask = MLXArray.ones([1, tokens.count])
+                let tokenTypes = MLXArray.zeros([1, tokens.count])
+
+                // Forward pass through model
+                let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+
+                // Apply pooling and normalization
+                let pooled = pooler(output, mask: mask, normalize: true, applyLayerNorm: true)
+                eval(pooled)
+
+                return pooled[0].asArray(Float.self)
+            }
+
+            // Validate dimension
+            guard embedding.count == expectedDimension else {
+                throw ProviderError.dimensionMismatch(expected: expectedDimension, actual: embedding.count)
+            }
+
+            return embedding
+        }
+
+        func embedBatch(_ texts: [String], maxBatchSize: Int) async throws -> [[Float]] {
+            try await ensureModelLoaded()
+
+            guard let container = modelContainer else {
+                throw ProviderError.notAvailable(reason: "Model not loaded")
+            }
+
+            var results: [[Float]] = []
+            results.reserveCapacity(texts.count)
+
+            // Process in batches
+            for batchStart in stride(from: 0, to: texts.count, by: maxBatchSize) {
+                let batchEnd = min(batchStart + maxBatchSize, texts.count)
+                let batch = Array(texts[batchStart ..< batchEnd])
+
+                let batchEmbeddings = await container.perform { model, tokenizer, pooler -> [[Float]] in
+                    // Tokenize all inputs
+                    let tokenizedInputs = batch.map {
+                        tokenizer.encode(text: $0, addSpecialTokens: true)
+                    }
+
+                    // Pad to longest sequence
+                    let maxLength = tokenizedInputs.reduce(into: 16) { acc, elem in
+                        acc = max(acc, elem.count)
+                    }
+
+                    let padToken = tokenizer.eosTokenId ?? 0
+
+                    let padded = stacked(
+                        tokenizedInputs.map { tokens in
+                            MLXArray(
+                                tokens + Array(repeating: padToken, count: maxLength - tokens.count)
+                            )
+                        }
+                    )
+
+                    let mask = (padded .!= padToken)
+                    let tokenTypes = MLXArray.zeros(like: padded)
+
+                    // Forward pass through model
+                    let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+
+                    // Apply pooling and normalization
+                    let pooled = pooler(output, mask: mask, normalize: true, applyLayerNorm: true)
+                    eval(pooled)
+
+                    // Extract individual embeddings from batch result
+                    let batchSize = pooled.shape[0]
+                    var embeddings: [[Float]] = []
+                    for i in 0 ..< batchSize {
+                        embeddings.append(pooled[i].asArray(Float.self))
+                    }
+                    return embeddings
+                }
+
+                results.append(contentsOf: batchEmbeddings)
+            }
+
+            return results
+        }
     }
 
-    func embed(_ text: String) async throws -> [Float] {
-        if !isLoaded {
-            _ = try await ensureModelLoaded()
-        }
-
-        // Tokenize input using swift-transformers tokenizer
-        guard let tokenizer else {
-            throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
-        }
-
-        let tokens = tokenizer.encode(text: text)
-
-        // Create input tensor
-        let inputArray = MLXArray(tokens.map { Int32($0) })
-
-        // Forward pass through model (simplified)
-        // In real implementation: let output = model(inputArray)
-        let embedding = computeEmbedding(inputArray)
-
-        return embedding
-    }
-
-    func embedBatch(_ texts: [String], maxBatchSize: Int) async throws -> [[Float]] {
-        if !isLoaded {
-            _ = try await ensureModelLoaded()
-        }
-
-        var results: [[Float]] = []
-        results.reserveCapacity(texts.count)
-
-        // Process in batches
-        for batchStart in stride(from: 0, to: texts.count, by: maxBatchSize) {
-            let batchEnd = min(batchStart + maxBatchSize, texts.count)
-            let batch = Array(texts[batchStart ..< batchEnd])
-
-            let batchEmbeddings = try await processBatch(batch)
-            results.append(contentsOf: batchEmbeddings)
-        }
-
-        return results
-    }
-
-    // MARK: - Private Helpers
-
-    private func hubModel(for name: String) -> HubModelManager.Model {
-        switch name {
-        case "bge-small-en-v1.5":
-            .bgeSmall
-        case "bge-base-en-v1.5":
-            .bgeBase
-        case "all-MiniLM-L6-v2":
-            .miniLM
-        default:
-            .bgeSmall
-        }
-    }
-
-    private func processBatch(_ texts: [String]) async throws -> [[Float]] {
-        guard let tokenizer else {
-            throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
-        }
-
-        var embeddings: [[Float]] = []
-
-        for text in texts {
-            let tokens = tokenizer.encode(text: text)
-            let inputArray = MLXArray(tokens.map { Int32($0) })
-            let embedding = computeEmbedding(inputArray)
-            embeddings.append(embedding)
-        }
-
-        return embeddings
-    }
-
-    private func computeEmbedding(_ input: MLXArray) -> [Float] {
-        // Simplified embedding computation
-        // Real implementation would:
-        // 1. Pass through BERT encoder
-        // 2. Apply mean pooling
-        // 3. Normalize to unit vector
-
-        // Placeholder: return normalized random vector
-        // This will be replaced with actual MLX model inference
-        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1) }
-
-        // L2 normalize
-        let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
-        if norm > 0 {
-            embedding = embedding.map { $0 / norm }
-        }
-
-        return embedding
-    }
-}
+#endif

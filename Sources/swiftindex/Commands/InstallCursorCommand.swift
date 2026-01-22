@@ -1,69 +1,37 @@
-// MARK: - Install Command
+// MARK: - Install Cursor Command
 
 import ArgumentParser
 import Foundation
 import Logging
-import SwiftIndexCore
 
-/// Target platforms for installation.
-enum InstallTarget: String, ExpressibleByArgument, CaseIterable {
-    case claudeCode = "claude-code"
-    case cursor
-    case codex
-
-    var description: String {
-        switch self {
-        case .claudeCode:
-            "Claude Code (Anthropic)"
-        case .cursor:
-            "Cursor IDE"
-        case .codex:
-            "OpenAI Codex"
-        }
-    }
-
-    var configPath: String {
-        switch self {
-        case .claudeCode:
-            "~/.config/claude-code/mcp.json"
-        case .cursor:
-            "~/.config/cursor/mcp.json"
-        case .codex:
-            "~/.config/codex/mcp.json"
-        }
-    }
-}
-
-/// Command to install SwiftIndex as an MCP server for AI assistants.
+/// Command to install SwiftIndex as an MCP server for Cursor IDE.
 ///
 /// Usage:
-///   swiftindex install-claude-code
-///   swiftindex install-claude-code claude-code
-///   swiftindex install-claude-code cursor
-struct InstallCommand: ParsableCommand {
+///   swiftindex install-cursor
+///   swiftindex install-cursor --dry-run
+///   swiftindex install-cursor --force
+struct InstallCursorCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
-        commandName: "install-claude-code",
-        abstract: "Install SwiftIndex as MCP server for AI assistants",
+        commandName: "install-cursor",
+        abstract: "Install SwiftIndex as MCP server for Cursor IDE",
         discussion: """
         Configures SwiftIndex as a Model Context Protocol (MCP) server
-        for the specified AI assistant platform.
+        for Cursor IDE.
 
-        Supported targets:
-        - claude-code: Claude Code by Anthropic
-        - cursor: Cursor IDE
-        - codex: OpenAI Codex
+        This command modifies ~/.cursor/mcp.json to add SwiftIndex
+        as an available MCP tool provider.
 
-        This command modifies the MCP configuration file to add
-        SwiftIndex as an available tool provider.
+        Configuration format:
+        {
+          "mcpServers": {
+            "swiftindex": {
+              "command": "/path/to/swiftindex",
+              "args": ["serve"]
+            }
+          }
+        }
         """
     )
-
-    // MARK: - Arguments
-
-    @Argument(
-        help: "Target platform to install for"
-    )
-    var target: InstallTarget = .claudeCode
 
     // MARK: - Options
 
@@ -79,41 +47,44 @@ struct InstallCommand: ParsableCommand {
     )
     var dryRun: Bool = false
 
+    @Flag(
+        name: .long,
+        help: "Overwrite existing configuration"
+    )
+    var force: Bool = false
+
     // MARK: - Execution
 
     mutating func run() throws {
         let logger = CLIUtils.makeLogger(verbose: verbose)
-        logger.info("Installing SwiftIndex for \(target.description)")
+        logger.info("Installing SwiftIndex for Cursor IDE")
 
         // Get the executable path
         let executablePath = CommandLine.arguments[0]
         let resolvedExecutable = CLIUtils.resolvePath(executablePath)
 
-        // Resolve config path
-        let configPath = (target.configPath as NSString)
-            .expandingTildeInPath
+        // Config path: ~/.cursor/mcp.json
+        let configPath = ("~/.cursor/mcp.json" as NSString).expandingTildeInPath
 
         logger.debug("Target config path: \(configPath)")
         logger.debug("Executable path: \(resolvedExecutable)")
 
-        // Create MCP configuration entry
-        let mcpConfig: [String: Any] = [
-            "swiftindex": [
-                "command": resolvedExecutable,
-                "args": ["serve"],
-                "env": [:] as [String: String],
-            ],
+        // Create MCP configuration entry (Cursor does not require "type" field)
+        let mcpServerConfig: [String: Any] = [
+            "command": resolvedExecutable,
+            "args": ["serve"],
         ]
 
         if dryRun {
             print("Dry run - would perform the following:")
             print("")
-            print("Target: \(target.description)")
+            print("Target: Cursor IDE")
             print("Config: \(configPath)")
             print("")
             print("Would add MCP server configuration:")
+            let fullConfig: [String: Any] = ["mcpServers": ["swiftindex": mcpServerConfig]]
             if let jsonData = try? JSONSerialization.data(
-                withJSONObject: mcpConfig,
+                withJSONObject: fullConfig,
                 options: [.prettyPrinted, .sortedKeys]
             ),
                 let jsonString = String(data: jsonData, encoding: .utf8)
@@ -151,15 +122,17 @@ struct InstallCommand: ParsableCommand {
         var mcpServers = existingConfig["mcpServers"] as? [String: Any] ?? [:]
 
         // Check if already installed
-        if mcpServers["swiftindex"] != nil {
-            logger.warning("SwiftIndex is already installed for \(target.description)")
-            print("SwiftIndex is already configured for \(target.description)")
+        if mcpServers["swiftindex"] != nil, !force {
+            logger.warning("SwiftIndex is already installed for Cursor IDE")
+            print("SwiftIndex is already configured for Cursor IDE")
             print("Config: \(configPath)")
+            print("")
+            print("Use --force to overwrite existing configuration")
             return
         }
 
         // Add swiftindex configuration
-        mcpServers["swiftindex"] = mcpConfig["swiftindex"]
+        mcpServers["swiftindex"] = mcpServerConfig
         existingConfig["mcpServers"] = mcpServers
 
         // Write updated config
@@ -171,11 +144,11 @@ struct InstallCommand: ParsableCommand {
 
         try jsonData.write(to: URL(fileURLWithPath: configPath))
 
-        print("Successfully installed SwiftIndex for \(target.description)")
+        print("Successfully installed SwiftIndex for Cursor IDE")
         print("")
         print("Configuration written to: \(configPath)")
         print("")
-        print("Restart \(target.description) to enable SwiftIndex tools.")
+        print("Restart Cursor IDE to enable SwiftIndex tools.")
 
         logger.info("Installation completed")
     }

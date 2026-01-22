@@ -44,15 +44,17 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### CLI Commands
 
-| Command                     | Description              |
-| --------------------------- | ------------------------ |
-| `swiftindex index [PATH]`   | Index a codebase         |
-| `swiftindex search <QUERY>` | Search indexed code      |
-| `swiftindex watch [PATH]`   | Watch mode (incremental) |
-| `swiftindex serve`          | Start MCP server         |
-| `swiftindex providers`      | List embedding providers |
-| `swiftindex init`           | Initialize config        |
-| `swiftindex install`        | Install CLI              |
+| Command                          | Description              |
+| -------------------------------- | ------------------------ |
+| `swiftindex index [PATH]`        | Index a codebase         |
+| `swiftindex search <QUERY>`      | Search indexed code      |
+| `swiftindex watch [PATH]`        | Watch mode (incremental) |
+| `swiftindex serve`               | Start MCP server         |
+| `swiftindex providers`           | List embedding providers |
+| `swiftindex init`                | Initialize config        |
+| `swiftindex install-claude-code` | Configure Claude Code    |
+| `swiftindex install-cursor`      | Configure Cursor         |
+| `swiftindex install-codex`       | Configure Codex          |
 
 ## Architecture
 
@@ -122,6 +124,33 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 ```bash
 ./bin/mise run test                              # All tests
 ./bin/mise run test:filter SwiftIndexCoreTests   # Specific suite
+```
+
+## Distribution
+
+### GitHub Releases (Ready)
+
+- **Workflow**: `.github/workflows/release.yml`
+- **Trigger**: Push tag `v*.*.*` (e.g., `git tag v0.1.0 && git push --tags`)
+- **Artifacts**: Universal binary (arm64 + x86_64) in `swiftindex-macos.zip`
+- **Auto-updates**: Homebrew formula SHA256 on stable releases
+
+### Homebrew (Ready)
+
+- **Tap**: `alexey1312/swift-index` (published)
+- **Formula**: `homebrew-swift-index/Formula/swiftindex.rb`
+- **Install**: `brew install alexey1312/swift-index/swiftindex`
+- **Status**: Waiting for first GitHub release to populate SHA256
+
+### First Release Checklist
+
+```bash
+# 1. Tag and push
+git tag v0.1.0
+git push --tags
+
+# 2. Wait for GitHub Actions to complete
+# 3. Homebrew formula auto-updates via workflow
 ```
 
 ## Configuration

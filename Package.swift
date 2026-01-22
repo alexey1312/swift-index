@@ -30,6 +30,7 @@ let package = Package(
 
         // Embeddings
         .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", branch: "main"),
         .package(url: "https://github.com/jkrukowski/swift-embeddings.git", from: "0.0.25"),
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6"),
 
@@ -66,6 +67,7 @@ let package = Package(
                 // Embeddings
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXEmbedders", package: "mlx-swift-lm"),
                 .product(name: "Embeddings", package: "swift-embeddings"),
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
