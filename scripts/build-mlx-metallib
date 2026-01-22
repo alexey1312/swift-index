@@ -47,9 +47,9 @@ if [ ! -f "$OUT_LIB" ]; then
   exit 1
 fi
 
-RELEASE_DIR="${ROOT_DIR}/.build/release"
-mkdir -p "$RELEASE_DIR"
-cp -f "$OUT_LIB" "${RELEASE_DIR}/default.metallib"
-cp -f "$OUT_LIB" "${RELEASE_DIR}/mlx.metallib"
+# Copy to mlx-metal output directory (stable, not a symlink)
+cp -f "$OUT_LIB" "${BUILD_DIR}/mlx.metallib"
 
-echo "Built Metal library: ${RELEASE_DIR}/default.metallib"
+echo "Built Metal libraries:"
+echo "  ${OUT_LIB}"
+echo "  ${BUILD_DIR}/mlx.metallib"

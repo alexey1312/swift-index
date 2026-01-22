@@ -45,8 +45,8 @@ jobs:
         run: |
           mkdir -p dist
           cp .build/universal/swiftindex dist/
-          cp .build/release/default.metallib dist/ 2>/dev/null || echo "No default.metallib"
-          cp .build/release/mlx.metallib dist/ 2>/dev/null || echo "No mlx.metallib"
+          cp .build/mlx-metal/default.metallib dist/
+          cp .build/mlx-metal/mlx.metallib dist/
           cp LICENSE dist/ 2>/dev/null || echo "No LICENSE file"
           cp README.md dist/ 2>/dev/null || echo "No README file"
           cd dist && zip -r ../swiftindex-macos.zip .
