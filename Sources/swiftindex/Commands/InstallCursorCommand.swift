@@ -7,7 +7,8 @@ import Logging
 /// Command to install SwiftIndex as an MCP server for Cursor IDE.
 ///
 /// Usage:
-///   swiftindex install-cursor
+///   swiftindex install-cursor           # Project-local (.mcp.json)
+///   swiftindex install-cursor --global  # Global (~/.cursor/mcp.json)
 ///   swiftindex install-cursor --dry-run
 ///   swiftindex install-cursor --force
 struct InstallCursorCommand: ParsableCommand {
@@ -18,8 +19,8 @@ struct InstallCursorCommand: ParsableCommand {
         Configures SwiftIndex as a Model Context Protocol (MCP) server
         for Cursor IDE.
 
-        This command modifies ~/.cursor/mcp.json to add SwiftIndex
-        as an available MCP tool provider.
+        By default, creates a project-local .mcp.json in the current directory.
+        Use --global to add to ~/.cursor/mcp.json for global availability.
 
         Configuration format:
         {
@@ -43,6 +44,12 @@ struct InstallCursorCommand: ParsableCommand {
 
     @Flag(
         name: .long,
+        help: "Install globally to ~/.cursor/mcp.json instead of project-local .mcp.json"
+    )
+    var global: Bool = false
+
+    @Flag(
+        name: .long,
         help: "Show what would be done without making changes"
     )
     var dryRun: Bool = false
@@ -63,11 +70,21 @@ struct InstallCursorCommand: ParsableCommand {
         let executablePath = CommandLine.arguments[0]
         let resolvedExecutable = CLIUtils.resolvePath(executablePath)
 
-        // Config path: ~/.cursor/mcp.json
-        let configPath = ("~/.cursor/mcp.json" as NSString).expandingTildeInPath
+        // Config path depends on --global flag
+        let configPath: String
+        let scopeDescription: String
+
+        if global {
+            configPath = ("~/.cursor/mcp.json" as NSString).expandingTildeInPath
+            scopeDescription = "global"
+        } else {
+            configPath = FileManager.default.currentDirectoryPath + "/.mcp.json"
+            scopeDescription = "project-local"
+        }
 
         logger.debug("Target config path: \(configPath)")
         logger.debug("Executable path: \(resolvedExecutable)")
+        logger.debug("Scope: \(scopeDescription)")
 
         // Create MCP configuration entry (Cursor does not require "type" field)
         let mcpServerConfig: [String: Any] = [
@@ -78,7 +95,7 @@ struct InstallCursorCommand: ParsableCommand {
         if dryRun {
             print("Dry run - would perform the following:")
             print("")
-            print("Target: Cursor IDE")
+            print("Target: Cursor IDE (\(scopeDescription))")
             print("Config: \(configPath)")
             print("")
             print("Would add MCP server configuration:")
@@ -94,17 +111,21 @@ struct InstallCursorCommand: ParsableCommand {
             return
         }
 
-        // Check if config directory exists
-        let configDir = (configPath as NSString).deletingLastPathComponent
-        let fileManager = FileManager.default
+        // Check if config directory exists (for global)
+        if global {
+            let configDir = (configPath as NSString).deletingLastPathComponent
+            let fileManager = FileManager.default
 
-        if !fileManager.fileExists(atPath: configDir) {
-            logger.info("Creating config directory: \(configDir)")
-            try fileManager.createDirectory(
-                atPath: configDir,
-                withIntermediateDirectories: true
-            )
+            if !fileManager.fileExists(atPath: configDir) {
+                logger.info("Creating config directory: \(configDir)")
+                try fileManager.createDirectory(
+                    atPath: configDir,
+                    withIntermediateDirectories: true
+                )
+            }
         }
+
+        let fileManager = FileManager.default
 
         // Read existing config or create new one
         var existingConfig: [String: Any] = [:]
@@ -144,7 +165,7 @@ struct InstallCursorCommand: ParsableCommand {
 
         try jsonData.write(to: URL(fileURLWithPath: configPath))
 
-        print("Successfully installed SwiftIndex for Cursor IDE")
+        print("Successfully installed SwiftIndex for Cursor IDE (\(scopeDescription))")
         print("")
         print("Configuration written to: \(configPath)")
         print("")

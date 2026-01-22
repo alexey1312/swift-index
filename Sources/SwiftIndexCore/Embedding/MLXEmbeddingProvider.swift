@@ -21,10 +21,10 @@ import Foundation
 ///
 /// ## Models
 ///
-/// Uses MLXEmbedders from mlx-swift-lm package. Supported models:
-/// - `nomic-ai/nomic-embed-text-v1.5` (768 dim, default)
-/// - `BAAI/bge-small-en-v1.5` (384 dim)
-/// - `BAAI/bge-base-en-v1.5` (768 dim)
+/// Uses MLXEmbedders from mlx-swift-lm package. Supported 4-bit quantized models:
+/// - `mlx-community/bge-small-en-v1.5-4bit` (384 dim, default - memory-safe)
+/// - `mlx-community/nomic-embed-text-v1.5-4bit` (768 dim)
+/// - `mlx-community/bge-large-en-v1.5-4bit` (1024 dim)
 public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
     // MARK: - Properties
 
@@ -42,29 +42,34 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
 
     // MARK: - Supported Models
 
-    /// Available MLX embedding models.
+    /// Available MLX embedding models (4-bit quantized for memory safety).
     public enum Model: String, Sendable, CaseIterable {
-        case nomicEmbedText = "nomic-embed-text-v1.5"
-        case bgeSmall = "bge-small-en-v1.5"
-        case bgeBase = "bge-base-en-v1.5"
+        /// BGE Small (384 dim) - default, memory-safe choice
+        case bgeSmall = "bge-small-en-v1.5-4bit"
+        /// Nomic Embed Text (768 dim) - larger model, better quality
+        case nomicEmbedText = "nomic-embed-text-v1.5-4bit"
+        /// BGE Large (1024 dim) - highest quality, more memory
+        case bgeLarge = "bge-large-en-v1.5-4bit"
 
         public var dimension: Int {
             switch self {
-            case .nomicEmbedText, .bgeBase:
-                768
             case .bgeSmall:
                 384
+            case .nomicEmbedText:
+                768
+            case .bgeLarge:
+                1024
             }
         }
 
         public var huggingFaceId: String {
             switch self {
-            case .nomicEmbedText:
-                "nomic-ai/nomic-embed-text-v1.5"
             case .bgeSmall:
-                "BAAI/bge-small-en-v1.5"
-            case .bgeBase:
-                "BAAI/bge-base-en-v1.5"
+                "mlx-community/bge-small-en-v1.5-4bit"
+            case .nomicEmbedText:
+                "mlx-community/nomic-embed-text-v1.5-4bit"
+            case .bgeLarge:
+                "mlx-community/bge-large-en-v1.5-4bit"
             }
         }
     }
@@ -74,9 +79,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     /// Creates an MLX embedding provider with a specific model.
     ///
     /// - Parameters:
-    ///   - model: The embedding model to use (default: nomicEmbedText).
+    ///   - model: The embedding model to use (default: bgeSmall for memory safety).
     ///   - maxBatchSize: Maximum batch size for embedding (default: 32).
-    public init(model: Model = .nomicEmbedText, maxBatchSize: Int = 32) {
+    public init(model: Model = .bgeSmall, maxBatchSize: Int = 32) {
         modelId = model.huggingFaceId
         dimension = model.dimension
         self.maxBatchSize = maxBatchSize

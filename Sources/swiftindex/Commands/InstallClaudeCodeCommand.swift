@@ -7,7 +7,8 @@ import Logging
 /// Command to install SwiftIndex as an MCP server for Claude Code.
 ///
 /// Usage:
-///   swiftindex install-claude-code
+///   swiftindex install-claude-code           # Project-local (.mcp.json)
+///   swiftindex install-claude-code --global  # Global (~/.claude.json)
 ///   swiftindex install-claude-code --dry-run
 ///   swiftindex install-claude-code --force
 struct InstallClaudeCodeCommand: ParsableCommand {
@@ -18,8 +19,8 @@ struct InstallClaudeCodeCommand: ParsableCommand {
         Configures SwiftIndex as a Model Context Protocol (MCP) server
         for Claude Code by Anthropic.
 
-        This command modifies ~/.claude.json to add SwiftIndex
-        as an available MCP tool provider.
+        By default, creates a project-local .mcp.json in the current directory.
+        Use --global to add to ~/.claude.json for global availability.
 
         Configuration format:
         {
@@ -44,6 +45,12 @@ struct InstallClaudeCodeCommand: ParsableCommand {
 
     @Flag(
         name: .long,
+        help: "Install globally to ~/.claude.json instead of project-local .mcp.json"
+    )
+    var global: Bool = false
+
+    @Flag(
+        name: .long,
         help: "Show what would be done without making changes"
     )
     var dryRun: Bool = false
@@ -64,11 +71,21 @@ struct InstallClaudeCodeCommand: ParsableCommand {
         let executablePath = CommandLine.arguments[0]
         let resolvedExecutable = CLIUtils.resolvePath(executablePath)
 
-        // Config path: ~/.claude.json
-        let configPath = ("~/.claude.json" as NSString).expandingTildeInPath
+        // Config path depends on --global flag
+        let configPath: String
+        let scopeDescription: String
+
+        if global {
+            configPath = ("~/.claude.json" as NSString).expandingTildeInPath
+            scopeDescription = "global"
+        } else {
+            configPath = FileManager.default.currentDirectoryPath + "/.mcp.json"
+            scopeDescription = "project-local"
+        }
 
         logger.debug("Target config path: \(configPath)")
         logger.debug("Executable path: \(resolvedExecutable)")
+        logger.debug("Scope: \(scopeDescription)")
 
         // Create MCP configuration entry (Claude Code requires "type": "stdio")
         let mcpServerConfig: [String: Any] = [
@@ -80,7 +97,7 @@ struct InstallClaudeCodeCommand: ParsableCommand {
         if dryRun {
             print("Dry run - would perform the following:")
             print("")
-            print("Target: Claude Code")
+            print("Target: Claude Code (\(scopeDescription))")
             print("Config: \(configPath)")
             print("")
             print("Would add MCP server configuration:")
@@ -136,7 +153,7 @@ struct InstallClaudeCodeCommand: ParsableCommand {
 
         try jsonData.write(to: URL(fileURLWithPath: configPath))
 
-        print("Successfully installed SwiftIndex for Claude Code")
+        print("Successfully installed SwiftIndex for Claude Code (\(scopeDescription))")
         print("")
         print("Configuration written to: \(configPath)")
         print("")
