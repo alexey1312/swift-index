@@ -408,12 +408,19 @@ struct TOMLConfigLoaderTests {
         #expect(loader.filePath == "/path/to/project/.swiftindex.toml")
     }
 
-    @Test("forGlobal creates path in home directory")
+    @Test("forGlobal creates path in config directory")
     func forGlobalPath() {
         let loader = TOMLConfigLoader.forGlobal()
         let homeDir = FileManager.default.homeDirectoryForCurrentUser.path
 
-        #expect(loader.filePath == "\(homeDir)/.swiftindex.toml")
+        #expect(loader.filePath == "\(homeDir)/.config/swiftindex/config.toml")
+    }
+
+    @Test("forGlobal accepts custom config directory")
+    func forGlobalCustomPath() {
+        let loader = TOMLConfigLoader.forGlobal(configDirectory: "/custom/config/dir")
+
+        #expect(loader.filePath == "/custom/config/dir/config.toml")
     }
 
     // MARK: - Layered Configuration Tests

@@ -221,7 +221,8 @@ Configuration is loaded from multiple sources with the following priority (highe
 1. **CLI arguments**: `--config`, `--limit`, etc.
 2. **Environment variables**: `SWIFTINDEX_*` prefixed
 3. **Project config**: `.swiftindex.toml` in project root
-4. **Default config**: Built-in defaults
+4. **Global config**: `~/.config/swiftindex/config.toml`
+5. **Default config**: Built-in defaults
 
 ### Environment Variables
 

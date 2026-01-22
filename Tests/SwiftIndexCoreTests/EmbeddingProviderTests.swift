@@ -510,6 +510,185 @@ struct ProviderErrorTests {
     }
 }
 
+// MARK: - EmbeddingProviderRegistry Tests
+
+@Suite("EmbeddingProviderRegistry Tests")
+struct EmbeddingProviderRegistryTests {
+    @Test("Registry returns all providers")
+    func registryReturnsAllProviders() async {
+        let config = Config.default
+        let registry = EmbeddingProviderRegistry(config: config)
+
+        let providers = await registry.allProviders()
+
+        // Should have MLX, SwiftEmbeddings, Ollama, Voyage, and OpenAI
+        #expect(providers.count >= 5)
+
+        let ids = providers.map(\.id)
+        #expect(ids.contains("mlx"))
+        #expect(ids.contains("swift-embeddings"))
+        #expect(ids.contains("ollama"))
+        #expect(ids.contains("voyage"))
+        #expect(ids.contains("openai"))
+    }
+
+    @Test("Registry shows local providers first")
+    func registryLocalProvidersFirst() async {
+        let config = Config.default
+        let registry = EmbeddingProviderRegistry(config: config)
+
+        let providers = await registry.allProviders()
+
+        // Local providers should come before cloud providers
+        let localProviders = providers.filter { $0.providerType == .local }
+        let cloudProviders = providers.filter { $0.providerType == .cloud }
+
+        #expect(localProviders.count >= 2)
+        #expect(cloudProviders.count >= 2)
+
+        // Find indices
+        if let firstCloud = providers.firstIndex(where: { $0.providerType == .cloud }),
+           let lastLocal = providers.lastIndex(where: { $0.providerType == .local })
+        {
+            #expect(lastLocal < firstCloud)
+        }
+    }
+
+    @Test("Registry reflects API key availability for Voyage")
+    func registryVoyageAPIKey() async {
+        // Without API key
+        let configWithoutKey = Config.default
+        let registryWithoutKey = EmbeddingProviderRegistry(config: configWithoutKey)
+        let providersWithoutKey = await registryWithoutKey.allProviders()
+
+        let voyageWithoutKey = providersWithoutKey.first { $0.id == "voyage" }
+        #expect(voyageWithoutKey?.isAvailable == false)
+        #expect(voyageWithoutKey?.notes.contains("API key required") == true)
+
+        // With API key
+        var configWithKey = Config.default
+        configWithKey.voyageAPIKey = "test-api-key"
+        let registryWithKey = EmbeddingProviderRegistry(config: configWithKey)
+        let providersWithKey = await registryWithKey.allProviders()
+
+        let voyageWithKey = providersWithKey.first { $0.id == "voyage" }
+        #expect(voyageWithKey?.notes.contains("API key configured") == true)
+    }
+
+    @Test("Registry reflects API key availability for OpenAI")
+    func registryOpenAIAPIKey() async {
+        // Without API key
+        let configWithoutKey = Config.default
+        let registryWithoutKey = EmbeddingProviderRegistry(config: configWithoutKey)
+        let providersWithoutKey = await registryWithoutKey.allProviders()
+
+        let openAIWithoutKey = providersWithoutKey.first { $0.id == "openai" }
+        #expect(openAIWithoutKey?.isAvailable == false)
+        #expect(openAIWithoutKey?.notes.contains("API key required") == true)
+
+        // With API key
+        var configWithKey = Config.default
+        configWithKey.openAIAPIKey = "sk-test-key"
+        let registryWithKey = EmbeddingProviderRegistry(config: configWithKey)
+        let providersWithKey = await registryWithKey.allProviders()
+
+        let openAIWithKey = providersWithKey.first { $0.id == "openai" }
+        #expect(openAIWithKey?.notes.contains("API key configured") == true)
+    }
+
+    @Test("ProviderInfo has correct properties")
+    func providerInfoProperties() async {
+        let config = Config.default
+        let registry = EmbeddingProviderRegistry(config: config)
+
+        let providers = await registry.allProviders()
+        let mlx = providers.first { $0.id == "mlx" }
+
+        #expect(mlx != nil)
+        #expect(mlx?.name == "MLX Embeddings")
+        #expect(mlx?.dimension == 768)
+        #expect(mlx?.providerType == .local)
+        #expect(mlx?.modelId != nil)
+    }
+
+    @Test("Registry provider lookup by ID")
+    func registryProviderById() async {
+        let config = Config.default
+        let registry = EmbeddingProviderRegistry(config: config)
+
+        // Lookup should return nil for cloud providers without API keys
+        let voyage = await registry.provider(id: "voyage")
+        #expect(voyage == nil) // No API key configured
+
+        // Unknown provider should return nil
+        let unknown = await registry.provider(id: "unknown-provider")
+        #expect(unknown == nil)
+    }
+}
+
+// MARK: - ProviderInfo Tests
+
+@Suite("ProviderInfo Tests")
+struct ProviderInfoTests {
+    @Test("ProviderInfo is Sendable")
+    func providerInfoSendable() async {
+        let info = ProviderInfo(
+            id: "test",
+            name: "Test Provider",
+            dimension: 384,
+            isAvailable: true,
+            notes: "Test notes",
+            providerType: .local,
+            modelId: "test-model"
+        )
+
+        await Task.detached {
+            // Accessing info from another task verifies Sendable
+            _ = info.id
+            _ = info.name
+        }.value
+    }
+
+    @Test("ProviderInfo is Equatable")
+    func providerInfoEquatable() {
+        let info1 = ProviderInfo(
+            id: "test",
+            name: "Test",
+            dimension: 384,
+            isAvailable: true,
+            notes: "Notes",
+            providerType: .local
+        )
+
+        let info2 = ProviderInfo(
+            id: "test",
+            name: "Test",
+            dimension: 384,
+            isAvailable: true,
+            notes: "Notes",
+            providerType: .local
+        )
+
+        let info3 = ProviderInfo(
+            id: "different",
+            name: "Test",
+            dimension: 384,
+            isAvailable: true,
+            notes: "Notes",
+            providerType: .local
+        )
+
+        #expect(info1 == info2)
+        #expect(info1 != info3)
+    }
+
+    @Test("ProviderType raw values")
+    func providerTypeRawValues() {
+        #expect(ProviderInfo.ProviderType.local.rawValue == "local")
+        #expect(ProviderInfo.ProviderType.cloud.rawValue == "cloud")
+    }
+}
+
 // MARK: - Integration Tests
 
 @Suite("Embedding Provider Integration Tests")

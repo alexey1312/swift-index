@@ -71,13 +71,19 @@ public struct TOMLConfigLoader: ConfigLoader, Sendable {
 
     /// Creates a TOML config loader for the global configuration file.
     ///
-    /// Looks for `.swiftindex.toml` in the user's home directory.
+    /// Looks for `config.toml` in `~/.config/swiftindex/`.
     ///
-    /// - Parameter homeDirectory: Optional home directory path. If nil, uses the current user's home.
+    /// - Parameter configDirectory: Optional config directory path. If nil, uses `~/.config/swiftindex`.
     /// - Returns: A loader configured for the global config file.
-    public static func forGlobal(homeDirectory: String? = nil) -> TOMLConfigLoader {
-        let home = homeDirectory ?? FileManager.default.homeDirectoryForCurrentUser.path
-        let path = (home as NSString).appendingPathComponent(".swiftindex.toml")
+    public static func forGlobal(configDirectory: String? = nil) -> TOMLConfigLoader {
+        let configDir: String
+        if let directory = configDirectory {
+            configDir = directory
+        } else {
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            configDir = (home as NSString).appendingPathComponent(".config/swiftindex")
+        }
+        let path = (configDir as NSString).appendingPathComponent("config.toml")
         return TOMLConfigLoader(filePath: path)
     }
 
@@ -230,20 +236,20 @@ public extension TOMLConfigLoader {
     /// 1. CLI arguments (provided as `PartialConfig`)
     /// 2. Environment variables
     /// 3. Project `.swiftindex.toml`
-    /// 4. Global `~/.swiftindex.toml`
+    /// 4. Global `~/.config/swiftindex/config.toml`
     /// 5. Default values
     ///
     /// - Parameters:
     ///   - cliConfig: Configuration from CLI arguments (highest priority).
     ///   - envConfig: Configuration from environment variables.
     ///   - projectDirectory: Path to the project root directory.
-    ///   - homeDirectory: Optional home directory path for global config. If nil, uses current user's home.
+    ///   - globalConfigDirectory: Optional global config directory path. If nil, uses `~/.config/swiftindex`.
     /// - Returns: Complete merged configuration.
     static func loadLayered(
         cli cliConfig: PartialConfig = .empty,
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
-        homeDirectory: String? = nil
+        globalConfigDirectory: String? = nil
     ) -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
 
@@ -254,7 +260,7 @@ public extension TOMLConfigLoader {
         }
 
         // Try loading global config
-        let globalLoader = TOMLConfigLoader.forGlobal(homeDirectory: homeDirectory)
+        let globalLoader = TOMLConfigLoader.forGlobal(configDirectory: globalConfigDirectory)
         if let globalConfig = try? globalLoader.load() {
             partials.append(globalConfig)
         }

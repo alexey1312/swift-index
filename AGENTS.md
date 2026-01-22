@@ -179,7 +179,7 @@ git push --tags
 
 ## Configuration
 
-Config priority: CLI args > Environment > `.swiftindex.toml` > Defaults
+Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~/.config/swiftindex/config.toml` > Defaults
 
 ### Environment Variables
 

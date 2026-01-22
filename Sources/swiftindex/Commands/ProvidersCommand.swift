@@ -51,47 +51,19 @@ struct ProvidersCommand: AsyncParsableCommand {
         print("===================")
         print("")
 
-        // TODO: Replace with actual provider registry
-        // let registry = EmbeddingProviderRegistry(config: configuration)
-        // let providers = await registry.allProviders()
-
-        // Placeholder provider information
-        let providers: [(id: String, name: String, dimension: Int, available: Bool, notes: String)] = [
-            (
-                id: "mlx-minilm",
-                name: "MLX MiniLM-L6",
-                dimension: 384,
-                available: true,
-                notes: "Local, Apple Silicon required"
-            ),
-            (
-                id: "mlx-bge-small",
-                name: "MLX BGE-Small",
-                dimension: 384,
-                available: true,
-                notes: "Local, Apple Silicon required"
-            ),
-            (
-                id: "voyage-code-3",
-                name: "Voyage Code 3",
-                dimension: 1024,
-                available: configuration.voyageAPIKey != nil,
-                notes: "Cloud, API key required"
-            ),
-            (
-                id: "openai-ada-002",
-                name: "OpenAI Ada 002",
-                dimension: 1536,
-                available: configuration.openAIAPIKey != nil,
-                notes: "Cloud, API key required"
-            ),
-        ]
+        // Use the provider registry
+        let registry = EmbeddingProviderRegistry(config: configuration)
+        let providers = await registry.allProviders()
 
         for provider in providers {
-            let status = provider.available ? "[OK]" : "[--]"
+            let status = provider.isAvailable ? "[OK]" : "[--]"
             print("\(status) \(provider.id)")
             print("    Name: \(provider.name)")
             print("    Dimension: \(provider.dimension)")
+            if let modelId = provider.modelId {
+                print("    Model: \(modelId)")
+            }
+            print("    Type: \(provider.providerType.rawValue)")
             print("    Notes: \(provider.notes)")
             print("")
         }
