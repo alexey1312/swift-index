@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change add-swiftindex-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: CLI Application Structure
 
 The system SHALL provide `swiftindex` CLI built with swift-argument-parser.
@@ -311,4 +313,3 @@ Exit codes:
 - **WHEN** command fails
 - **THEN** exits with appropriate error code
 - **AND** shows error message to stderr
-

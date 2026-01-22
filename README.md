@@ -172,6 +172,7 @@ swiftindex install-claude-code --dry-run
 ```
 
 Similar commands exist for other AI assistants:
+
 - `swiftindex install-cursor` — Cursor IDE (local: `.mcp.json`, global: `~/.cursor/mcp.json`)
 - `swiftindex install-codex` — Codex CLI (local: `.mcp.json`, global: `~/.codex/config.toml`)
 

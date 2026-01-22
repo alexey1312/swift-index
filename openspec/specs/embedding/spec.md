@@ -3,7 +3,9 @@
 ## Purpose
 
 TBD - created by archiving change add-swiftindex-core. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Embedding Provider Protocol
 
 The system SHALL define a unified `EmbeddingProvider` protocol for all embedding backends.
@@ -289,4 +291,3 @@ Recommended models for code:
 - **WHEN** config specifies `embedding_model = "jinaai/jina-embeddings-v2-base-code"`
 - **THEN** system uses Jina model for code-aware embeddings
 - **AND** search results are optimized for code semantics
-
