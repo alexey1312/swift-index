@@ -62,6 +62,8 @@ run = """
 set -euo pipefail
 swift build --configuration release -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
 ./scripts/build-mlx-metallib
+BIN_DIR="$(swift build --configuration release --show-bin-path)"
+cp -f .build/mlx-metal/default.metallib .build/mlx-metal/mlx.metallib "${BIN_DIR}/"
 """
 
 [tasks.test]
