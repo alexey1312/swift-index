@@ -223,7 +223,13 @@ struct SearchCommand: AsyncParsableCommand {
         case "mlx":
             logger.debug("Using MLX embedding provider")
             return EmbeddingProviderChain(
-                providers: [MLXEmbeddingProvider(), SwiftEmbeddingsProvider()],
+                providers: [
+                    MLXEmbeddingProvider(
+                        huggingFaceId: config.embeddingModel,
+                        dimension: config.embeddingDimension
+                    ),
+                    SwiftEmbeddingsProvider(),
+                ],
                 id: "mlx-chain",
                 name: "MLX with Swift Embeddings fallback"
             )

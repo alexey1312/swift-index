@@ -207,6 +207,10 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("# provider = \"openai\"")
         lines.append("# model = \"text-embedding-3-large\"")
         lines.append("")
+        lines.append("# Code-optimized models (recommended for Swift code search):")
+        lines.append("# model = \"jinaai/jina-embeddings-v2-base-code\"  # 768 dim, Apache 2.0")
+        lines.append("# model = \"Salesforce/SFR-Embedding-Code-400M_R\" # High quality, larger")
+        lines.append("")
 
         // Search section
         lines.append("[search]")
