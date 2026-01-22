@@ -86,7 +86,7 @@ struct MLXEmbeddingProviderTests {
 
         #expect(provider.id == "mlx")
         #expect(provider.name == "MLX Embeddings")
-        #expect(provider.dimension == 384) // Default is bge-small-en-v1.5-4bit (memory-safe)
+        #expect(provider.dimension == 1024) // Default is Qwen3-Embedding-0.6B-4bit-DWQ
     }
 
     @Test("Provider with custom configuration")

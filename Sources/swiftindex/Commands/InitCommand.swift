@@ -282,7 +282,7 @@ struct InitCommand: AsyncParsableCommand {
     private func defaultModel(for provider: String) -> String? {
         switch provider.lowercased() {
         case "mlx":
-            "mlx-community/bge-small-en-v1.5-4bit"
+            "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
         case "swift", "swift-embeddings", "swiftembeddings":
             "all-MiniLM-L6-v2"
         default:
@@ -312,14 +312,17 @@ struct InitCommand: AsyncParsableCommand {
             return nil
         }
         switch resolvedModel {
-        case "mlx-community/bge-small-en-v1.5-4bit",
-             "all-MiniLM-L6-v2",
+        // Qwen3 MLX models
+        case "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ":
+            return 1024
+        case "mlx-community/Qwen3-Embedding-4B-4bit-DWQ":
+            return 2048
+        case "mlx-community/Qwen3-Embedding-8B-4bit-DWQ":
+            return 4096
+        // SwiftEmbeddings models
+        case "all-MiniLM-L6-v2",
              "bge-small-en-v1.5":
             return 384
-        case "mlx-community/bge-large-en-v1.5-4bit":
-            return 1024
-        case "mlx-community/nomic-embed-text-v1.5-4bit":
-            return 768
         default:
             return nil
         }

@@ -21,10 +21,12 @@ import Foundation
 ///
 /// ## Models
 ///
-/// Uses MLXEmbedders from mlx-swift-lm package. Supported 4-bit quantized models:
-/// - `mlx-community/bge-small-en-v1.5-4bit` (384 dim, default - memory-safe)
-/// - `mlx-community/nomic-embed-text-v1.5-4bit` (768 dim)
-/// - `mlx-community/bge-large-en-v1.5-4bit` (1024 dim)
+/// Uses MLXEmbedders from mlx-swift-lm package with Qwen3 embedding models:
+/// - `mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ` (1024 dim, default - fast)
+/// - `mlx-community/Qwen3-Embedding-4B-4bit-DWQ` (2048 dim - better quality)
+/// - `mlx-community/Qwen3-Embedding-8B-4bit-DWQ` (4096 dim - best quality)
+///
+/// > Note: For BERT/BGE models, use `SwiftEmbeddingsProvider` instead.
 public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
     // MARK: - Properties
 
@@ -42,35 +44,31 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
 
     // MARK: - Supported Models
 
-    /// Available MLX embedding models (4-bit quantized for memory safety).
+    /// Available MLX embedding models (Qwen3, 4-bit quantized).
+    ///
+    /// > Note: MLX provider only supports Qwen3 models. For BERT/BGE models,
+    /// > use `SwiftEmbeddingsProvider` instead.
     public enum Model: String, Sendable, CaseIterable {
-        /// BGE Small (384 dim) - default, memory-safe choice
-        case bgeSmall = "bge-small-en-v1.5-4bit"
-        /// Nomic Embed Text (768 dim) - larger model, better quality
-        case nomicEmbedText = "nomic-embed-text-v1.5-4bit"
-        /// BGE Large (1024 dim) - highest quality, more memory
-        case bgeLarge = "bge-large-en-v1.5-4bit"
+        /// Qwen3 Embedding 0.6B (1024 dim) - recommended, fast
+        case qwen3Small = "Qwen3-Embedding-0.6B-4bit-DWQ"
+        /// Qwen3 Embedding 4B (2048 dim) - better quality
+        case qwen3Medium = "Qwen3-Embedding-4B-4bit-DWQ"
+        /// Qwen3 Embedding 8B (4096 dim) - best quality
+        case qwen3Large = "Qwen3-Embedding-8B-4bit-DWQ"
 
         public var dimension: Int {
             switch self {
-            case .bgeSmall:
-                384
-            case .nomicEmbedText:
-                768
-            case .bgeLarge:
+            case .qwen3Small:
                 1024
+            case .qwen3Medium:
+                2048
+            case .qwen3Large:
+                4096
             }
         }
 
         public var huggingFaceId: String {
-            switch self {
-            case .bgeSmall:
-                "mlx-community/bge-small-en-v1.5-4bit"
-            case .nomicEmbedText:
-                "mlx-community/nomic-embed-text-v1.5-4bit"
-            case .bgeLarge:
-                "mlx-community/bge-large-en-v1.5-4bit"
-            }
+            "mlx-community/\(rawValue)"
         }
     }
 
@@ -79,9 +77,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     /// Creates an MLX embedding provider with a specific model.
     ///
     /// - Parameters:
-    ///   - model: The embedding model to use (default: bgeSmall for memory safety).
+    ///   - model: The embedding model to use (default: qwen3Small).
     ///   - maxBatchSize: Maximum batch size for embedding (default: 32).
-    public init(model: Model = .bgeSmall, maxBatchSize: Int = 32) {
+    public init(model: Model = .qwen3Small, maxBatchSize: Int = 32) {
         modelId = model.huggingFaceId
         dimension = model.dimension
         self.maxBatchSize = maxBatchSize
@@ -94,9 +92,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     ///
     /// - Parameters:
     ///   - huggingFaceId: The HuggingFace model ID.
-    ///   - dimension: Embedding dimension (default: 768).
+    ///   - dimension: Embedding dimension (default: 1024).
     ///   - maxBatchSize: Maximum batch size for embedding (default: 32).
-    public init(huggingFaceId: String, dimension: Int = 768, maxBatchSize: Int = 32) {
+    public init(huggingFaceId: String, dimension: Int = 1024, maxBatchSize: Int = 32) {
         modelId = huggingFaceId
         self.dimension = dimension
         self.maxBatchSize = maxBatchSize
@@ -174,7 +172,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             }
 
             do {
-                // Load embedding model using MLXEmbedders
+                // Load embedding model using MLXEmbedders (Qwen3 models work natively)
                 let configuration = ModelConfiguration(id: modelId)
                 modelContainer = try await MLXEmbedders.loadModelContainer(configuration: configuration)
                 isLoaded = true
