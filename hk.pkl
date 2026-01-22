@@ -31,7 +31,7 @@ local swift_linters = new Mapping<String, Step> {
     }
     ["swiftlint"] {
         glob = List("*.swift")
-        fix = "swiftlint --fix {{files}}"
+        fix = "swiftlint --fix {{files}} && swiftlint --strict --quiet {{files}}"
         batch = true
         stage = List("*.swift")
         hide = true

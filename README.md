@@ -25,6 +25,14 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 brew install alexey1312/swift-index/swiftindex
 ```
 
+### mise (GitHub backend)
+
+```bash
+mise use -g github:alexey1312/swift-index@latest
+```
+
+This installs SwiftIndex from GitHub Releases.
+
 ### GitHub Releases
 
 Download the latest universal binary:
