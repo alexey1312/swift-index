@@ -23,7 +23,7 @@ public actor MCPServer {
     /// Server information.
     public static let serverInfo = MCPServerInfo(
         name: "swiftindex",
-        version: "0.1.0"
+        version: "VERSION_PLACEHOLDER"
     )
 
     /// Supported protocol version.

@@ -23,10 +23,12 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer
 
-      - name: Set version from tag
+      - name: Replace version placeholder
         run: |
-          VERSION="${GITHUB_REF#refs/tags/}"
-          sed -i '' "s/version: \".*\"/version: \"$VERSION\"/" Sources/swiftindex/SwiftIndexApp.swift
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/swiftindex/SwiftIndexApp.swift
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/SwiftIndexMCP/MCPServer.swift
 
       - name: Build release binary (Universal)
         run: |

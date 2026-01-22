@@ -24,7 +24,7 @@ struct SwiftIndex: AsyncParsableCommand {
           swiftindex install-claude-code  Configure for Claude Code
           swiftindex serve                Start MCP server
         """,
-        version: "0.1.0",
+        version: "VERSION_PLACEHOLDER",
         subcommands: [
             InitCommand.self,
             IndexCommand.self,
