@@ -4,6 +4,11 @@ import Foundation
 @testable import SwiftIndexMCP
 import Testing
 
+private let envSetup: Void = {
+    _ = setenv("SWIFTINDEX_EMBEDDING_PROVIDER", "mock", 1)
+    return ()
+}()
+
 @Suite("MCP Tools")
 struct MCPToolsTests {
     // MARK: - IndexCodebaseTool Tests

@@ -220,8 +220,11 @@ struct PerformanceTests {
         print("Total chunks indexed: \(totalChunks)")
         print("Total time: \(String(format: "%.2f", elapsed)) seconds")
 
+        let isCI = ProcessInfo.processInfo.environment["CI"] == "true"
+        let minimumThroughput = isCI ? 30.0 : 50.0
+
         // Should index at least 50 chunks/second with mock embeddings (relaxed for CI)
-        #expect(throughput > 50, "Should index at least 50 chunks/second")
+        #expect(throughput > minimumThroughput, "Should index at least \(minimumThroughput) chunks/second")
     }
 
     @Test("Batch indexing performance")

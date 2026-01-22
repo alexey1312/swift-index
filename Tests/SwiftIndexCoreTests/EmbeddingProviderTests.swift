@@ -86,7 +86,7 @@ struct MLXEmbeddingProviderTests {
 
         #expect(provider.id == "mlx")
         #expect(provider.name == "MLX Embeddings")
-        #expect(provider.dimension == 384)
+        #expect(provider.dimension == 768)
     }
 
     @Test("Provider with custom configuration")

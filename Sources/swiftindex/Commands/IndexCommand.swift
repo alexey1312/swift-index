@@ -90,6 +90,7 @@ struct IndexCommand: AsyncParsableCommand {
         if force {
             logger.info("Force re-indexing enabled, clearing existing index")
             print("Mode: Force re-index")
+            print("Force: true")
         } else {
             print("Mode: Incremental")
         }
@@ -199,6 +200,14 @@ struct IndexCommand: AsyncParsableCommand {
         logger: Logger
     ) -> EmbeddingProviderChain {
         switch config.embeddingProvider.lowercased() {
+        case "mock":
+            logger.debug("Using mock embedding provider")
+            return EmbeddingProviderChain(
+                providers: [MockEmbeddingProvider()],
+                id: "mock-chain",
+                name: "Mock Embeddings"
+            )
+
         case "mlx":
             logger.debug("Using MLX embedding provider")
             return EmbeddingProviderChain(

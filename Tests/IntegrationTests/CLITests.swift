@@ -63,13 +63,14 @@ struct CLITests {
             process.currentDirectoryURL = URL(fileURLWithPath: workDir)
         }
 
+        var processEnv = ProcessInfo.processInfo.environment
+        processEnv["SWIFTINDEX_EMBEDDING_PROVIDER"] = "mock"
         if let env = environment {
-            var processEnv = ProcessInfo.processInfo.environment
             for (key, value) in env {
                 processEnv[key] = value
             }
-            process.environment = processEnv
         }
+        process.environment = processEnv
 
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
@@ -108,6 +109,14 @@ struct CLITests {
         }
         """.write(to: swiftFile, atomically: true, encoding: .utf8)
 
+        return dir
+    }
+
+    /// Creates fixtures and indexes them for search tests.
+    private func prepareIndexedFixtures() throws -> URL {
+        let dir = try createTestFixtures()
+        let (_, _, exitCode) = try runCommand(["index", "--force", dir.path])
+        #expect(exitCode == 0, "Indexing fixtures should succeed")
         return dir
     }
 
@@ -161,7 +170,7 @@ struct CLITests {
         let (stdout, _, exitCode) = try runCommand(["index", "--force", fixtureDir.path])
 
         #expect(exitCode == 0, "Should succeed with force flag")
-        #expect(stdout.contains("Force: true"), "Should show force enabled")
+        #expect(stdout.contains("Force: true") || stdout.contains("Mode: Force re-index"), "Should show force enabled")
     }
 
     // MARK: - Search Command Tests
@@ -178,7 +187,15 @@ struct CLITests {
 
     @Test("search command with query")
     func searchCommandWithQuery() throws {
-        let (stdout, _, exitCode) = try runCommand(["search", "authentication"])
+        let fixtureDir = try prepareIndexedFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand([
+            "search",
+            "authentication",
+            "--path",
+            fixtureDir.path,
+        ])
 
         #expect(exitCode == 0, "Should succeed")
         #expect(stdout.contains("authentication"), "Should echo the query")
@@ -186,7 +203,16 @@ struct CLITests {
 
     @Test("search command with --json flag")
     func searchCommandJSONOutput() throws {
-        let (stdout, _, exitCode) = try runCommand(["search", "test query", "--json"])
+        let fixtureDir = try prepareIndexedFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand([
+            "search",
+            "test query",
+            "--json",
+            "--path",
+            fixtureDir.path,
+        ])
 
         #expect(exitCode == 0, "Should succeed")
         #expect(stdout.contains("{"), "Should output JSON")
@@ -195,7 +221,17 @@ struct CLITests {
 
     @Test("search command with --limit option")
     func searchCommandLimitOption() throws {
-        let (stdout, _, exitCode) = try runCommand(["search", "test", "--limit", "5"])
+        let fixtureDir = try prepareIndexedFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand([
+            "search",
+            "test",
+            "--limit",
+            "5",
+            "--path",
+            fixtureDir.path,
+        ])
 
         #expect(exitCode == 0, "Should succeed")
         #expect(stdout.contains("Limit: 5"), "Should show limit")

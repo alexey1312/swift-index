@@ -36,7 +36,8 @@ public actor MCPContext {
         }
 
         // Load config using TOMLConfigLoader (handles layered config)
-        let config = TOMLConfigLoader.loadLayered(projectDirectory: resolvedPath)
+        let envConfig = (try? EnvironmentConfigLoader().load()) ?? .empty
+        let config = TOMLConfigLoader.loadLayered(env: envConfig, projectDirectory: resolvedPath)
         logger.debug("Loaded config for: \(resolvedPath)")
 
         loadedConfigs[resolvedPath] = config
@@ -58,6 +59,14 @@ public actor MCPContext {
 
     private func createEmbeddingProvider(config: Config) -> EmbeddingProviderChain {
         switch config.embeddingProvider.lowercased() {
+        case "mock":
+            logger.debug("Creating mock embedding provider")
+            return EmbeddingProviderChain(
+                providers: [MockEmbeddingProvider()],
+                id: "mock-chain",
+                name: "Mock Embeddings"
+            )
+
         case "mlx":
             logger.debug("Creating MLX embedding provider")
             return EmbeddingProviderChain(
