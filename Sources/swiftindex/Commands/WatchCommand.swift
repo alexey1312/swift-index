@@ -132,9 +132,11 @@ struct WatchCommand: AsyncParsableCommand {
                 if isVerbose {
                     let stats = await incrementalIndexer.getStats()
                     if stats.totalChanges > 0 {
-                        print(
-                            "\n[Stats] Created: \(stats.filesCreated), Modified: \(stats.filesModified), Deleted: \(stats.filesDeleted), Errors: \(stats.errors)"
-                        )
+                        let created = stats.filesCreated
+                        let modified = stats.filesModified
+                        let deleted = stats.filesDeleted
+                        print("\n[Stats] Created: \(created), Modified: \(modified)")
+                        print("        Deleted: \(deleted), Errors: \(stats.errors)")
                     }
                 }
             }

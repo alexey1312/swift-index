@@ -11,7 +11,32 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 - **Watch Mode**: Automatically updates the index when files change
 - **MCP Server**: Exposes search capabilities to AI assistants via Model Context Protocol
 
+## System Requirements
+
+- **macOS 14 (Sonoma)** or later
+- **Swift 6.2+** (included with Xcode 16.2+)
+- **Apple Silicon** (recommended for MLX embeddings) or Intel x86_64
+
 ## Installation
+
+### Homebrew (Recommended)
+
+```bash
+brew install alexey1312/swift-index/swiftindex
+```
+
+### GitHub Releases
+
+Download the latest universal binary:
+
+```bash
+# Download latest release
+curl -L -O https://github.com/alexey1312/swift-index/releases/latest/download/swiftindex-macos.zip
+
+# Extract and install
+unzip swiftindex-macos.zip
+mv dist/swiftindex /usr/local/bin/
+```
 
 ### From Source
 
@@ -22,13 +47,27 @@ swift build -c release
 cp .build/release/swiftindex /usr/local/bin/
 ```
 
-### Install for Claude Code
+### Verify Installation
 
 ```bash
-swiftindex install-claude-code
+swiftindex --version
+swiftindex providers  # Check available embedding providers
 ```
 
-This adds SwiftIndex as an MCP server to Claude Code's configuration.
+### Install for AI Assistants
+
+```bash
+# Claude Code
+swiftindex install-claude-code
+
+# Cursor
+swiftindex install-cursor
+
+# Codex
+swiftindex install-codex
+```
+
+This adds SwiftIndex as an MCP server to your AI assistant's configuration.
 
 ## Quick Start
 
@@ -349,6 +388,65 @@ swift-index/
 │   ├── SwiftIndexCoreTests/
 │   └── IntegrationTests/
 └── Package.swift
+```
+
+## Troubleshooting
+
+### MLX not available on Intel Macs
+
+SwiftIndex automatically falls back to `swift-embeddings` on Intel Macs. You can explicitly set the provider:
+
+```bash
+export SWIFTINDEX_PROVIDER=swift-embeddings
+```
+
+Or in `.swiftindex.toml`:
+
+```toml
+[embedding]
+provider = "swift-embeddings"
+```
+
+### Build errors with Xcode
+
+Ensure you have Xcode 16.2+ with command line tools installed:
+
+```bash
+xcode-select --install
+xcode-select -p  # Should show Xcode path
+```
+
+### Index not updating
+
+Try forcing a re-index:
+
+```bash
+swiftindex index --force .
+```
+
+### MCP server not responding
+
+Check the server is running:
+
+```bash
+swiftindex serve --verbose
+```
+
+Verify the MCP configuration in your AI assistant's settings file.
+
+## Uninstall
+
+### Homebrew
+
+```bash
+brew uninstall swiftindex
+```
+
+### Manual
+
+```bash
+rm /usr/local/bin/swiftindex
+rm -rf ~/.swiftindex  # Optional: remove cached models
 ```
 
 ## License

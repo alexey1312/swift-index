@@ -137,16 +137,19 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Index files
         var stats = IndexingStats()
+        let indexingContext = IndexingContext(
+            indexManager: indexManager,
+            parser: parser,
+            embeddingProvider: embeddingProvider,
+            logger: logger
+        )
 
         for (index, filePath) in files.enumerated() {
             do {
                 let result = try await indexFile(
                     at: filePath,
-                    indexManager: indexManager,
-                    parser: parser,
-                    embeddingProvider: embeddingProvider,
-                    force: force,
-                    logger: logger
+                    context: indexingContext,
+                    force: force
                 )
 
                 stats.filesProcessed += 1
@@ -155,7 +158,8 @@ struct IndexCommand: AsyncParsableCommand {
 
                 // Progress indicator
                 let progress = (index + 1) * 100 / files.count
-                print("\r[\(progress)%] Processing: \(stats.filesProcessed)/\(files.count) files, \(stats.chunksIndexed) chunks", terminator: "")
+                let progressMsg = "\r[\(progress)%] Processing: \(stats.filesProcessed)/\(files.count)"
+                print("\(progressMsg) files, \(stats.chunksIndexed) chunks", terminator: "")
                 fflush(stdout)
             } catch {
                 stats.errors += 1
@@ -339,11 +343,8 @@ struct IndexCommand: AsyncParsableCommand {
 
     private func indexFile(
         at path: String,
-        indexManager: IndexManager,
-        parser: HybridParser,
-        embeddingProvider: EmbeddingProviderChain,
-        force: Bool,
-        logger: Logger
+        context: IndexingContext,
+        force: Bool
     ) async throws -> FileIndexResult {
         // Read file content
         let content = try String(contentsOfFile: path, encoding: .utf8)
@@ -353,32 +354,32 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Check if file needs indexing (unless force is set)
         if !force {
-            let needsIndexing = try await indexManager.needsIndexing(fileHash: fileHash)
+            let needsIndexing = try await context.indexManager.needsIndexing(fileHash: fileHash)
             if !needsIndexing {
-                logger.debug("Skipping unchanged file: \(path)")
+                context.logger.debug("Skipping unchanged file: \(path)")
                 return FileIndexResult(chunksIndexed: 0, skipped: true)
             }
         }
 
         // Parse file
-        let parseResult = parser.parse(content: content, path: path)
+        let parseResult = context.parser.parse(content: content, path: path)
 
         guard case let .success(chunks) = parseResult else {
             if case let .failure(error) = parseResult {
-                logger.debug("Parse failed for \(path): \(error)")
+                context.logger.debug("Parse failed for \(path): \(error)")
             }
             return FileIndexResult(chunksIndexed: 0, skipped: false)
         }
 
         guard !chunks.isEmpty else {
             // Record file as indexed even if no chunks (to avoid re-processing)
-            try await indexManager.recordIndexed(fileHash: fileHash, path: path)
+            try await context.indexManager.recordIndexed(fileHash: fileHash, path: path)
             return FileIndexResult(chunksIndexed: 0, skipped: false)
         }
 
         // Generate embeddings for all chunks
         let contents = chunks.map(\.content)
-        let embeddings = try await embeddingProvider.embed(contents)
+        let embeddings = try await context.embeddingProvider.embed(contents)
 
         // Create chunk-vector pairs
         var items: [(chunk: CodeChunk, vector: [Float])] = []
@@ -387,9 +388,9 @@ struct IndexCommand: AsyncParsableCommand {
         }
 
         // Re-index the file (removes old chunks, adds new ones)
-        try await indexManager.reindex(path: path, newChunks: items)
+        try await context.indexManager.reindex(path: path, newChunks: items)
 
-        logger.debug("Indexed file", metadata: [
+        context.logger.debug("Indexed file", metadata: [
             "path": "\(path)",
             "chunks": "\(chunks.count)",
         ])
@@ -407,6 +408,13 @@ struct IndexCommand: AsyncParsableCommand {
 }
 
 // MARK: - Helper Types
+
+private struct IndexingContext {
+    let indexManager: IndexManager
+    let parser: HybridParser
+    let embeddingProvider: EmbeddingProviderChain
+    let logger: Logger
+}
 
 private struct IndexingStats {
     var filesProcessed: Int = 0

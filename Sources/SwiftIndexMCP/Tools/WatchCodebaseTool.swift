@@ -90,15 +90,48 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             ))
         }
 
-        // Start watching
-        await Self.watcherState.startWatching(path: path)
+        // Get config and create incremental indexer
+        do {
+            let context = MCPContext.shared
+            let config = try await context.getConfig(for: path)
 
-        return .text(formatResult(
-            action: "start",
-            path: path,
-            watching: true,
-            message: "Started watching for file changes"
-        ))
+            // Check if index exists
+            guard await context.indexExists(for: path, config: config) else {
+                return .error(
+                    """
+                    No index found for path: \(path)
+                    Run 'index_codebase' tool first to create the index.
+                    """
+                )
+            }
+
+            // Get index manager and embedding provider
+            let indexManager = try await context.getIndexManager(for: path, config: config)
+            let embeddingProvider = await context.getEmbeddingProvider(config: config)
+
+            // Create incremental indexer
+            let incrementalIndexer = IncrementalIndexer(
+                indexManager: indexManager,
+                parser: HybridParser(),
+                embeddingProvider: embeddingProvider,
+                config: config
+            )
+
+            // Start watching
+            await Self.watcherState.startWatching(
+                path: path,
+                indexer: incrementalIndexer
+            )
+
+            return .text(formatResult(
+                action: "start",
+                path: path,
+                watching: true,
+                message: "Started watching for file changes"
+            ))
+        } catch {
+            return .error("Failed to start watching: \(error.localizedDescription)")
+        }
     }
 
     private func stopWatching(path: String) async -> ToolCallResult {
@@ -113,14 +146,19 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             ))
         }
 
-        // Stop watching
-        await Self.watcherState.stopWatching(path: path)
+        // Stop watching and get final stats
+        let stats = await Self.watcherState.stopWatching(path: path)
 
-        return .text(formatResult(
-            action: "stop",
+        // Save the index
+        do {
+            try await MCPContext.shared.saveAllIndexes()
+        } catch {
+            // Log but don't fail - watching was stopped
+        }
+
+        return .text(formatStopResult(
             path: path,
-            watching: false,
-            message: "Stopped watching for file changes"
+            stats: stats
         ))
     }
 
@@ -128,18 +166,29 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
         let isWatching = await Self.watcherState.isWatching(path: path)
         let stats = await Self.watcherState.getStats(path: path)
 
-        var output = "{\n"
-        output += "  \"path\": \"\(escapeJSON(path))\",\n"
-        output += "  \"watching\": \(isWatching),\n"
-        output += "  \"stats\": {\n"
-        output += "    \"files_modified\": \(stats.filesModified),\n"
-        output += "    \"files_added\": \(stats.filesAdded),\n"
-        output += "    \"files_deleted\": \(stats.filesDeleted),\n"
-        output += "    \"last_event\": \(stats.lastEvent.map { "\"\(formatDate($0))\"" } ?? "null")\n"
-        output += "  }\n"
-        output += "}"
+        let output: [String: Any] = [
+            "path": path,
+            "watching": isWatching,
+            "stats": [
+                "files_created": stats.filesCreated,
+                "files_modified": stats.filesModified,
+                "files_deleted": stats.filesDeleted,
+                "chunks_added": stats.chunksAdded,
+                "chunks_removed": stats.chunksRemoved,
+                "errors": stats.errors,
+                "last_event": stats.lastEvent.map { formatDate($0) } as Any,
+            ],
+        ]
 
-        return .text(output)
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: output,
+            options: [.prettyPrinted, .sortedKeys]
+        ),
+            let string = String(data: data, encoding: .utf8)
+        else {
+            return .text("{}")
+        }
+        return .text(string)
     }
 
     private func formatResult(
@@ -148,23 +197,49 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
         watching: Bool,
         message: String
     ) -> String {
-        """
-        {
-          "action": "\(action)",
-          "path": "\(escapeJSON(path))",
-          "watching": \(watching),
-          "message": "\(escapeJSON(message))"
+        let output: [String: Any] = [
+            "action": action,
+            "path": path,
+            "watching": watching,
+            "message": message,
+        ]
+
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: output,
+            options: [.prettyPrinted, .sortedKeys]
+        ),
+            let string = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
         }
-        """
+        return string
     }
 
-    private func escapeJSON(_ string: String) -> String {
-        string
-            .replacingOccurrences(of: "\\", with: "\\\\")
-            .replacingOccurrences(of: "\"", with: "\\\"")
-            .replacingOccurrences(of: "\n", with: "\\n")
-            .replacingOccurrences(of: "\r", with: "\\r")
-            .replacingOccurrences(of: "\t", with: "\\t")
+    private func formatStopResult(path: String, stats: WatchStats) -> String {
+        let output: [String: Any] = [
+            "action": "stop",
+            "path": path,
+            "watching": false,
+            "message": "Stopped watching for file changes",
+            "session_stats": [
+                "files_created": stats.filesCreated,
+                "files_modified": stats.filesModified,
+                "files_deleted": stats.filesDeleted,
+                "chunks_added": stats.chunksAdded,
+                "chunks_removed": stats.chunksRemoved,
+                "errors": stats.errors,
+            ],
+        ]
+
+        guard let data = try? JSONSerialization.data(
+            withJSONObject: output,
+            options: [.prettyPrinted, .sortedKeys]
+        ),
+            let string = String(data: data, encoding: .utf8)
+        else {
+            return "{}"
+        }
+        return string
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -178,61 +253,87 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
 
 /// Actor to manage watcher state in a thread-safe manner.
 private actor WatcherState {
-    private var watchedPaths: Set<String> = []
-    private var stats: [String: WatchStats] = [:]
-    private var dispatches: [String: DispatchSourceFileSystemObject] = [:]
+    private var watchedPaths: [String: WatchSession] = [:]
+
+    struct WatchSession {
+        let indexer: IncrementalIndexer
+        var task: Task<Void, Error>?
+        var stats: WatchStats
+    }
 
     func isWatching(path: String) -> Bool {
-        watchedPaths.contains(path)
+        watchedPaths[path] != nil
     }
 
-    func startWatching(path: String) {
-        watchedPaths.insert(path)
-        stats[path] = WatchStats()
+    func startWatching(path: String, indexer: IncrementalIndexer) {
+        var session = WatchSession(
+            indexer: indexer,
+            task: nil,
+            stats: WatchStats()
+        )
 
-        // TODO: Integrate with actual DispatchSource file monitoring
-        // For now, just track the state
-        // Real implementation would use DispatchSource.makeFileSystemObjectSource
-    }
-
-    func stopWatching(path: String) {
-        watchedPaths.remove(path)
-        dispatches[path]?.cancel()
-        dispatches.removeValue(forKey: path)
-    }
-
-    func getStats(path: String) -> WatchStats {
-        stats[path] ?? WatchStats()
-    }
-
-    func recordEvent(path: String, type: EventType) {
-        var pathStats = stats[path] ?? WatchStats()
-
-        switch type {
-        case .modified:
-            pathStats.filesModified += 1
-        case .added:
-            pathStats.filesAdded += 1
-        case .deleted:
-            pathStats.filesDeleted += 1
+        // Start the watch task
+        session.task = Task {
+            try await indexer.watchAndIndex(path: path)
         }
 
-        pathStats.lastEvent = Date()
-        stats[path] = pathStats
+        watchedPaths[path] = session
     }
 
-    enum EventType {
-        case modified
-        case added
-        case deleted
+    func stopWatching(path: String) async -> WatchStats {
+        guard let session = watchedPaths[path] else {
+            return WatchStats()
+        }
+
+        // Cancel the task
+        session.task?.cancel()
+
+        // Stop the indexer
+        await session.indexer.stop()
+
+        // Get final stats from indexer
+        let indexerStats = await session.indexer.getStats()
+        let stats = WatchStats(
+            filesCreated: indexerStats.filesCreated,
+            filesModified: indexerStats.filesModified,
+            filesDeleted: indexerStats.filesDeleted,
+            chunksAdded: indexerStats.chunksAdded,
+            chunksRemoved: indexerStats.chunksRemoved,
+            errors: indexerStats.errors,
+            lastEvent: Date()
+        )
+
+        watchedPaths.removeValue(forKey: path)
+        return stats
+    }
+
+    func getStats(path: String) async -> WatchStats {
+        guard let session = watchedPaths[path] else {
+            return WatchStats()
+        }
+
+        // Get current stats from indexer
+        let indexerStats = await session.indexer.getStats()
+        return WatchStats(
+            filesCreated: indexerStats.filesCreated,
+            filesModified: indexerStats.filesModified,
+            filesDeleted: indexerStats.filesDeleted,
+            chunksAdded: indexerStats.chunksAdded,
+            chunksRemoved: indexerStats.chunksRemoved,
+            errors: indexerStats.errors,
+            lastEvent: Date()
+        )
     }
 }
 
 // MARK: - Watch Stats
 
 private struct WatchStats {
+    var filesCreated: Int = 0
     var filesModified: Int = 0
-    var filesAdded: Int = 0
     var filesDeleted: Int = 0
+    var chunksAdded: Int = 0
+    var chunksRemoved: Int = 0
+    var errors: Int = 0
     var lastEvent: Date?
 }
