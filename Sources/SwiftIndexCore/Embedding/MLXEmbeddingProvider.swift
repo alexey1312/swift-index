@@ -207,16 +207,23 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 let mask = MLXArray.ones([1, tokens.count])
                 let tokenTypes = MLXArray.zeros([1, tokens.count])
 
-                // Forward pass through model and apply pooling (per MLXEmbedders docs)
-                let result = pooling(
-                    model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask),
-                    normalize: true,
-                    applyLayerNorm: true
-                )
-                eval(result)
+                // Forward pass through model
+                // Note: MLXEmbedders pooling doesn't work for Qwen3 decoder models
+                // We need to manually do last-token pooling
+                let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                let hiddenStates = pooling(output, normalize: false, applyLayerNorm: false)
+                // hiddenStates shape: [1, seq_len, hidden_dim]
 
-                // Result should be [batch_size, hidden_dim] after pooling
-                return result[0].asArray(Float.self)
+                // Last-token pooling for decoder models
+                let lastTokenIdx = tokens.count - 1
+                let lastHidden = hiddenStates[0, lastTokenIdx] // [hidden_dim]
+
+                // L2 normalize
+                let norm = sqrt((lastHidden * lastHidden).sum())
+                let normalized = lastHidden / norm
+                eval(normalized)
+
+                return normalized.asArray(Float.self)
             }
 
             // Validate dimension
@@ -248,6 +255,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                         tokenizer.encode(text: $0, addSpecialTokens: true)
                     }
 
+                    // Store original lengths for last-token pooling
+                    let originalLengths = tokenizedInputs.map(\.count)
+
                     // Pad to longest sequence
                     let maxLength = tokenizedInputs.reduce(into: 16) { acc, elem in
                         acc = max(acc, elem.count)
@@ -266,20 +276,24 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                     let mask = (padded .!= padToken)
                     let tokenTypes = MLXArray.zeros(like: padded)
 
-                    // Forward pass through model and apply pooling (per MLXEmbedders docs)
-                    let result = pooling(
-                        model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask),
-                        normalize: true,
-                        applyLayerNorm: true
-                    )
-                    eval(result)
+                    // Forward pass through model
+                    // Note: MLXEmbedders pooling doesn't work for Qwen3 decoder models
+                    let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                    let hiddenStates = pooling(output, normalize: false, applyLayerNorm: false)
+                    // hiddenStates shape: [batch_size, seq_len, hidden_dim]
 
-                    // Result should be [batch_size, hidden_dim] after pooling
-                    // Extract individual embeddings
-                    let batchSize = result.shape[0]
+                    // Last-token pooling for decoder models
                     var embeddings: [[Float]] = []
-                    for i in 0 ..< batchSize {
-                        embeddings.append(result[i].asArray(Float.self))
+                    for i in 0 ..< batch.count {
+                        let lastTokenIdx = originalLengths[i] - 1
+                        let lastHidden = hiddenStates[i, lastTokenIdx] // [hidden_dim]
+
+                        // L2 normalize
+                        let norm = sqrt((lastHidden * lastHidden).sum())
+                        let normalized = lastHidden / norm
+                        eval(normalized)
+
+                        embeddings.append(normalized.asArray(Float.self))
                     }
                     return embeddings
                 }
