@@ -171,6 +171,15 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 return
             }
 
+            // Check for unsupported BERT/BGE models (4-bit versions lack pooler weights)
+            let lowerId = modelId.lowercased()
+            if lowerId.contains("bge") || lowerId.contains("bert") || lowerId.contains("nomic") {
+                throw ProviderError.unsupportedModel(
+                    name: modelId,
+                    reason: "4-bit BERT/BGE models lack pooler weights. Use: --embedding-provider swift-embeddings"
+                )
+            }
+
             do {
                 // Load embedding model using MLXEmbedders (Qwen3 models work natively)
                 let configuration = ModelConfiguration(id: modelId)
@@ -188,7 +197,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 throw ProviderError.notAvailable(reason: "Model not loaded")
             }
 
-            let embedding = await container.perform { model, tokenizer, pooler -> [Float] in
+            let embedding = await container.perform { model, tokenizer, pooling -> [Float] in
                 // Tokenize input
                 let tokens = tokenizer.encode(text: text, addSpecialTokens: true)
 
@@ -198,14 +207,16 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 let mask = MLXArray.ones([1, tokens.count])
                 let tokenTypes = MLXArray.zeros([1, tokens.count])
 
-                // Forward pass through model
-                let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                // Forward pass through model and apply pooling (per MLXEmbedders docs)
+                let result = pooling(
+                    model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask),
+                    normalize: true,
+                    applyLayerNorm: true
+                )
+                eval(result)
 
-                // Apply pooling and normalization
-                let pooled = pooler(output, mask: mask, normalize: true, applyLayerNorm: true)
-                eval(pooled)
-
-                return pooled[0].asArray(Float.self)
+                // Result should be [batch_size, hidden_dim] after pooling
+                return result[0].asArray(Float.self)
             }
 
             // Validate dimension
@@ -231,7 +242,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 let batchEnd = min(batchStart + maxBatchSize, texts.count)
                 let batch = Array(texts[batchStart ..< batchEnd])
 
-                let batchEmbeddings = await container.perform { model, tokenizer, pooler -> [[Float]] in
+                let batchEmbeddings = await container.perform { model, tokenizer, pooling -> [[Float]] in
                     // Tokenize all inputs
                     let tokenizedInputs = batch.map {
                         tokenizer.encode(text: $0, addSpecialTokens: true)
@@ -255,18 +266,20 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                     let mask = (padded .!= padToken)
                     let tokenTypes = MLXArray.zeros(like: padded)
 
-                    // Forward pass through model
-                    let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                    // Forward pass through model and apply pooling (per MLXEmbedders docs)
+                    let result = pooling(
+                        model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask),
+                        normalize: true,
+                        applyLayerNorm: true
+                    )
+                    eval(result)
 
-                    // Apply pooling and normalization
-                    let pooled = pooler(output, mask: mask, normalize: true, applyLayerNorm: true)
-                    eval(pooled)
-
-                    // Extract individual embeddings from batch result
-                    let batchSize = pooled.shape[0]
+                    // Result should be [batch_size, hidden_dim] after pooling
+                    // Extract individual embeddings
+                    let batchSize = result.shape[0]
                     var embeddings: [[Float]] = []
                     for i in 0 ..< batchSize {
-                        embeddings.append(pooled[i].asArray(Float.self))
+                        embeddings.append(result[i].asArray(Float.self))
                     }
                     return embeddings
                 }

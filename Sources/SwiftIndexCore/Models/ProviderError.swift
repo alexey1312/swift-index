@@ -10,6 +10,9 @@ public enum ProviderError: Error, Sendable, Equatable {
     /// The required model is not downloaded.
     case modelNotFound(name: String)
 
+    /// The model is not supported by this provider.
+    case unsupportedModel(name: String, reason: String)
+
     /// Model download failed.
     case downloadFailed(reason: String)
 
@@ -50,6 +53,8 @@ extension ProviderError: LocalizedError {
             return "Provider not available: \(reason)"
         case let .modelNotFound(name):
             return "Model not found: \(name)"
+        case let .unsupportedModel(name, reason):
+            return "Model '\(name)' not supported: \(reason)"
         case let .downloadFailed(reason):
             return "Model download failed: \(reason)"
         case let .apiKeyMissing(provider):
