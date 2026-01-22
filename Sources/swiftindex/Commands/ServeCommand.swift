@@ -59,7 +59,7 @@ struct ServeCommand: AsyncParsableCommand {
         logger.info("Starting SwiftIndex MCP server")
 
         // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, logger: logger)
+        _ = try CLIUtils.loadConfig(from: config, logger: logger)
         logger.debug("Configuration loaded for MCP server")
 
         // Output startup info to stderr

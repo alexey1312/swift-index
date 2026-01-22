@@ -153,7 +153,7 @@ struct InstallCodexCommand: ParsableCommand {
 
     /// Removes existing [mcp_servers.swiftindex] section from TOML content.
     private func removeSwiftIndexSection(from content: String) -> String {
-        var lines = content.components(separatedBy: "\n")
+        let lines = content.components(separatedBy: "\n")
         var result: [String] = []
         var inSwiftIndexSection = false
 

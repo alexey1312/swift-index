@@ -105,8 +105,8 @@ public actor FileWatcher {
     public func start() -> AsyncStream<Event> {
         AsyncStream<Event> { continuation in
             Task {
-                await self.setupContinuation(continuation)
-                await self.startWatching()
+                self.setupContinuation(continuation)
+                self.startWatching()
             }
         }
     }
@@ -263,7 +263,7 @@ public actor FileWatcher {
 
             guard !Task.isCancelled else { return }
 
-            await flushPendingEvents()
+            flushPendingEvents()
         }
     }
 
