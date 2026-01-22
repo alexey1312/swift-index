@@ -1,7 +1,8 @@
 // MARK: - HubModelManager
 
 import Foundation
-import Transformers
+import Hub
+import Tokenizers
 
 /// Manages embedding models from HuggingFace Hub using swift-transformers.
 ///
@@ -184,7 +185,7 @@ public actor HubModelManager {
     /// - Returns: `true` if the model appears to be cached.
     public func isModelCached(_ model: Model) -> Bool {
         let repo = Hub.Repo(id: model.huggingFaceId)
-        let hubApi = self.hubApi
+        let hubApi = hubApi
 
         // Check if the snapshot directory exists
         let repoDir = hubApi.localRepoLocation(repo)
@@ -208,10 +209,6 @@ public actor HubModelManager {
     /// - Throws: File system errors on failure.
     public func clearCache() throws {
         cachedTokenizers.removeAll()
-
-        // Clear Hub cache directory
-        let cacheDir = customCacheDirectory ?? HubApi.defaultDownloadBase
-        let modelsDir = cacheDir.appendingPathComponent("models--")
 
         // Remove model directories
         for model in Model.allCases {

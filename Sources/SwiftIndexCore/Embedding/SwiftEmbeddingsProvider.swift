@@ -2,6 +2,8 @@
 
 import Embeddings
 import Foundation
+import Hub
+import Tokenizers
 
 /// Embedding provider using the swift-embeddings package.
 ///
@@ -60,6 +62,18 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
                 "BAAI/bge-base-en-v1.5"
             case .miniLM:
                 "sentence-transformers/all-MiniLM-L6-v2"
+            }
+        }
+
+        /// Converts to HubModelManager.Model.
+        var hubModel: HubModelManager.Model {
+            switch self {
+            case .bgeSmall:
+                .bgeSmall
+            case .bgeBase:
+                .bgeBase
+            case .miniLM:
+                .miniLM
             }
         }
     }
@@ -131,39 +145,41 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
 private actor EmbeddingsModelManager {
     private let modelName: String
     private let dimension: Int
-    private let huggingFaceId: String?
+    private let hubModel: HubModelManager.Model?
 
+    private let hubManager: HubModelManager
     private var isLoaded: Bool = false
     private var bertModel: BertModel?
-    private var tokenizer: BertTokenizer?
+    private var tokenizer: (any Tokenizer)?
 
     init(model: SwiftEmbeddingsProvider.Model) {
         modelName = model.rawValue
         dimension = model.dimension
-        huggingFaceId = model.huggingFaceId
+        hubModel = model.hubModel
+        hubManager = HubModelManager()
     }
 
     init(modelName: String, dimension: Int) {
         self.modelName = modelName
         self.dimension = dimension
-        huggingFaceId = nil
+        hubModel = nil
+        hubManager = HubModelManager()
     }
 
-    func ensureModelLoaded() throws {
+    func ensureModelLoaded() async throws {
         if isLoaded {
             return
         }
 
-        // Initialize BERT model and tokenizer from swift-embeddings
-        do {
-            // The swift-embeddings package provides model loading utilities
-            // This is a simplified version - actual implementation depends on the package API
-            let modelPath = try getOrDownloadModel()
+        // Determine which hub model to use
+        let model = hubModel ?? inferHubModel(from: modelName)
 
-            // Load tokenizer
-            tokenizer = try BertTokenizer(
-                vocabularyFile: modelPath.appendingPathComponent("vocab.txt")
-            )
+        do {
+            // Download model from Hub
+            let modelPath = try await hubManager.ensureModel(model, progress: nil)
+
+            // Load tokenizer using swift-transformers
+            tokenizer = try await hubManager.loadTokenizer(for: model)
 
             // Load model (simplified - actual API may differ)
             bertModel = try BertModel(
@@ -177,15 +193,19 @@ private actor EmbeddingsModelManager {
         }
     }
 
-    func embed(_ text: String) throws -> [Float] {
-        try ensureModelLoaded()
+    func embed(_ text: String) async throws -> [Float] {
+        try await ensureModelLoaded()
 
         guard let tokenizer, let model = bertModel else {
             throw ProviderError.notAvailable(reason: "Model not loaded")
         }
 
-        // Tokenize
-        let encoded = tokenizer.encode(text)
+        // Tokenize using swift-transformers
+        let tokens = tokenizer.encode(text: text)
+        let encoded = EncodedInput(
+            inputIds: tokens,
+            attentionMask: Array(repeating: 1, count: tokens.count)
+        )
 
         // Generate embedding
         let embedding = try model.encode(encoded)
@@ -198,8 +218,8 @@ private actor EmbeddingsModelManager {
         return embedding
     }
 
-    func embedBatch(_ texts: [String], maxBatchSize: Int) throws -> [[Float]] {
-        try ensureModelLoaded()
+    func embedBatch(_ texts: [String], maxBatchSize: Int) async throws -> [[Float]] {
+        try await ensureModelLoaded()
 
         var results: [[Float]] = []
         results.reserveCapacity(texts.count)
@@ -209,7 +229,7 @@ private actor EmbeddingsModelManager {
             let batchEnd = min(batchStart + maxBatchSize, texts.count)
             let batch = Array(texts[batchStart ..< batchEnd])
 
-            let batchEmbeddings = try processBatch(batch)
+            let batchEmbeddings = try await processBatch(batch)
             results.append(contentsOf: batchEmbeddings)
         }
 
@@ -218,24 +238,20 @@ private actor EmbeddingsModelManager {
 
     // MARK: - Private Helpers
 
-    private func getOrDownloadModel() throws -> URL {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        let modelDir = cacheDir
-            .appendingPathComponent("SwiftIndex")
-            .appendingPathComponent("models")
-            .appendingPathComponent(modelName)
-
-        // Check if model exists locally
-        if FileManager.default.fileExists(atPath: modelDir.appendingPathComponent("model.safetensors").path) {
-            return modelDir
+    private func inferHubModel(from name: String) -> HubModelManager.Model {
+        switch name {
+        case "bge-small-en-v1.5":
+            .bgeSmall
+        case "bge-base-en-v1.5":
+            .bgeBase
+        case "all-MiniLM-L6-v2":
+            .miniLM
+        default:
+            .bgeSmall
         }
-
-        // Model needs to be downloaded
-        // In production, this would use the swift-embeddings download utilities
-        throw ProviderError.modelNotFound(name: modelName)
     }
 
-    private func processBatch(_ texts: [String]) throws -> [[Float]] {
+    private func processBatch(_ texts: [String]) async throws -> [[Float]] {
         guard let tokenizer, let model = bertModel else {
             throw ProviderError.notAvailable(reason: "Model not loaded")
         }
@@ -243,7 +259,11 @@ private actor EmbeddingsModelManager {
         var embeddings: [[Float]] = []
 
         for text in texts {
-            let encoded = tokenizer.encode(text)
+            let tokens = tokenizer.encode(text: text)
+            let encoded = EncodedInput(
+                inputIds: tokens,
+                attentionMask: Array(repeating: 1, count: tokens.count)
+            )
             let embedding = try model.encode(encoded)
             embeddings.append(embedding)
         }
@@ -314,57 +334,6 @@ private struct BertConfig: Sendable {
         self.numHiddenLayers = numHiddenLayers
         self.intermediateSize = intermediateSize
         self.maxPositionEmbeddings = maxPositionEmbeddings
-    }
-}
-
-// MARK: - BertTokenizer (Placeholder)
-
-/// Placeholder for BERT tokenizer from swift-embeddings.
-private struct BertTokenizer: Sendable {
-    private let vocabulary: [String: Int]
-    private let maxLength: Int
-
-    init(vocabularyFile: URL, maxLength: Int = 512) throws {
-        self.maxLength = maxLength
-
-        // Load vocabulary from file
-        guard FileManager.default.fileExists(atPath: vocabularyFile.path) else {
-            // Use default vocabulary for testing
-            vocabulary = [:]
-            return
-        }
-
-        let content = try String(contentsOf: vocabularyFile, encoding: .utf8)
-        var vocab: [String: Int] = [:]
-
-        for (index, line) in content.components(separatedBy: .newlines).enumerated() {
-            let token = line.trimmingCharacters(in: .whitespaces)
-            if !token.isEmpty {
-                vocab[token] = index
-            }
-        }
-
-        vocabulary = vocab
-    }
-
-    func encode(_ text: String) -> EncodedInput {
-        let lowercased = text.lowercased()
-        let words = lowercased.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-
-        var inputIds = [101] // [CLS]
-        var attentionMask = [1]
-
-        for word in words.prefix(maxLength - 2) {
-            let tokenId = vocabulary[word] ?? (abs(word.hashValue) % 30000)
-            inputIds.append(tokenId)
-            attentionMask.append(1)
-        }
-
-        inputIds.append(102) // [SEP]
-        attentionMask.append(1)
-
-        return EncodedInput(inputIds: inputIds, attentionMask: attentionMask)
     }
 }
 

@@ -1,8 +1,10 @@
 // MARK: - MLXEmbeddingProvider
 
 import Foundation
+import Hub
 import MLX
 import MLXNN
+import Tokenizers
 
 /// Embedding provider using Apple MLX for native Apple Silicon acceleration.
 ///
@@ -113,51 +115,59 @@ private actor ModelManager {
     private let modelPath: URL?
     private let dimension: Int
 
+    private let hubManager: HubModelManager
     private var isLoaded: Bool = false
     private var modelWeights: MLXArray?
-    private var tokenizer: SimpleTokenizer?
+    private var tokenizer: (any Tokenizer)?
 
     init(modelName: String, modelPath: URL?, dimension: Int) {
         self.modelName = modelName
         self.modelPath = modelPath
         self.dimension = dimension
+        hubManager = HubModelManager()
     }
 
-    func ensureModelLoaded() throws -> Bool {
+    func ensureModelLoaded() async throws -> Bool {
         if isLoaded {
             return true
         }
 
-        // In a real implementation, this would load the model weights
-        // For now, we check if the model path exists or use a default location
-        let path = modelPath ?? defaultModelPath()
+        // Determine which model to use based on modelName
+        let model = hubModel(for: modelName)
 
-        guard FileManager.default.fileExists(atPath: path.path) else {
-            throw ProviderError.modelNotFound(name: modelName)
+        // Use custom path if provided, otherwise download from Hub
+        if let customPath = modelPath {
+            guard FileManager.default.fileExists(atPath: customPath.path) else {
+                throw ProviderError.modelNotFound(name: modelName)
+            }
+        } else {
+            _ = try await hubManager.ensureModel(model, progress: nil)
         }
 
+        // Load tokenizer from swift-transformers
+        tokenizer = try await hubManager.loadTokenizer(for: model)
+
         // Load model weights (simplified - real implementation would use MLX load functions)
-        // modelWeights = try MLX.load(path)
-        tokenizer = SimpleTokenizer()
+        // modelWeights = try MLX.load(path.appendingPathComponent("model.safetensors"))
         isLoaded = true
 
         return true
     }
 
-    func embed(_ text: String) throws -> [Float] {
+    func embed(_ text: String) async throws -> [Float] {
         if !isLoaded {
-            _ = try ensureModelLoaded()
+            _ = try await ensureModelLoaded()
         }
 
-        // Tokenize input
+        // Tokenize input using swift-transformers tokenizer
         guard let tokenizer else {
             throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
         }
 
-        let tokens = tokenizer.encode(text)
+        let tokens = tokenizer.encode(text: text)
 
         // Create input tensor
-        let inputArray = MLXArray(tokens)
+        let inputArray = MLXArray(tokens.map { Int32($0) })
 
         // Forward pass through model (simplified)
         // In real implementation: let output = model(inputArray)
@@ -166,9 +176,9 @@ private actor ModelManager {
         return embedding
     }
 
-    func embedBatch(_ texts: [String], maxBatchSize: Int) throws -> [[Float]] {
+    func embedBatch(_ texts: [String], maxBatchSize: Int) async throws -> [[Float]] {
         if !isLoaded {
-            _ = try ensureModelLoaded()
+            _ = try await ensureModelLoaded()
         }
 
         var results: [[Float]] = []
@@ -179,7 +189,7 @@ private actor ModelManager {
             let batchEnd = min(batchStart + maxBatchSize, texts.count)
             let batch = Array(texts[batchStart ..< batchEnd])
 
-            let batchEmbeddings = try processBatch(batch)
+            let batchEmbeddings = try await processBatch(batch)
             results.append(contentsOf: batchEmbeddings)
         }
 
@@ -188,16 +198,20 @@ private actor ModelManager {
 
     // MARK: - Private Helpers
 
-    private func defaultModelPath() -> URL {
-        let cacheDir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
-        return cacheDir
-            .appendingPathComponent("SwiftIndex")
-            .appendingPathComponent("models")
-            .appendingPathComponent(modelName)
-            .appendingPathComponent("model.safetensors")
+    private func hubModel(for name: String) -> HubModelManager.Model {
+        switch name {
+        case "bge-small-en-v1.5":
+            .bgeSmall
+        case "bge-base-en-v1.5":
+            .bgeBase
+        case "all-MiniLM-L6-v2":
+            .miniLM
+        default:
+            .bgeSmall
+        }
     }
 
-    private func processBatch(_ texts: [String]) throws -> [[Float]] {
+    private func processBatch(_ texts: [String]) async throws -> [[Float]] {
         guard let tokenizer else {
             throw ProviderError.notAvailable(reason: "Tokenizer not initialized")
         }
@@ -205,8 +219,8 @@ private actor ModelManager {
         var embeddings: [[Float]] = []
 
         for text in texts {
-            let tokens = tokenizer.encode(text)
-            let inputArray = MLXArray(tokens)
+            let tokens = tokenizer.encode(text: text)
+            let inputArray = MLXArray(tokens.map { Int32($0) })
             let embedding = computeEmbedding(inputArray)
             embeddings.append(embedding)
         }
@@ -232,40 +246,5 @@ private actor ModelManager {
         }
 
         return embedding
-    }
-}
-
-// MARK: - SimpleTokenizer
-
-/// Basic tokenizer for preprocessing text.
-///
-/// In production, this would be replaced with a proper BPE tokenizer
-/// matching the model's vocabulary.
-private struct SimpleTokenizer: Sendable {
-    private let maxLength: Int
-
-    init(maxLength: Int = 512) {
-        self.maxLength = maxLength
-    }
-
-    func encode(_ text: String) -> [Int32] {
-        // Simplified tokenization
-        // Real implementation would use BPE or WordPiece
-
-        let lowercased = text.lowercased()
-        let words = lowercased.components(separatedBy: .whitespacesAndNewlines)
-            .filter { !$0.isEmpty }
-
-        // Simple hash-based token IDs (placeholder)
-        var tokens: [Int32] = [101] // [CLS] token
-
-        for word in words.prefix(maxLength - 2) {
-            let hash = abs(word.hashValue) % 30000
-            tokens.append(Int32(hash))
-        }
-
-        tokens.append(102) // [SEP] token
-
-        return tokens
     }
 }

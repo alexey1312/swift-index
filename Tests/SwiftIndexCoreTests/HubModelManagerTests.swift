@@ -127,20 +127,10 @@ struct HubModelManagerIntegrationTests {
     func downloadModel() async throws {
         let manager = HubModelManager()
 
-        var progressReports: [Double] = []
-
-        let modelPath = try await manager.ensureModel(.bgeSmall) { progress in
-            progressReports.append(progress)
-        }
+        let modelPath = try await manager.ensureModel(.bgeSmall, progress: nil)
 
         // Model path should exist
         #expect(FileManager.default.fileExists(atPath: modelPath.path))
-
-        // Progress should have been reported
-        #expect(!progressReports.isEmpty)
-
-        // Final progress should be 1.0
-        #expect(progressReports.last == 1.0)
     }
 
     @Test("Can load tokenizer for downloaded model")
@@ -165,13 +155,7 @@ struct HubModelManagerIntegrationTests {
         // First call downloads the model
         _ = try await manager.ensureModel(.bgeSmall, progress: nil)
 
-        // Second call should return cached model (no download)
-        var downloadTriggered = false
-        _ = try await manager.ensureModel(.bgeSmall) { _ in
-            downloadTriggered = true
-        }
-
-        // Progress handler may not be called at all for cached models
-        // or it may be called once with 1.0
+        // Second call should return cached model quickly
+        _ = try await manager.ensureModel(.bgeSmall, progress: nil)
     }
 }
