@@ -37,6 +37,12 @@ Products:
 
 - `MLXEmbedders` — for embedding model loading and inference
 
+#### Scenario: MLX dependency configured
+
+- **WHEN** building SwiftIndex with MLX enabled
+- **THEN** SwiftPM resolves `mlx-swift-lm`
+- **AND** `MLXEmbedders` is available for provider initialization
+
 ### Requirement: Swift Embeddings Provider Dependencies
 
 The system SHALL use swift-embeddings package for pure Swift embeddings.
@@ -53,3 +59,9 @@ let modelBundle = try await Bert.loadModelBundle(
 let embedding = modelBundle.encode("text to embed")
 let result = await embedding.cast(to: Float.self).shapedArray(of: Float.self).scalars
 ```
+
+#### Scenario: Swift embeddings dependency configured
+
+- **WHEN** building SwiftIndex with SwiftEmbeddingsProvider
+- **THEN** SwiftPM resolves `swift-embeddings`
+- **AND** `Bert.loadModelBundle()` is available for embedding generation

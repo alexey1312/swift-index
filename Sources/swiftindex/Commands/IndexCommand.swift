@@ -70,7 +70,7 @@ struct IndexCommand: AsyncParsableCommand {
         }
 
         // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, logger: logger)
+        let configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
         logger.debug("Configuration loaded", metadata: [
             "provider": "\(configuration.embeddingProvider)",
             "model": "\(configuration.embeddingModel)",

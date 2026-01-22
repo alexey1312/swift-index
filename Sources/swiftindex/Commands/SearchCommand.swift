@@ -98,7 +98,7 @@ struct SearchCommand: AsyncParsableCommand {
         logger.debug("Resolved path: \(resolvedPath)")
 
         // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, logger: logger)
+        let configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
 
         // Validate limit
         guard limit > 0 else {

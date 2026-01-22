@@ -65,7 +65,7 @@ struct WatchCommand: AsyncParsableCommand {
         }
 
         // Load configuration
-        var configuration = try CLIUtils.loadConfig(from: config, logger: logger)
+        var configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
 
         // Override debounce if specified
         if let debounce {

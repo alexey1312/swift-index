@@ -50,39 +50,41 @@ enum CLIUtils {
     /// CLI > Environment > Project > Global > Defaults
     ///
     /// - Parameters:
-    ///   - configPath: Optional path to a configuration file.
+    ///   - configPath: Optional explicit path to a configuration file.
+    ///   - projectDirectory: Directory for auto-discovering `.swiftindex.toml`.
     ///   - logger: Logger for debug output.
     /// - Returns: The merged configuration.
-    /// - Throws: ConfigError if the config file cannot be loaded.
-    static func loadConfig(from configPath: String?, logger: Logger) throws -> Config {
-        var partials: [PartialConfig] = []
+    /// - Throws: ConfigError if the explicit config file cannot be loaded.
+    static func loadConfig(
+        from configPath: String?,
+        projectDirectory: String = FileManager.default.currentDirectoryPath,
+        logger: Logger
+    ) throws -> Config {
+        let envPartial = loadEnvironmentConfig()
+        if envPartial != .empty {
+            logger.debug("Loaded environment configuration")
+        }
 
-        // Load from file if specified
+        // If explicit --config flag: load only that specific file
         if let configPath {
             let resolvedPath = resolvePath(configPath)
-            logger.debug("Loading config from: \(resolvedPath)")
+            logger.debug("Loading config from explicit path: \(resolvedPath)")
 
             guard FileManager.default.fileExists(atPath: resolvedPath) else {
                 throw ConfigError.fileNotFound(resolvedPath)
             }
 
-            // TODO: Implement actual TOML parsing
-            // let fileLoader = TOMLConfigLoader(path: resolvedPath)
-            // let filePartial = try fileLoader.load()
-            // partials.append(filePartial)
-
-            logger.debug("Config file found, parsing not yet implemented")
+            let fileLoader = TOMLConfigLoader(filePath: resolvedPath)
+            let filePartial = try fileLoader.load()
+            return Config.merge([envPartial, filePartial])
         }
 
-        // Load from environment
-        let envPartial = loadEnvironmentConfig()
-        if envPartial != .empty {
-            partials.append(envPartial)
-            logger.debug("Loaded environment configuration")
-        }
-
-        // Merge all partials
-        return Config.merge(partials)
+        // Auto-discovery: project .swiftindex.toml + global ~/.swiftindex.toml
+        logger.debug("Auto-discovering config from: \(projectDirectory)")
+        return TOMLConfigLoader.loadLayered(
+            env: envPartial,
+            projectDirectory: projectDirectory
+        )
     }
 
     /// Loads configuration from environment variables.
