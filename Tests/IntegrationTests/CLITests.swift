@@ -276,8 +276,8 @@ struct CLITests {
         // This may or may not be implemented
         let (stdout, _, _) = try runCommand(["--version"])
 
-        // Just verify it doesn't crash
-        #expect(stdout.isEmpty, "Should produce some output")
+        // Just verify it doesn't crash and produces output
+        #expect(!stdout.isEmpty, "Should produce some output")
     }
 
     @Test("swiftindex handles unknown command gracefully")

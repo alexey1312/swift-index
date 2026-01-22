@@ -440,10 +440,11 @@ struct E2ETests {
         let content = "Some random text content"
 
         let result = parser.parse(content: content, path: "readme.txt")
-        // Should use plain text fallback - may succeed or fail depending on implementation
+        // Should use plain text fallback which returns chunks for any text content
         switch result {
         case let .success(chunks):
-            #expect(chunks.isEmpty, "Should handle unknown extensions")
+            // PlainTextParser handles unknown extensions as fallback and returns chunks
+            #expect(!chunks.isEmpty, "Plain text fallback should return chunks")
         case .failure:
             // Acceptable - unknown extension may fail gracefully
             #expect(Bool(true), "Parser returned failure for unknown extension")

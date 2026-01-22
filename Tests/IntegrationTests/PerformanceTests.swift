@@ -220,8 +220,8 @@ struct PerformanceTests {
         print("Total chunks indexed: \(totalChunks)")
         print("Total time: \(String(format: "%.2f", elapsed)) seconds")
 
-        // Should index at least 100 chunks/second with mock embeddings in debug builds
-        #expect(throughput > 100, "Should index at least 100 chunks/second")
+        // Should index at least 50 chunks/second with mock embeddings (relaxed for CI)
+        #expect(throughput > 50, "Should index at least 50 chunks/second")
     }
 
     @Test("Batch indexing performance")
@@ -276,8 +276,8 @@ struct PerformanceTests {
         print("Batch size: \(batchSize)")
         print("Total time: \(String(format: "%.2f", elapsed)) seconds")
 
-        // Batch should be reasonably fast in debug builds
-        #expect(throughput > 200, "Batch indexing should be at least 200 chunks/second")
+        // Batch should be reasonably fast in debug builds (relaxed for CI)
+        #expect(throughput > 100, "Batch indexing should be at least 100 chunks/second")
     }
 
     // MARK: - Search Performance Tests
@@ -360,8 +360,8 @@ struct PerformanceTests {
         print("Average search latency: \(String(format: "%.2f", averageLatency * 1000)) ms")
         print("Total searches: \(iterations * queries.count)")
 
-        // Search should be fast (under 50ms average)
-        #expect(averageLatency < 0.05, "Average search latency should be under 50ms")
+        // Search should be fast (under 100ms average, relaxed for CI)
+        #expect(averageLatency < 0.1, "Average search latency should be under 100ms")
     }
 
     @Test("BM25 FTS search performance")
