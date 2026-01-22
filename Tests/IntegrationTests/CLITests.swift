@@ -116,6 +116,15 @@ struct CLITests {
         }
         """.write(to: swiftFile, atomically: true, encoding: .utf8)
 
+        // Ensure CLI uses mock embeddings even if environment is lost in subprocess.
+        let configFile = dir.appendingPathComponent(".swiftindex.toml")
+        try """
+        [embedding]
+        provider = "mock"
+        model = "all-MiniLM-L6-v2"
+        dimension = 384
+        """.write(to: configFile, atomically: true, encoding: .utf8)
+
         return dir
     }
 

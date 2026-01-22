@@ -280,7 +280,15 @@ struct PerformanceTests {
         print("Total time: \(String(format: "%.2f", elapsed)) seconds")
 
         // Batch should be reasonably fast in debug builds (relaxed for CI)
-        #expect(throughput > 100, "Batch indexing should be at least 100 chunks/second")
+        let isCI = {
+            let value = ProcessInfo.processInfo.environment["CI"]?.lowercased()
+            return value == "1" || value == "true" || value == "yes"
+        }()
+        let minThroughput = isCI ? 50.0 : 100.0
+        #expect(
+            throughput > minThroughput,
+            "Batch indexing should be at least \(Int(minThroughput)) chunks/second"
+        )
     }
 
     // MARK: - Search Performance Tests

@@ -63,3 +63,6 @@ fastlane/test_output
 
 # Claude
 CLAUDE.local.md
+
+# macOS
+.DS_Store

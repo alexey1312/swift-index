@@ -4,10 +4,52 @@ import Foundation
 @testable import SwiftIndexMCP
 import Testing
 
-private let envSetup: Void = {
-    _ = setenv("SWIFTINDEX_EMBEDDING_PROVIDER", "mock", 1)
-    return ()
-}()
+private func createTestFixtures() throws -> URL {
+    let dir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("swiftindex-mcp-tests-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+    let swiftFile = dir.appendingPathComponent("Sample.swift")
+    try """
+    // Sample Swift file for testing
+    import Foundation
+
+    struct Sample {
+        let name: String
+
+        func greet() -> String {
+            return "Hello, \\(name)!"
+        }
+    }
+    """.write(to: swiftFile, atomically: true, encoding: .utf8)
+
+    let configFile = dir.appendingPathComponent(".swiftindex.toml")
+    try """
+    [embedding]
+    provider = "mock"
+    model = "all-MiniLM-L6-v2"
+    dimension = 384
+    """.write(to: configFile, atomically: true, encoding: .utf8)
+
+    return dir
+}
+
+private func prepareIndexedFixtures() async throws -> URL {
+    let dir = try createTestFixtures()
+    let tool = IndexCodebaseTool()
+    let result = try await tool.execute(arguments: .object([
+        "path": .string(dir.path),
+        "force": true,
+    ]))
+    if result.isError == true {
+        throw NSError(domain: "MCPToolsTests", code: 1)
+    }
+    return dir
+}
+
+private func cleanupFixtures(_ dir: URL) {
+    try? FileManager.default.removeItem(at: dir)
+}
 
 @Suite("MCP Tools")
 struct MCPToolsTests {
@@ -60,11 +102,11 @@ struct MCPToolsTests {
 
         @Test("Execute with valid path returns result")
         func executeWithValidPathReturnsResult() async throws {
-            // Use the current project directory as test path
-            let testPath = FileManager.default.currentDirectoryPath
+            let fixtureDir = try await prepareIndexedFixtures()
+            defer { cleanupFixtures(fixtureDir) }
 
             let result = try await tool.execute(
-                arguments: .object(["path": .string(testPath)])
+                arguments: .object(["path": .string(fixtureDir.path)])
             )
 
             if case let .text(content) = result.content.first {
@@ -119,10 +161,14 @@ struct MCPToolsTests {
 
         @Test("Execute with valid query returns results")
         func executeWithValidQueryReturnsResults() async throws {
+            let fixtureDir = try await prepareIndexedFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "authentication",
                     "limit": 5,
+                    "path": .string(fixtureDir.path),
                 ])
             )
 
@@ -184,11 +230,15 @@ struct MCPToolsTests {
 
         @Test("Execute with valid parameters returns analysis")
         func executeWithValidParametersReturnsAnalysis() async throws {
+            let fixtureDir = try await prepareIndexedFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
             let result = try await tool.execute(
                 arguments: .object([
                     "query": "how does search work",
                     "depth": 2,
                     "focus": "architecture",
+                    "path": .string(fixtureDir.path),
                 ])
             )
 
@@ -249,11 +299,12 @@ struct MCPToolsTests {
 
         @Test("Execute start action returns watching true")
         func executeStartActionReturnsWatchingTrue() async throws {
-            let testPath = FileManager.default.currentDirectoryPath
+            let fixtureDir = try await prepareIndexedFixtures()
+            defer { cleanupFixtures(fixtureDir) }
 
             let result = try await tool.execute(
                 arguments: .object([
-                    "path": .string(testPath),
+                    "path": .string(fixtureDir.path),
                     "action": "start",
                 ])
             )
