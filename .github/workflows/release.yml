@@ -57,11 +57,18 @@ jobs:
           cp README.md dist/ 2>/dev/null || echo "No README file"
           cd dist && zip -r ../swiftindex-macos.zip .
 
+      - name: Generate checksums
+        run: |
+          shasum -a 256 swiftindex-macos.zip > checksums.txt
+          cat checksums.txt
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: swiftindex-macos
-          path: swiftindex-macos.zip
+          path: |
+            swiftindex-macos.zip
+            checksums.txt
 
   release:
     name: Create Release
@@ -82,7 +89,9 @@ jobs:
         with:
           generate_release_notes: true
           prerelease: ${{ contains(github.ref, '-') }}
-          files: artifacts/swiftindex-macos.zip
+          files: |
+            artifacts/swiftindex-macos.zip
+            artifacts/checksums.txt
 
   update-homebrew:
     name: Update Homebrew Tap

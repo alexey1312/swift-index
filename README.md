@@ -24,7 +24,26 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 
 ## Installation
 
-### Homebrew (Recommended)
+### One-Line Install (Recommended)
+
+```bash
+curl -fsSL https://alexey1312.github.io/swift-index/install.sh | sh
+```
+
+Options:
+
+```bash
+# Install specific version
+curl -fsSL https://alexey1312.github.io/swift-index/install.sh | VERSION=v0.1.0 sh
+
+# Install to custom location
+curl -fsSL https://alexey1312.github.io/swift-index/install.sh | PREFIX=/opt/bin sh
+
+# Uninstall
+curl -fsSL https://alexey1312.github.io/swift-index/install.sh | sh -s -- --uninstall
+```
+
+### Homebrew
 
 ```bash
 brew install alexey1312/swift-index/swiftindex

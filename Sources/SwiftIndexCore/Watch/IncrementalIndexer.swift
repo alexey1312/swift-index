@@ -186,15 +186,20 @@ public actor IncrementalIndexer {
         let chunks = parseResult.chunks
         let snippets = parseResult.snippets
 
-        // Generate embeddings and index chunks
-        for chunk in chunks {
+        // BATCH: Generate embeddings for all chunks at once
+        // This prevents multiple reserve() calls that can corrupt the HNSW graph
+        if !chunks.isEmpty {
             do {
-                let embedding = try await embeddingProvider.embed(chunk.content)
-                try await indexManager.index(chunk: chunk, vector: embedding)
-                stats.chunksAdded += 1
+                let contents = chunks.map(\.content)
+                let embeddings = try await embeddingProvider.embed(contents)
+
+                // BATCH: Index all chunks at once - single atomic operation
+                let items = zip(chunks, embeddings).map { (chunk: $0, vector: $1) }
+                try await indexManager.indexBatch(items)
+                stats.chunksAdded += chunks.count
             } catch {
-                logger.error("Failed to index chunk", metadata: [
-                    "chunkId": "\(chunk.id)",
+                logger.error("Failed to index chunks", metadata: [
+                    "path": "\(path)",
                     "error": "\(error.localizedDescription)",
                 ])
             }
@@ -250,14 +255,20 @@ public actor IncrementalIndexer {
         try await indexManager.chunkStore.deleteByPath(path)
         try await indexManager.chunkStore.deleteSnippetsByPath(path)
 
-        for chunk in chunks {
+        // BATCH: Generate embeddings for all chunks at once
+        // This prevents multiple reserve() calls that can corrupt the HNSW graph
+        if !chunks.isEmpty {
             do {
-                let embedding = try await embeddingProvider.embed(chunk.content)
-                try await indexManager.index(chunk: chunk, vector: embedding)
-                stats.chunksAdded += 1
+                let contents = chunks.map(\.content)
+                let embeddings = try await embeddingProvider.embed(contents)
+
+                // BATCH: Index all chunks at once - single atomic operation
+                let items = zip(chunks, embeddings).map { (chunk: $0, vector: $1) }
+                try await indexManager.indexBatch(items)
+                stats.chunksAdded += chunks.count
             } catch {
-                logger.error("Failed to index chunk", metadata: [
-                    "chunkId": "\(chunk.id)",
+                logger.error("Failed to index chunks", metadata: [
+                    "path": "\(path)",
                     "error": "\(error.localizedDescription)",
                 ])
             }
