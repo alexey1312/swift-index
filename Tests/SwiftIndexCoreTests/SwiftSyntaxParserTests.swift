@@ -616,4 +616,198 @@ struct SwiftSyntaxParserTests {
         let methods = chunks.filter { $0.kind == .method }
         #expect(methods.count == 2)
     }
+
+    // MARK: - Rich Metadata Tests
+
+    @Test("Extract docComment from line doc comment")
+    func extractDocCommentFromLineComment() {
+        let content = """
+        /// Authenticates the user with credentials.
+        /// - Parameter username: The user's name.
+        /// - Returns: True if authenticated.
+        func authenticate(username: String) -> Bool {
+            return true
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .function }
+        #expect(chunk != nil)
+        #expect(chunk?.docComment != nil)
+        #expect(chunk?.docComment?.contains("Authenticates the user") == true)
+        #expect(chunk?.docComment?.contains("Parameter username") == true)
+    }
+
+    @Test("Extract docComment from block doc comment")
+    func extractDocCommentFromBlockComment() {
+        let content = """
+        /**
+         * Processes the data and returns result.
+         *
+         * - Parameter data: Input data to process.
+         */
+        func processData(data: Data) -> Data {
+            return data
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .function }
+        #expect(chunk != nil)
+        #expect(chunk?.docComment != nil)
+        #expect(chunk?.docComment?.contains("Processes the data") == true)
+    }
+
+    @Test("Extract function signature")
+    func extractFunctionSignature() {
+        let content = """
+        public func authenticate(user: String, password: String) async throws -> AuthResult {
+            // implementation
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .function }
+        #expect(chunk != nil)
+        #expect(chunk?.signature != nil)
+        #expect(chunk?.signature?.contains("public") == true)
+        #expect(chunk?.signature?.contains("func authenticate") == true)
+        #expect(chunk?.signature?.contains("async") == true)
+        #expect(chunk?.signature?.contains("throws") == true)
+        #expect(chunk?.signature?.contains("AuthResult") == true)
+    }
+
+    @Test("Extract class signature with inheritance")
+    func extractClassSignature() {
+        let content = """
+        public final class NetworkManager: NSObject, URLSessionDelegate {
+            // implementation
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .class }
+        #expect(chunk != nil)
+        #expect(chunk?.signature != nil)
+        #expect(chunk?.signature?.contains("public final class") == true)
+        #expect(chunk?.signature?.contains("NSObject") == true)
+        #expect(chunk?.signature?.contains("URLSessionDelegate") == true)
+    }
+
+    @Test("Build breadcrumb for nested method")
+    func buildBreadcrumbForNestedMethod() {
+        let content = """
+        class AuthManager {
+            func authenticate(user: String) -> Bool {
+                return true
+            }
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let methodChunk = chunks.first { $0.kind == .method }
+        #expect(methodChunk != nil)
+        #expect(methodChunk?.breadcrumb != nil)
+        #expect(methodChunk?.breadcrumb == "AuthManager > authenticate")
+    }
+
+    @Test("Build breadcrumb for deeply nested type")
+    func buildBreadcrumbForDeeplyNestedType() {
+        let content = """
+        struct Outer {
+            struct Inner {
+                func deepMethod() {}
+            }
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let methodChunk = chunks.first { $0.kind == .method }
+        #expect(methodChunk != nil)
+        #expect(methodChunk?.breadcrumb == "Outer > Inner > deepMethod")
+    }
+
+    @Test("No breadcrumb for top-level function")
+    func noBreadcrumbForTopLevelFunction() {
+        let content = """
+        func topLevelFunction() {}
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .function }
+        #expect(chunk != nil)
+        #expect(chunk?.breadcrumb == nil)
+    }
+
+    @Test("Calculate token count")
+    func calculateTokenCount() {
+        let content = """
+        func test() {
+            let x = 1
+            let y = 2
+            return x + y
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first { $0.kind == .function }
+        #expect(chunk != nil)
+        #expect(chunk?.tokenCount ?? 0 > 0)
+        // Token count is approximately content.count / 4
+        let expectedApprox = chunk!.content.count / 4
+        #expect(abs(chunk!.tokenCount - expectedApprox) <= 1)
+    }
+
+    @Test("Detect Swift language")
+    func detectSwiftLanguage() {
+        let content = "func test() {}"
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "swift")
+    }
 }

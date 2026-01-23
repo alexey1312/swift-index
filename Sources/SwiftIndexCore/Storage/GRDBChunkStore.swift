@@ -128,6 +128,71 @@ public actor GRDBChunkStore: ChunkStore {
             }
         }
 
+        // Version 2: Rich metadata fields
+        migrator.registerMigration("v2_rich_metadata") { db in
+            // Add new metadata columns to chunks table
+            try db.alter(table: "chunks") { table in
+                table.add(column: "doc_comment", .text)
+                table.add(column: "signature", .text)
+                table.add(column: "breadcrumb", .text)
+                table.add(column: "token_count", .integer).notNull().defaults(to: 0)
+                table.add(column: "language", .text).notNull().defaults(to: "unknown")
+            }
+
+            // Drop old FTS table and triggers
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ai")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ad")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_au")
+            try db.execute(sql: "DROP TABLE IF EXISTS chunks_fts")
+
+            // Create new FTS5 table with doc_comment column for search
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    symbols,
+                    doc_comment,
+                    path UNINDEXED,
+                    content='chunks',
+                    content_rowid='rowid',
+                    tokenize='porter unicode61'
+                )
+            """)
+
+            // New triggers including doc_comment
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols, COALESCE(NEW.doc_comment, ''), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols, doc_comment, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_au AFTER UPDATE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols, doc_comment, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), OLD.path);
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), NEW.path);
+                END
+            """)
+
+            // Rebuild FTS index with existing data
+            try db.execute(sql: """
+                INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, path)
+                SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''), path FROM chunks
+            """)
+        }
+
         try migrator.migrate(dbWriter)
     }
 
@@ -322,6 +387,11 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     let references: String // JSON array
     let fileHash: String
     let createdAt: Date
+    let docComment: String?
+    let signature: String?
+    let breadcrumb: String?
+    let tokenCount: Int
+    let language: String
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -334,6 +404,11 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case references
         case fileHash = "file_hash"
         case createdAt = "created_at"
+        case docComment = "doc_comment"
+        case signature
+        case breadcrumb
+        case tokenCount = "token_count"
+        case language
     }
 
     init(chunk: CodeChunk) {
@@ -349,6 +424,11 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         fileHash = chunk.fileHash
         createdAt = chunk.createdAt
+        docComment = chunk.docComment
+        signature = chunk.signature
+        breadcrumb = chunk.breadcrumb
+        tokenCount = chunk.tokenCount
+        language = chunk.language
     }
 
     init(row: Row) {
@@ -362,6 +442,11 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         references = row["references"]
         fileHash = row["file_hash"]
         createdAt = row["created_at"]
+        docComment = row["doc_comment"]
+        signature = row["signature"]
+        breadcrumb = row["breadcrumb"]
+        tokenCount = row["token_count"] ?? 0
+        language = row["language"] ?? "unknown"
     }
 
     func toCodeChunk() throws -> CodeChunk {
@@ -389,7 +474,12 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             symbols: symbolsArray,
             references: referencesArray,
             fileHash: fileHash,
-            createdAt: createdAt
+            createdAt: createdAt,
+            docComment: docComment,
+            signature: signature,
+            breadcrumb: breadcrumb,
+            tokenCount: tokenCount,
+            language: language
         )
     }
 }

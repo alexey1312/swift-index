@@ -287,7 +287,8 @@ public struct TreeSitterParser: Parser, Sendable {
             kind: .document,
             symbols: symbols,
             references: [],
-            fileHash: fileHash
+            fileHash: fileHash,
+            language: "json"
         )
 
         return .success([chunk])
@@ -322,7 +323,8 @@ public struct TreeSitterParser: Parser, Sendable {
             kind: .document,
             symbols: symbols,
             references: [],
-            fileHash: fileHash
+            fileHash: fileHash,
+            language: "yaml"
         )
 
         return .success([chunk])
@@ -338,6 +340,7 @@ public struct TreeSitterParser: Parser, Sendable {
         var currentSection = ""
         var currentSectionStart = 1
         var currentSectionTitle = ""
+        var headerStack: [String] = [] // Track header hierarchy for breadcrumb
 
         for (index, line) in lines.enumerated() {
             let lineNumber = index + 1
@@ -346,6 +349,7 @@ public struct TreeSitterParser: Parser, Sendable {
             if line.hasPrefix("#") {
                 // Save previous section if it has content
                 if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let breadcrumb = headerStack.isEmpty ? nil : headerStack.joined(separator: " > ")
                     let chunk = CodeChunk(
                         id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
                         path: path,
@@ -355,15 +359,26 @@ public struct TreeSitterParser: Parser, Sendable {
                         kind: .section,
                         symbols: currentSectionTitle.isEmpty ? [] : [currentSectionTitle],
                         references: [],
-                        fileHash: fileHash
+                        fileHash: fileHash,
+                        breadcrumb: breadcrumb,
+                        language: "markdown"
                     )
                     chunks.append(chunk)
+                }
+
+                // Calculate header level
+                let headerLevel = line.prefix(while: { $0 == "#" }).count
+
+                // Update header stack for breadcrumb
+                while headerStack.count >= headerLevel {
+                    headerStack.removeLast()
                 }
 
                 // Start new section
                 currentSection = line + "\n"
                 currentSectionStart = lineNumber
                 currentSectionTitle = line.trimmingCharacters(in: CharacterSet(charactersIn: "# "))
+                headerStack.append(currentSectionTitle)
             } else {
                 currentSection += line + "\n"
             }
@@ -371,6 +386,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
         // Don't forget the last section
         if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let breadcrumb = headerStack.isEmpty ? nil : headerStack.joined(separator: " > ")
             let chunk = CodeChunk(
                 id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
                 path: path,
@@ -380,7 +396,9 @@ public struct TreeSitterParser: Parser, Sendable {
                 kind: .section,
                 symbols: currentSectionTitle.isEmpty ? [] : [currentSectionTitle],
                 references: [],
-                fileHash: fileHash
+                fileHash: fileHash,
+                breadcrumb: breadcrumb,
+                language: "markdown"
             )
             chunks.append(chunk)
         }
@@ -414,6 +432,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
         let range = NSRange(content.startIndex..., in: content)
         let matches = regex.matches(in: content, options: [], range: range)
+        let language = detectLanguage(from: path)
 
         return matches.compactMap { match -> CodeChunk? in
             guard let matchRange = Range(match.range, in: content) else {
@@ -433,6 +452,15 @@ public struct TreeSitterParser: Parser, Sendable {
                 symbols.append(String(content[symbolRange]))
             }
 
+            // Extract preceding doc comment if present
+            let docComment = extractDocComment(before: matchRange.lowerBound, in: content)
+
+            // Build signature from first line of matched content
+            let signature = matchedContent.components(separatedBy: "\n").first?
+                .trimmingCharacters(in: .whitespaces)
+                .replacingOccurrences(of: "{", with: "")
+                .trimmingCharacters(in: .whitespaces)
+
             return CodeChunk(
                 id: generateChunkId(path: path, content: matchedContent, startLine: startLine),
                 path: path,
@@ -442,8 +470,57 @@ public struct TreeSitterParser: Parser, Sendable {
                 kind: kind,
                 symbols: symbols,
                 references: [],
-                fileHash: fileHash
+                fileHash: fileHash,
+                docComment: docComment,
+                signature: signature,
+                breadcrumb: nil,
+                language: language
             )
+        }
+    }
+
+    private func extractDocComment(before position: String.Index, in content: String) -> String? {
+        // Look backwards for doc comments (// or /* style)
+        let beforeContent = String(content[..<position])
+        let lines = beforeContent.components(separatedBy: "\n")
+
+        var docLines: [String] = []
+        var foundComment = false
+
+        // Scan backwards through lines
+        for line in lines.reversed() {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("///") {
+                docLines.insert(String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces), at: 0)
+                foundComment = true
+            } else if trimmed.hasPrefix("//") {
+                docLines.insert(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces), at: 0)
+                foundComment = true
+            } else if trimmed.isEmpty, foundComment {
+                // Empty line after finding comments - stop collecting
+                break
+            } else if !trimmed.isEmpty {
+                // Non-comment, non-empty line - stop
+                break
+            }
+        }
+
+        let result = docLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? nil : result
+    }
+
+    private func detectLanguage(from path: String) -> String {
+        let ext = (path as NSString).pathExtension.lowercased()
+        switch ext {
+        case "m", "mm": return "objective-c"
+        case "h": return "c-header"
+        case "c": return "c"
+        case "cpp", "cc", "cxx", "hpp": return "cpp"
+        case "json": return "json"
+        case "yaml", "yml": return "yaml"
+        case "md", "markdown": return "markdown"
+        default: return "unknown"
         }
     }
 
@@ -457,7 +534,8 @@ public struct TreeSitterParser: Parser, Sendable {
             kind: .document,
             symbols: [],
             references: [],
-            fileHash: fileHash
+            fileHash: fileHash,
+            language: detectLanguage(from: path)
         )
     }
 

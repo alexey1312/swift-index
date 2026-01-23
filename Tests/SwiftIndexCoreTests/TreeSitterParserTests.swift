@@ -303,6 +303,195 @@ struct TreeSitterParserTests {
 
         #expect(error == .emptyContent)
     }
+
+    // MARK: - Rich Metadata Tests
+
+    @Test("Detect C language")
+    func detectCLanguage() {
+        let parser = TreeSitterParser()
+        let content = """
+        int main() {
+            return 0;
+        }
+        """
+
+        let result = parser.parse(content: content, path: "main.c")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "c")
+    }
+
+    @Test("Detect Objective-C language")
+    func detectObjectiveCLanguage() {
+        let parser = TreeSitterParser()
+        let content = """
+        @implementation Test
+        @end
+        """
+
+        let result = parser.parse(content: content, path: "Test.m")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "objective-c")
+    }
+
+    @Test("Detect JSON language")
+    func detectJSONLanguage() {
+        let parser = TreeSitterParser()
+        let content = """
+        {"key": "value"}
+        """
+
+        let result = parser.parse(content: content, path: "config.json")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "json")
+    }
+
+    @Test("Detect YAML language")
+    func detectYAMLLanguage() {
+        let parser = TreeSitterParser()
+        let content = """
+        key: value
+        """
+
+        let result = parser.parse(content: content, path: "config.yaml")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "yaml")
+    }
+
+    @Test("Detect Markdown language")
+    func detectMarkdownLanguage() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Title
+        Some content.
+        """
+
+        let result = parser.parse(content: content, path: "README.md")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks.first?.language == "markdown")
+    }
+
+    @Test("Build breadcrumb for Markdown sections")
+    func buildMarkdownBreadcrumb() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Getting Started
+
+        Introduction text.
+
+        ## Installation
+
+        Install instructions.
+
+        ### Prerequisites
+
+        Requirements list.
+        """
+
+        let result = parser.parse(content: content, path: "README.md")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        // First section should have breadcrumb
+        let gettingStarted = chunks.first { $0.symbols.contains("Getting Started") }
+        #expect(gettingStarted?.breadcrumb == "Getting Started")
+
+        // Nested section should have hierarchical breadcrumb
+        let installation = chunks.first { $0.symbols.contains("Installation") }
+        #expect(installation?.breadcrumb == "Getting Started > Installation")
+
+        let prereqs = chunks.first { $0.symbols.contains("Prerequisites") }
+        #expect(prereqs?.breadcrumb == "Getting Started > Installation > Prerequisites")
+    }
+
+    @Test("Calculate token count")
+    func calculateTokenCount() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Title
+
+        This is some content that should have tokens calculated.
+        """
+
+        let result = parser.parse(content: content, path: "test.md")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let chunk = chunks.first
+        #expect(chunk != nil)
+        #expect(chunk?.tokenCount ?? 0 > 0)
+        // Token count is approximately content.count / 4
+        let expectedApprox = chunk!.content.count / 4
+        #expect(abs(chunk!.tokenCount - expectedApprox) <= 1)
+    }
+
+    @Test("Extract C function signature")
+    func extractCFunctionSignature() {
+        let parser = TreeSitterParser()
+        let content = """
+        // Calculate the sum of two integers
+        int calculateSum(int a, int b) {
+            return a + b;
+        }
+        """
+
+        let result = parser.parse(content: content, path: "math.c")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let funcChunk = chunks.first { $0.kind == .function }
+        #expect(funcChunk != nil)
+        #expect(funcChunk?.signature != nil)
+        #expect(funcChunk?.signature?.contains("calculateSum") == true)
+    }
+
+    @Test("Extract doc comment from C code")
+    func extractCDocComment() {
+        let parser = TreeSitterParser()
+        let content = """
+        // Calculate the sum of two integers
+        // Returns the result of a + b
+        int calculateSum(int a, int b) {
+            return a + b;
+        }
+        """
+
+        let result = parser.parse(content: content, path: "math.c")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let funcChunk = chunks.first { $0.kind == .function }
+        #expect(funcChunk != nil)
+        #expect(funcChunk?.docComment != nil)
+        #expect(funcChunk?.docComment?.contains("Calculate the sum") == true)
+    }
 }
 
 // MARK: - HybridParser Tests

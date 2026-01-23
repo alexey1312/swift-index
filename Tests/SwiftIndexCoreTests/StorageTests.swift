@@ -106,6 +106,129 @@ struct GRDBChunkStoreTests {
         #expect(remaining == 1)
     }
 
+    // MARK: - Rich Metadata Tests
+
+    @Test("Store and retrieve chunk with docComment")
+    func storeAndRetrieveDocComment() async throws {
+        let store = try GRDBChunkStore()
+        let chunk = makeChunk(
+            id: "doc-1",
+            docComment: "Authenticates the user with given credentials.",
+            signature: "func authenticate(user: String) -> Bool"
+        )
+
+        try await store.insert(chunk)
+        let retrieved = try await store.get(id: "doc-1")
+
+        #expect(retrieved != nil)
+        #expect(retrieved?.docComment == "Authenticates the user with given credentials.")
+        #expect(retrieved?.signature == "func authenticate(user: String) -> Bool")
+    }
+
+    @Test("Store and retrieve chunk with breadcrumb")
+    func storeAndRetrieveBreadcrumb() async throws {
+        let store = try GRDBChunkStore()
+        let chunk = makeChunk(
+            id: "bread-1",
+            breadcrumb: "AuthManager > authenticate"
+        )
+
+        try await store.insert(chunk)
+        let retrieved = try await store.get(id: "bread-1")
+
+        #expect(retrieved != nil)
+        #expect(retrieved?.breadcrumb == "AuthManager > authenticate")
+    }
+
+    @Test("Store and retrieve chunk with tokenCount and language")
+    func storeAndRetrieveTokenCountAndLanguage() async throws {
+        let store = try GRDBChunkStore()
+        let content = "func test() { let x = 1 }"
+        let chunk = CodeChunk(
+            id: "token-1",
+            path: "/test/file.swift",
+            content: content,
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["test"],
+            references: [],
+            fileHash: "hash123",
+            language: "swift"
+        )
+
+        try await store.insert(chunk)
+        let retrieved = try await store.get(id: "token-1")
+
+        #expect(retrieved != nil)
+        #expect(retrieved?.tokenCount == content.count / 4)
+        #expect(retrieved?.language == "swift")
+    }
+
+    @Test("Batch insert preserves rich metadata")
+    func batchInsertPreservesRichMetadata() async throws {
+        let store = try GRDBChunkStore()
+        let chunks = [
+            makeChunk(
+                id: "meta-1",
+                docComment: "First function doc",
+                signature: "func first()",
+                breadcrumb: "Class > first",
+                language: "swift"
+            ),
+            makeChunk(
+                id: "meta-2",
+                docComment: "Second function doc",
+                signature: "func second()",
+                breadcrumb: "Class > second",
+                language: "swift"
+            ),
+        ]
+
+        try await store.insertBatch(chunks)
+
+        let retrieved1 = try await store.get(id: "meta-1")
+        let retrieved2 = try await store.get(id: "meta-2")
+
+        #expect(retrieved1?.docComment == "First function doc")
+        #expect(retrieved1?.breadcrumb == "Class > first")
+        #expect(retrieved2?.docComment == "Second function doc")
+        #expect(retrieved2?.breadcrumb == "Class > second")
+    }
+
+    @Test("Update preserves rich metadata")
+    func updatePreservesRichMetadata() async throws {
+        let store = try GRDBChunkStore()
+        let original = makeChunk(
+            id: "update-meta-1",
+            docComment: "Original doc",
+            signature: "func original()"
+        )
+        try await store.insert(original)
+
+        let updated = CodeChunk(
+            id: "update-meta-1",
+            path: original.path,
+            content: "func updated() {}",
+            startLine: original.startLine,
+            endLine: original.endLine,
+            kind: original.kind,
+            symbols: ["updated"],
+            references: [],
+            fileHash: original.fileHash,
+            docComment: "Updated doc comment",
+            signature: "func updated()",
+            breadcrumb: "NewClass > updated"
+        )
+
+        try await store.update(updated)
+        let retrieved = try await store.get(id: "update-meta-1")
+
+        #expect(retrieved?.docComment == "Updated doc comment")
+        #expect(retrieved?.signature == "func updated()")
+        #expect(retrieved?.breadcrumb == "NewClass > updated")
+    }
+
     // MARK: - FTS Search
 
     @Test("FTS search finds matching content")
@@ -147,6 +270,28 @@ struct GRDBChunkStoreTests {
         let results = try await store.searchFTS(query: "nonexistent", limit: 10)
 
         #expect(results.isEmpty)
+    }
+
+    @Test("FTS search finds matching docComment")
+    func fTSSearchDocComment() async throws {
+        let store = try GRDBChunkStore()
+        try await store.insertBatch([
+            makeChunk(
+                id: "doc-search-1",
+                content: "func processData() { }",
+                docComment: "Authenticates the user with OAuth2 credentials"
+            ),
+            makeChunk(
+                id: "doc-search-2",
+                content: "func validateToken() { }",
+                docComment: "Validates a JWT token"
+            ),
+        ])
+
+        let results = try await store.searchFTS(query: "OAuth2", limit: 10)
+
+        #expect(results.count >= 1)
+        #expect(results[0].chunk.id == "doc-search-1")
     }
 
     // MARK: - File Hash Tracking
@@ -607,7 +752,11 @@ private func makeChunk(
     kind: ChunkKind = .function,
     symbols: [String] = ["testFunction"],
     references: [String] = [],
-    fileHash: String = "testhash123"
+    fileHash: String = "testhash123",
+    docComment: String? = nil,
+    signature: String? = nil,
+    breadcrumb: String? = nil,
+    language: String = "swift"
 ) -> CodeChunk {
     CodeChunk(
         id: id,
@@ -618,6 +767,10 @@ private func makeChunk(
         kind: kind,
         symbols: symbols,
         references: references,
-        fileHash: fileHash
+        fileHash: fileHash,
+        docComment: docComment,
+        signature: signature,
+        breadcrumb: breadcrumb,
+        language: language
     )
 }

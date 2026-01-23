@@ -342,7 +342,20 @@ struct SearchCommand: AsyncParsableCommand {
                 "symbols": result.chunk.symbols,
                 "score": Double(result.score),
                 "content": result.chunk.content,
+                "tokenCount": result.chunk.tokenCount,
+                "language": result.chunk.language,
             ]
+
+            // Rich metadata fields
+            if let docComment = result.chunk.docComment {
+                item["docComment"] = docComment
+            }
+            if let signature = result.chunk.signature {
+                item["signature"] = signature
+            }
+            if let breadcrumb = result.chunk.breadcrumb {
+                item["breadcrumb"] = breadcrumb
+            }
 
             if let bm25Score = result.bm25Score {
                 item["bm25Score"] = Double(bm25Score)
@@ -402,6 +415,16 @@ struct SearchCommand: AsyncParsableCommand {
                 print("    Symbols: \(result.chunk.symbols.joined(separator: ", "))")
             }
 
+            // Show breadcrumb if available
+            if let breadcrumb = result.chunk.breadcrumb {
+                print("    Location: \(breadcrumb)")
+            }
+
+            // Show signature if available
+            if let signature = result.chunk.signature {
+                print("    Signature: \(signature)")
+            }
+
             // Show relevance percentage as primary metric
             print("    Relevance: \(result.relevancePercent)%", terminator: "")
 
@@ -410,6 +433,13 @@ struct SearchCommand: AsyncParsableCommand {
                 print(" (keyword rank #\(bm25Rank))")
             } else {
                 print("")
+            }
+
+            // Show doc comment if available (truncated)
+            if let docComment = result.chunk.docComment {
+                let truncated = docComment.prefix(100)
+                let suffix = docComment.count > 100 ? "..." : ""
+                print("    Doc: \(truncated)\(suffix)")
             }
 
             // Show code preview (first 5 lines)
@@ -442,8 +472,8 @@ struct SearchCommand: AsyncParsableCommand {
             return
         }
 
-        // Tabular results: rank, relevance%, path, lines, kind, symbols
-        output += "results[\(results.count)]{r,rel,p,l,k,s}:\n"
+        // Tabular results with rich metadata: rank, relevance%, path, lines, kind, symbols, lang, tokens
+        output += "results[\(results.count)]{r,rel,p,l,k,s,lang,tok}:\n"
 
         for (index, result) in results.enumerated() {
             let rank = index + 1
@@ -454,8 +484,38 @@ struct SearchCommand: AsyncParsableCommand {
             let symbols = result.chunk.symbols.isEmpty
                 ? "[]"
                 : "[\"\(result.chunk.symbols.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+            let lang = result.chunk.language
+            let tokens = result.chunk.tokenCount
 
-            output += "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),\"\(kind)\",\(symbols)\n"
+            let row = "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),"
+                + "\"\(kind)\",\(symbols),\"\(lang)\",\(tokens)"
+            output += row + "\n"
+        }
+
+        // Metadata section for signatures and breadcrumbs (compact)
+        let hasMetadata = results.contains { $0.chunk.signature != nil || $0.chunk.breadcrumb != nil }
+        if hasMetadata {
+            output += "\nmeta[\(results.count)]{sig,bc}:\n"
+            for result in results {
+                let sig = result.chunk.signature.map { "\"\(escapeString($0))\"" } ?? "~"
+                let bc = result.chunk.breadcrumb.map { "\"\(escapeString($0))\"" } ?? "~"
+                output += "  \(sig),\(bc)\n"
+            }
+        }
+
+        // Doc comments section (compact, truncated)
+        let hasDocComments = results.contains { $0.chunk.docComment != nil }
+        if hasDocComments {
+            output += "\ndocs[\(results.count)]:\n"
+            for result in results {
+                if let doc = result.chunk.docComment {
+                    let truncated = String(doc.prefix(150)).replacingOccurrences(of: "\n", with: " ")
+                    let suffix = doc.count > 150 ? "..." : ""
+                    output += "  \"\(escapeString(truncated))\(suffix)\"\n"
+                } else {
+                    output += "  ~\n"
+                }
+            }
         }
 
         output += "\ncode[\(results.count)]:\n"

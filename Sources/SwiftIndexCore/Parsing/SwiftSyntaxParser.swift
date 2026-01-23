@@ -378,6 +378,9 @@ private final class DeclarationVisitor: SyntaxVisitor {
         // Build qualified name with parent context
         let qualifiedName = buildQualifiedName(name)
 
+        // Build breadcrumb for hierarchy context
+        let breadcrumb = buildBreadcrumb(name)
+
         // Generate unique chunk ID
         let chunkId = generateChunkId(
             path: path,
@@ -401,10 +404,22 @@ private final class DeclarationVisitor: SyntaxVisitor {
             kind: kind,
             symbols: symbols,
             references: extractReferences(from: node),
-            fileHash: fileHash
+            fileHash: fileHash,
+            docComment: docComment,
+            signature: signature,
+            breadcrumb: breadcrumb
         )
 
         chunks.append(chunk)
+    }
+
+    // MARK: - Breadcrumb Building
+
+    private func buildBreadcrumb(_ name: String) -> String? {
+        if typeStack.isEmpty {
+            return nil
+        }
+        return (typeStack + [name]).joined(separator: " > ")
     }
 
     // MARK: - Source Text Extraction

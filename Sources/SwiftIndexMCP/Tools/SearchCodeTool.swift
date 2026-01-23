@@ -155,8 +155,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             return output
         }
 
-        // Tabular results: rank, relevance%, path, lines, kind, symbols
-        output += "results[\(results.count)]{r,rel,p,l,k,s}:\n"
+        // Tabular results with rich metadata: rank, relevance%, path, lines, kind, symbols, lang, tokens
+        output += "results[\(results.count)]{r,rel,p,l,k,s,lang,tok}:\n"
 
         for (index, result) in results.enumerated() {
             let rank = index + 1
@@ -167,8 +167,38 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             let symbols = result.chunk.symbols.isEmpty
                 ? "[]"
                 : "[\"\(result.chunk.symbols.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+            let lang = result.chunk.language
+            let tokens = result.chunk.tokenCount
 
-            output += "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),\"\(kind)\",\(symbols)\n"
+            let row = "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),"
+                + "\"\(kind)\",\(symbols),\"\(lang)\",\(tokens)"
+            output += row + "\n"
+        }
+
+        // Metadata section for signatures and breadcrumbs (compact)
+        let hasMetadata = results.contains { $0.chunk.signature != nil || $0.chunk.breadcrumb != nil }
+        if hasMetadata {
+            output += "\nmeta[\(results.count)]{sig,bc}:\n"
+            for result in results {
+                let sig = result.chunk.signature.map { "\"\(escapeString($0))\"" } ?? "~"
+                let bc = result.chunk.breadcrumb.map { "\"\(escapeString($0))\"" } ?? "~"
+                output += "  \(sig),\(bc)\n"
+            }
+        }
+
+        // Doc comments section (compact, truncated)
+        let hasDocComments = results.contains { $0.chunk.docComment != nil }
+        if hasDocComments {
+            output += "\ndocs[\(results.count)]:\n"
+            for result in results {
+                if let doc = result.chunk.docComment {
+                    let truncated = String(doc.prefix(150)).replacingOccurrences(of: "\n", with: " ")
+                    let suffix = doc.count > 150 ? "..." : ""
+                    output += "  \"\(escapeString(truncated))\(suffix)\"\n"
+                } else {
+                    output += "  ~\n"
+                }
+            }
         }
 
         output += "\ncode[\(results.count)]:\n"
@@ -215,11 +245,28 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                 output += "    Symbols: \(result.chunk.symbols.joined(separator: ", "))\n"
             }
 
+            // Show breadcrumb if available
+            if let breadcrumb = result.chunk.breadcrumb {
+                output += "    Location: \(breadcrumb)\n"
+            }
+
+            // Show signature if available
+            if let signature = result.chunk.signature {
+                output += "    Signature: \(signature)\n"
+            }
+
             output += "    Relevance: \(result.relevancePercent)%"
             if let bm25Rank = result.bm25Rank {
                 output += " (keyword rank #\(bm25Rank))"
             }
             output += "\n"
+
+            // Show doc comment if available (truncated)
+            if let docComment = result.chunk.docComment {
+                let truncated = String(docComment.prefix(100))
+                let suffix = docComment.count > 100 ? "..." : ""
+                output += "    Doc: \(truncated)\(suffix)\n"
+            }
 
             // Show code preview (first 5 lines)
             let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
@@ -249,7 +296,20 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                 "symbols": result.chunk.symbols,
                 "relevance_percent": result.relevancePercent,
                 "content": result.chunk.content,
+                "token_count": result.chunk.tokenCount,
+                "language": result.chunk.language,
             ]
+
+            // Rich metadata fields
+            if let docComment = result.chunk.docComment {
+                item["doc_comment"] = docComment
+            }
+            if let signature = result.chunk.signature {
+                item["signature"] = signature
+            }
+            if let breadcrumb = result.chunk.breadcrumb {
+                item["breadcrumb"] = breadcrumb
+            }
 
             if let bm25Score = result.bm25Score {
                 item["bm25_score"] = Double(bm25Score)

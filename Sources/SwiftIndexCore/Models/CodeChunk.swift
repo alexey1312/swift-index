@@ -38,6 +38,23 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     /// Timestamp when this chunk was created.
     public let createdAt: Date
 
+    // MARK: - Rich Metadata Fields
+
+    /// Documentation comment extracted from the source (/// or /** */).
+    public let docComment: String?
+
+    /// Full declaration signature (e.g., "func authenticate(user: String) -> Bool").
+    public let signature: String?
+
+    /// Hierarchy path showing nesting context (e.g., "AuthManager > authenticate").
+    public let breadcrumb: String?
+
+    /// Approximate token count for context window estimation (content.count / 4).
+    public let tokenCount: Int
+
+    /// Programming language based on file extension.
+    public let language: String
+
     public init(
         id: String = UUID().uuidString,
         path: String,
@@ -48,7 +65,12 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         symbols: [String] = [],
         references: [String] = [],
         fileHash: String,
-        createdAt: Date = Date()
+        createdAt: Date = Date(),
+        docComment: String? = nil,
+        signature: String? = nil,
+        breadcrumb: String? = nil,
+        tokenCount: Int? = nil,
+        language: String? = nil
     ) {
         self.id = id
         self.path = path
@@ -60,6 +82,27 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         self.references = references
         self.fileHash = fileHash
         self.createdAt = createdAt
+        self.docComment = docComment
+        self.signature = signature
+        self.breadcrumb = breadcrumb
+        self.tokenCount = tokenCount ?? (content.count / 4)
+        self.language = language ?? CodeChunk.detectLanguage(from: path)
+    }
+
+    /// Detect programming language from file extension.
+    private static func detectLanguage(from path: String) -> String {
+        let ext = (path as NSString).pathExtension.lowercased()
+        switch ext {
+        case "swift": return "swift"
+        case "m", "mm": return "objective-c"
+        case "h": return "c-header"
+        case "c": return "c"
+        case "cpp", "cc", "cxx", "hpp": return "cpp"
+        case "json": return "json"
+        case "yaml", "yml": return "yaml"
+        case "md", "markdown": return "markdown"
+        default: return "unknown"
+        }
     }
 }
 
