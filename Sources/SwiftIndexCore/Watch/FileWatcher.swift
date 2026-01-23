@@ -102,11 +102,11 @@ public actor FileWatcher {
     /// Starts watching and returns an async stream of events.
     ///
     /// - Returns: An async stream of file system events.
-    public func start() -> AsyncStream<Event> {
+    public nonisolated func start() -> AsyncStream<Event> {
         AsyncStream<Event> { continuation in
             Task {
-                self.setupContinuation(continuation)
-                self.startWatching()
+                await self.setupContinuation(continuation)
+                await self.startWatching()
             }
         }
     }
@@ -160,18 +160,23 @@ public actor FileWatcher {
     private func startDispatchSourceWatcher() {
         // Create FSEventStream callback context
         let callback: FSEventStreamCallback = { _, contextInfo, numEvents, eventPaths, eventFlags, _ in
-            guard let contextInfo, let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String] else {
+            guard let contextInfo,
+                  let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String]
+            else {
                 return
             }
 
-            let watcher = Unmanaged<FileWatcherContext>.fromOpaque(contextInfo).takeUnretainedValue()
+            let context = Unmanaged<FileWatcherContext>.fromOpaque(contextInfo).takeUnretainedValue()
+
+            // Check if watcher is still alive
+            guard let watcher = context.watcher else { return }
 
             for i in 0 ..< numEvents {
                 let path = paths[i]
                 let flags = eventFlags[i]
 
-                Task {
-                    await watcher.watcher.handleEvent(path: path, flags: flags)
+                Task { [weak watcher] in
+                    await watcher?.handleEvent(path: path, flags: flags)
                 }
             }
         }
@@ -180,11 +185,16 @@ public actor FileWatcher {
         let context = FileWatcherContext(watcher: self)
         let contextPtr = Unmanaged.passRetained(context).toOpaque()
 
+        let releaseCallback: CFAllocatorReleaseCallBack = { ptr in
+            guard let ptr else { return }
+            Unmanaged<FileWatcherContext>.fromOpaque(ptr).release()
+        }
+
         var streamContext = FSEventStreamContext(
             version: 0,
             info: contextPtr,
             retain: nil,
-            release: nil,
+            release: releaseCallback,
             copyDescription: nil
         )
 
@@ -285,7 +295,7 @@ public actor FileWatcher {
 
 /// Helper class to bridge Swift actor with C callback.
 private final class FileWatcherContext: @unchecked Sendable {
-    let watcher: FileWatcher
+    weak var watcher: FileWatcher?
 
     init(watcher: FileWatcher) {
         self.watcher = watcher

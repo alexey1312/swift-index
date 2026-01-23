@@ -2,6 +2,7 @@
 
 import Foundation
 import Logging
+import OrderedCollections
 import SwiftIndexCore
 import YYJSON
 
@@ -19,7 +20,7 @@ public actor MCPServer {
     private var clientInfo: MCPClientInfo?
 
     /// Registered tools.
-    private var tools: [String: any MCPToolHandler] = [:]
+    private var tools: OrderedDictionary<String, any MCPToolHandler> = [:]
 
     /// Server information.
     public static let serverInfo = MCPServerInfo(
@@ -254,6 +255,10 @@ public actor MCPServer {
 
     private func createErrorResponse(id: RequestID?, error: JSONRPCError) throws -> JSONRPCResponse {
         JSONRPCResponse(id: id, error: error)
+    }
+
+    func toolDefinitionsForTesting() -> [MCPTool] {
+        tools.values.map(\.definition)
     }
 }
 

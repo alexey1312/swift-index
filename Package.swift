@@ -51,6 +51,9 @@ let package = Package(
         // Async utilities
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.0"),
 
+        // Collections
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
+
         // Crypto (for file hashing)
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
 
@@ -109,6 +112,7 @@ let package = Package(
             dependencies: [
                 "SwiftIndexCore",
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "OrderedCollections", package: "swift-collections"),
                 .product(name: "ToonFormat", package: "toon-swift"),
             ],
             path: "Sources/SwiftIndexMCP"
