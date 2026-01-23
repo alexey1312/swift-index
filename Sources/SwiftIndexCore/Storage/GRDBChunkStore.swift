@@ -663,9 +663,9 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         startLine = chunk.startLine
         endLine = chunk.endLine
         kind = chunk.kind.rawValue
-        symbols = (try? JSONEncoder().encode(chunk.symbols))
+        symbols = (try? JSONCodec.makeEncoder().encode(chunk.symbols))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        references = (try? JSONEncoder().encode(chunk.references))
+        references = (try? JSONCodec.makeEncoder().encode(chunk.references))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
         fileHash = chunk.fileHash
         createdAt = chunk.createdAt
@@ -703,12 +703,12 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             throw ChunkStoreError.invalidKind(kind)
         }
 
-        let symbolsArray: [String] = (try? JSONDecoder().decode(
+        let symbolsArray: [String] = (try? JSONCodec.makeDecoder().decode(
             [String].self,
             from: Data(symbols.utf8)
         )) ?? []
 
-        let referencesArray: [String] = (try? JSONDecoder().decode(
+        let referencesArray: [String] = (try? JSONCodec.makeDecoder().decode(
             [String].self,
             from: Data(references.utf8)
         )) ?? []

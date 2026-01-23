@@ -1,5 +1,5 @@
 {
-  "originHash" : "a3b2d9c7681d7068c547ca63f1ab85de24c523e07e2b72cf9f29b0e87f79eb4c",
+  "originHash" : "9fca60d6c75549fc990d28ecd5b4aaa374fef7da41b5919bbb08fa0a1da34685",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -161,6 +161,15 @@
       "state" : {
         "revision" : "08ef81eb8620617b55b08868126707ad72bf754f",
         "version" : "0.25.0"
+      }
+    },
+    {
+      "identity" : "swift-yyjson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/mattt/swift-yyjson.git",
+      "state" : {
+        "revision" : "04748af87a40eba45b52b11a8a9834103725bfe3",
+        "version" : "0.3.0"
       }
     },
     {

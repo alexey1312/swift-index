@@ -3,6 +3,7 @@
 import ArgumentParser
 import Foundation
 import Logging
+import SwiftIndexCore
 
 /// Command to install SwiftIndex as an MCP server for Claude Code.
 ///
@@ -102,11 +103,8 @@ struct InstallClaudeCodeCommand: ParsableCommand {
             print("")
             print("Would add MCP server configuration:")
             let fullConfig: [String: Any] = ["mcpServers": ["swiftindex": mcpServerConfig]]
-            if let jsonData = try? JSONSerialization.data(
-                withJSONObject: fullConfig,
-                options: [.prettyPrinted, .sortedKeys]
-            ),
-                let jsonString = String(data: jsonData, encoding: .utf8)
+            if let jsonData = try? JSONCodec.serialize(fullConfig, options: [.prettyPrinted, .sortedKeys]),
+               let jsonString = String(data: jsonData, encoding: .utf8)
             {
                 print(jsonString)
             }
@@ -121,7 +119,7 @@ struct InstallClaudeCodeCommand: ParsableCommand {
         if fileManager.fileExists(atPath: configPath) {
             logger.debug("Reading existing config")
             if let data = fileManager.contents(atPath: configPath),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+               let json = try? JSONCodec.deserialize(data) as? [String: Any]
             {
                 existingConfig = json
             }
@@ -146,10 +144,7 @@ struct InstallClaudeCodeCommand: ParsableCommand {
 
         // Write updated config
         logger.info("Writing updated config")
-        let jsonData = try JSONSerialization.data(
-            withJSONObject: existingConfig,
-            options: [.prettyPrinted, .sortedKeys]
-        )
+        let jsonData = try JSONCodec.serialize(existingConfig, options: [.prettyPrinted, .sortedKeys])
 
         try jsonData.write(to: URL(fileURLWithPath: configPath))
 

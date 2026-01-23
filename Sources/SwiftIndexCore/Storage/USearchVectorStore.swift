@@ -191,9 +191,7 @@ public actor USearchVectorStore: VectorStore {
             nextKey: nextKey
         )
 
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .prettyPrinted
-        let data = try encoder.encode(mapping)
+        let data = try JSONCodec.encodePretty(mapping)
         try data.write(to: URL(fileURLWithPath: mappingPath))
     }
 
@@ -214,7 +212,7 @@ public actor USearchVectorStore: VectorStore {
 
         // Load ID mappings
         let data = try Data(contentsOf: URL(fileURLWithPath: mappingPath))
-        let mapping = try JSONDecoder().decode(VectorStoreMapping.self, from: data)
+        let mapping = try JSONCodec.makeDecoder().decode(VectorStoreMapping.self, from: data)
 
         idToKey = mapping.idToKey
         keyToId = mapping.keyToId.reduce(into: [:]) {

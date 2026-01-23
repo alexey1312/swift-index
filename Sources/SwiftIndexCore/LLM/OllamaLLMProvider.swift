@@ -112,7 +112,7 @@ public struct OllamaLLMProvider: LLMProvider, Sendable {
             stream: false
         )
 
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try JSONCodec.makeEncoder().encode(payload)
 
         // Make request
         let (data, response) = try await session.data(for: request)
@@ -131,7 +131,7 @@ public struct OllamaLLMProvider: LLMProvider, Sendable {
         }
 
         // Parse response
-        let chatResponse = try JSONDecoder().decode(ChatResponse.self, from: data)
+        let chatResponse = try JSONCodec.makeDecoder().decode(ChatResponse.self, from: data)
         return chatResponse.message.content
     }
 }

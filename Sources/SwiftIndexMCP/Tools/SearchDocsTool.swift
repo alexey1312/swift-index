@@ -243,11 +243,8 @@ public struct SearchDocsTool: MCPToolHandler, Sendable {
     }
 
     private func formatJSON(_ dict: [String: Any]) -> String {
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: dict,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let string = String(data: data, encoding: .utf8)
+        guard let data = try? JSONCodec.serialize(dict, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
         else {
             return "{}"
         }

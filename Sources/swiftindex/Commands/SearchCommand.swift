@@ -571,11 +571,8 @@ struct SearchCommand: AsyncParsableCommand {
             ] }
         }
 
-        if let jsonData = try? JSONSerialization.data(
-            withJSONObject: output,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let jsonString = String(data: jsonData, encoding: .utf8)
+        if let jsonData = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+           let jsonString = String(data: jsonData, encoding: .utf8)
         {
             print(jsonString)
         }

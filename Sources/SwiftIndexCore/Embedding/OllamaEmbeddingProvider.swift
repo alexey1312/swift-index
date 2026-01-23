@@ -120,7 +120,7 @@ public struct OllamaEmbeddingProvider: EmbeddingProvider, Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let payload = EmbeddingRequest(model: modelName, prompt: text)
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try JSONCodec.makeEncoder().encode(payload)
 
         // Make request
         let (data, response) = try await session.data(for: request)
@@ -136,7 +136,7 @@ public struct OllamaEmbeddingProvider: EmbeddingProvider, Sendable {
         }
 
         // Parse response
-        let embeddingResponse = try JSONDecoder().decode(EmbeddingResponse.self, from: data)
+        let embeddingResponse = try JSONCodec.makeDecoder().decode(EmbeddingResponse.self, from: data)
         return embeddingResponse.embedding.map { Float($0) }
     }
 }

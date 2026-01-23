@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 
 import PackageDescription
 
@@ -53,6 +53,13 @@ let package = Package(
 
         // Crypto (for file hashing)
         .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+
+        // JSON codec (faster than Foundation, RFC 8259 strict mode)
+        .package(
+            url: "https://github.com/mattt/swift-yyjson.git",
+            from: "0.3.0",
+            traits: ["strictStandardJSON"]
+        ),
     ],
     targets: [
         // MARK: - Core Library
@@ -88,6 +95,9 @@ let package = Package(
                 // Utilities
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
+
+                // JSON codec
+                .product(name: "YYJSON", package: "swift-yyjson"),
             ],
             path: "Sources/SwiftIndexCore"
         ),

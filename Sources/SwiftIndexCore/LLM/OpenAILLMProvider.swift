@@ -118,7 +118,7 @@ public struct OpenAILLMProvider: LLMProvider, Sendable {
             messages: openAIMessages
         )
 
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try JSONCodec.makeEncoder().encode(payload)
 
         // Make request
         let (data, response) = try await session.data(for: request)
@@ -147,7 +147,7 @@ public struct OpenAILLMProvider: LLMProvider, Sendable {
         }
 
         // Parse response
-        let chatResponse = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        let chatResponse = try JSONCodec.makeDecoder().decode(ChatCompletionResponse.self, from: data)
 
         guard let choice = chatResponse.choices.first else {
             throw LLMError.unknown("No choices in response")
@@ -167,7 +167,7 @@ public struct OpenAILLMProvider: LLMProvider, Sendable {
             }
         }
 
-        return try? JSONDecoder().decode(ErrorResponse.self, from: data).error.message
+        return try? JSONCodec.makeDecoder().decode(ErrorResponse.self, from: data).error.message
     }
 }
 
