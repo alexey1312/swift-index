@@ -112,7 +112,7 @@ public actor IncrementalIndexer {
         watcher = fileWatcher
 
         // Process events
-        for await event in await fileWatcher.start() {
+        for await event in fileWatcher.start() {
             do {
                 try await handleEvent(event)
             } catch {

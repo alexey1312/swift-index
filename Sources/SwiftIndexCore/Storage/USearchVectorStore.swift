@@ -134,27 +134,43 @@ public actor USearchVectorStore: VectorStore {
         let key = nextKey
         nextKey += 1
 
-        do {
-            try index.add(key: key, vector: vector)
-        } catch let usearchError as USearchError {
-            if case .reservationError = usearchError {
-                // Capacity exhausted - expand and retry
-                try expandCapacity()
+        // Retry loop for handling burst insertions during capacity expansion
+        var retries = 0
+        let maxRetries = 3
+
+        while true {
+            do {
                 try index.add(key: key, vector: vector)
-            } else {
+                break // Success - exit retry loop
+            } catch let usearchError as USearchError {
+                if case .reservationError = usearchError {
+                    // Capacity exhausted - expand and retry
+                    retries += 1
+                    if retries > maxRetries {
+                        logger.error("Vector index capacity exhausted after retries", metadata: [
+                            "retries": "\(retries)",
+                            "id": "\(id)",
+                        ])
+                        throw VectorStoreError.capacityExhausted(retries: retries)
+                    }
+                    logger.debug("Expanding capacity (retry \(retries)/\(maxRetries))")
+                    try expandCapacity()
+                } else {
+                    logger.warning("USearch add failed", metadata: [
+                        "error": "\(usearchError)",
+                        "id": "\(id)",
+                    ])
+                    throw usearchError
+                }
+            } catch {
                 logger.warning("USearch add failed", metadata: [
-                    "error": "\(usearchError)",
+                    "error": "\(error)",
                     "id": "\(id)",
                 ])
-                throw usearchError
+                throw error
             }
-        } catch {
-            logger.warning("USearch add failed", metadata: [
-                "error": "\(error)",
-                "id": "\(id)",
-            ])
-            throw error
         }
+
         idToKey[id] = key
         keyToId[key] = id
     }
@@ -372,6 +388,7 @@ public enum VectorStoreError: Error, Sendable {
     case noPersistencePath
     case saveFailed(String)
     case loadFailed(String)
+    case capacityExhausted(retries: Int)
 }
 
 extension VectorStoreError: LocalizedError {
@@ -389,6 +406,8 @@ extension VectorStoreError: LocalizedError {
             "Failed to save vector index: \(message)"
         case let .loadFailed(message):
             "Failed to load vector index: \(message)"
+        case let .capacityExhausted(retries):
+            "Vector index capacity exhausted after \(retries) expansion attempts"
         }
     }
 }

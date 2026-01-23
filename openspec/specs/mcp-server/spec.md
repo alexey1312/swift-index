@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-swiftindex-core. Update Purpose after archive.
+Expose SwiftIndex semantic search capabilities to AI assistants via MCP protocol (version 2024-11-05).
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Protocol requirements:
 #### Scenario: Tool discovery
 
 - **WHEN** client sends `tools/list` request
-- **THEN** server returns all 4 tools with schemas
+- **THEN** server returns all 5 tools with schemas
 
 ---
 
@@ -43,10 +43,8 @@ Tool schema:
   "inputSchema": {
     "type": "object",
     "properties": {
-      "path": { "type": "string", "description": "Path to codebase root" },
-      "provider": { "type": "string", "enum": ["mlx", "ollama", "swift-embeddings", "voyage", "openai"] },
-      "include_tests": { "type": "boolean", "default": false },
-      "rebuild": { "type": "boolean", "default": false }
+      "path": { "type": "string", "description": "Absolute path to the directory to index" },
+      "force": { "type": "boolean", "default": false, "description": "Force re-indexing even if files haven't changed" }
     },
     "required": ["path"]
   }
@@ -57,7 +55,7 @@ Tool schema:
 
 - **WHEN** calling index_codebase with path
 - **THEN** project is indexed
-- **AND** returns statistics (files, chunks, duration)
+- **AND** returns statistics (files, chunks, errors)
 
 #### Scenario: Incremental index
 
@@ -65,17 +63,11 @@ Tool schema:
 - **THEN** only changed files are re-indexed
 - **AND** returns incremental stats
 
-#### Scenario: Index with specific provider
+#### Scenario: Force re-index
 
-- **WHEN** calling with `provider: "ollama"`
-- **THEN** uses Ollama for embeddings
-- **AND** ignores default provider chain
-
-#### Scenario: Include test files
-
-- **WHEN** calling with `include_tests: true`
-- **THEN** test files are indexed
-- **AND** searchable alongside production code
+- **WHEN** calling with `force: true`
+- **THEN** all files are re-indexed regardless of change status
+- **AND** index is rebuilt from scratch
 
 ---
 
