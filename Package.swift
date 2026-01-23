@@ -29,7 +29,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/swift-tree-sitter.git", from: "0.9.0"),
 
         // Embeddings
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.3"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", branch: "main"),
         .package(url: "https://github.com/jkrukowski/swift-embeddings.git", from: "0.0.25"),
         .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6"),

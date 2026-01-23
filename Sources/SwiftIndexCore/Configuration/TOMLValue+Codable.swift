@@ -1,7 +1,7 @@
 import Foundation
 import TOML
 
-extension TOMLValue: Codable {
+extension TOMLValue: @retroactive Codable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
 

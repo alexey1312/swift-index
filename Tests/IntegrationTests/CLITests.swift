@@ -12,15 +12,20 @@ struct CLITests {
     // MARK: - Test Fixtures
 
     /// Path to the swiftindex executable.
-    /// In tests, we use swift run or the built executable.
+    /// In tests, we prefer the built executable to avoid `swift run` rebuilds.
     private var executablePath: String {
-        // Get the path to the built executable in DerivedData
         let fm = FileManager.default
+        let root = packageRootPath
 
-        // Try to find the debug build
-        let debugPath = fm.currentDirectoryPath + "/.build/debug/swiftindex"
-        if fm.fileExists(atPath: debugPath) {
-            return debugPath
+        if let buildDir = ProcessInfo.processInfo.environment["SWIFTPM_BUILD_DIR"] {
+            let candidate = (buildDir as NSString).appendingPathComponent("swiftindex")
+            if fm.fileExists(atPath: candidate) {
+                return candidate
+            }
+        }
+
+        if let candidate = findBuiltExecutable(in: (root as NSString).appendingPathComponent(".build")) {
+            return candidate
         }
 
         // Fallback to swift run
@@ -39,6 +44,48 @@ struct CLITests {
     private var tempDir: URL {
         FileManager.default.temporaryDirectory
             .appendingPathComponent("swiftindex-cli-tests-\(UUID().uuidString)")
+    }
+
+    /// Package root path (directory containing Package.swift).
+    private var packageRootPath: String {
+        let fm = FileManager.default
+        var dir = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+
+        while true {
+            let candidate = dir.appendingPathComponent("Package.swift").path
+            if fm.fileExists(atPath: candidate) {
+                return dir.path
+            }
+
+            let parent = dir.deletingLastPathComponent()
+            if parent.path == dir.path {
+                break
+            }
+            dir = parent
+        }
+
+        return fm.currentDirectoryPath
+    }
+
+    private func findBuiltExecutable(in buildRoot: String) -> String? {
+        let fm = FileManager.default
+        let directDebug = (buildRoot as NSString).appendingPathComponent("debug/swiftindex")
+        if fm.fileExists(atPath: directDebug) {
+            return directDebug
+        }
+
+        guard let entries = try? fm.contentsOfDirectory(atPath: buildRoot) else {
+            return nil
+        }
+
+        for entry in entries {
+            let candidate = (buildRoot as NSString).appendingPathComponent("\(entry)/debug/swiftindex")
+            if fm.fileExists(atPath: candidate) {
+                return candidate
+            }
+        }
+
+        return nil
     }
 
     // MARK: - Helper Methods
@@ -97,7 +144,7 @@ struct CLITests {
     }
 
     /// Creates a temporary directory with test fixtures.
-    private func createTestFixtures() throws -> URL {
+    private func createTestFixtures(includeConfig: Bool = true) throws -> URL {
         let dir = tempDir
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
@@ -116,14 +163,16 @@ struct CLITests {
         }
         """.write(to: swiftFile, atomically: true, encoding: .utf8)
 
-        // Ensure CLI uses mock embeddings even if environment is lost in subprocess.
-        let configFile = dir.appendingPathComponent(".swiftindex.toml")
-        try """
-        [embedding]
-        provider = "mock"
-        model = "all-MiniLM-L6-v2"
-        dimension = 384
-        """.write(to: configFile, atomically: true, encoding: .utf8)
+        if includeConfig {
+            // Ensure CLI uses mock embeddings even if environment is lost in subprocess.
+            let configFile = dir.appendingPathComponent(".swiftindex.toml")
+            try """
+            [embedding]
+            provider = "mock"
+            model = "all-MiniLM-L6-v2"
+            dimension = 384
+            """.write(to: configFile, atomically: true, encoding: .utf8)
+        }
 
         return dir
     }
@@ -145,7 +194,7 @@ struct CLITests {
 
     @Test("init command writes MLX defaults with examples")
     func initCommandWritesMLXDefaults() throws {
-        let fixtureDir = try createTestFixtures()
+        let fixtureDir = try createTestFixtures(includeConfig: false)
         defer { cleanupFixtures(fixtureDir) }
 
         let (_, _, exitCode) = try runCommand(
@@ -159,14 +208,14 @@ struct CLITests {
         let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
         let contents = try String(contentsOf: configPath, encoding: .utf8)
         #expect(contents.contains("provider = \"mlx\""))
-        #expect(contents.contains("model = \"mlx-community/bge-small-en-v1.5-4bit\""))
+        #expect(contents.contains("model = \"mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ\""))
         #expect(contents.contains("# provider = \"ollama\""))
         #expect(contents.contains("# provider = \"openai\""))
     }
 
     @Test("init command falls back to Swift Embeddings when MetalToolchain missing")
     func initCommandFallsBackToSwiftEmbeddings() throws {
-        let fixtureDir = try createTestFixtures()
+        let fixtureDir = try createTestFixtures(includeConfig: false)
         defer { cleanupFixtures(fixtureDir) }
 
         let (_, _, exitCode) = try runCommand(
