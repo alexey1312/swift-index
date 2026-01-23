@@ -20,6 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: jdx/mise-action@v3
+        with:
+          experimental: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer
 
@@ -32,8 +37,9 @@ jobs:
 
       - name: Build release binary (Universal)
         run: |
-          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization
-          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization
+          set -euo pipefail
+          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift -f toon
+          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift -f toon
           mkdir -p .build/universal
           lipo -create \
             .build/arm64-apple-macosx/release/swiftindex \

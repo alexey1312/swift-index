@@ -597,14 +597,22 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     // MARK: - Private Helpers
 
     private nonisolated func sanitizeFTSQuery(_ query: String) -> String {
-        // Remove FTS5 special characters that could cause syntax errors
-        let specialChars = CharacterSet(charactersIn: "\"*():-^")
-        let words = query
-            .components(separatedBy: specialChars)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
+        // Remove FTS5 special characters and boolean operators that can cause syntax errors.
+        let separators = CharacterSet(charactersIn: "\"*():-^")
+            .union(.whitespacesAndNewlines)
+        let rawTokens = query
+            .components(separatedBy: separators)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
 
-        // Join with OR for broader matching, wrap in quotes for phrase matching
+        let words = rawTokens.filter { token in
+            let upper = token.uppercased()
+            return upper != "OR" && upper != "AND" && upper != "NOT"
+        }
+
+        if words.isEmpty {
+            return ""
+        }
         if words.count == 1 {
             return "\(words[0])*"
         }

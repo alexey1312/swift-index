@@ -51,7 +51,7 @@ jobs:
         run: swift --version
 
       - name: Build
-        run: swift build
+        run: swift build 2>&1 | xcsift -f toon
 
       - name: Test
-        run: swift test --skip Performance
+        run: swift test --skip Performance 2>&1 | xcsift -f toon
