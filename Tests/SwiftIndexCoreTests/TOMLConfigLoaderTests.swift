@@ -576,4 +576,90 @@ struct TOMLConfigLoaderTests {
             try loader.load()
         }
     }
+
+    // MARK: - Search Enhancement Tests
+
+    @Test("Parses search.enhancement section")
+    func searchEnhancementSection() throws {
+        let contents = """
+        [search]
+        semantic_weight = 0.7
+
+        [search.enhancement]
+        enabled = true
+
+        [search.enhancement.utility]
+        provider = "claude-code-cli"
+        timeout = 30
+
+        [search.enhancement.synthesis]
+        provider = "openai"
+        model = "gpt-4o"
+        timeout = 120
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+        let config = try loader.load()
+
+        #expect(config.semanticWeight == 0.7)
+        #expect(config.searchEnhancement?.enabled == true)
+        #expect(config.searchEnhancement?.utility.provider == "claude-code-cli")
+        #expect(config.searchEnhancement?.utility.timeout == 30)
+        #expect(config.searchEnhancement?.synthesis.provider == "openai")
+        #expect(config.searchEnhancement?.synthesis.model == "gpt-4o")
+        #expect(config.searchEnhancement?.synthesis.timeout == 120)
+    }
+
+    @Test("Parses minimal search.enhancement section")
+    func minimalSearchEnhancementSection() throws {
+        let contents = """
+        [search.enhancement]
+        enabled = false
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+        let config = try loader.load()
+
+        #expect(config.searchEnhancement?.enabled == false)
+    }
+
+    @Test("Rejects unknown keys in search.enhancement")
+    func unknownSearchEnhancementKeysRejected() throws {
+        let contents = """
+        [search.enhancement]
+        enabled = true
+        unknown_key = "value"
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
+    }
+
+    @Test("Rejects unknown keys in search.enhancement.utility")
+    func unknownEnhancementUtilityKeysRejected() throws {
+        let contents = """
+        [search.enhancement.utility]
+        provider = "ollama"
+        invalid_option = true
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
+    }
 }

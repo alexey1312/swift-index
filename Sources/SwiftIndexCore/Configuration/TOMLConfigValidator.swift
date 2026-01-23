@@ -21,11 +21,19 @@ public struct TOMLConfigDiagnostic: Sendable, Equatable {
 public enum TOMLConfigValidator {
     private static let allowedSections: [String: Set<String>] = [
         "embedding": ["provider", "model", "dimension"],
-        "search": ["semantic_weight", "rrf_k", "multi_hop_enabled", "multi_hop_depth", "output_format"],
+        "search": ["semantic_weight", "rrf_k", "multi_hop_enabled", "multi_hop_depth", "output_format", "enhancement"],
         "indexing": ["exclude", "include_extensions", "max_file_size", "chunk_size", "chunk_overlap"],
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
         "logging": ["level"],
+    ]
+
+    /// Allowed keys for nested subsections (e.g., search.enhancement.utility).
+    /// Structure: ["parent.child": ["key1", "key2", ...]]
+    private static let allowedNestedSections: [String: Set<String>] = [
+        "search.enhancement": ["enabled", "utility", "synthesis"],
+        "search.enhancement.utility": ["provider", "model", "timeout"],
+        "search.enhancement.synthesis": ["provider", "model", "timeout"],
     ]
 
     private static let forbiddenSections: Set<String> = ["api_keys"]
@@ -110,7 +118,7 @@ public enum TOMLConfigValidator {
                 continue
             }
 
-            for (key, _) in sectionTable {
+            for (key, value) in sectionTable {
                 if forbiddenKeySuffixes.contains(key) {
                     let path = "\(section).\(key)"
                     diagnostics.append(
@@ -132,6 +140,17 @@ public enum TOMLConfigValidator {
                             keyPath: path
                         )
                     )
+                    continue
+                }
+
+                // Handle nested sections (e.g., search.enhancement)
+                if case let .table(nestedTable) = value {
+                    let nestedPath = "\(section).\(key)"
+                    validateNestedSection(
+                        nestedTable,
+                        path: nestedPath,
+                        diagnostics: &diagnostics
+                    )
                 }
             }
         }
@@ -141,6 +160,43 @@ public enum TOMLConfigValidator {
         }
 
         return diagnostics
+    }
+
+    /// Recursively validates a nested TOML section.
+    ///
+    /// - Parameters:
+    ///   - table: The nested table to validate.
+    ///   - path: The dot-separated path to this section (e.g., "search.enhancement").
+    ///   - diagnostics: Array to append any validation errors to.
+    private static func validateNestedSection(
+        _ table: [String: TOMLValue],
+        path: String,
+        diagnostics: inout [TOMLConfigDiagnostic]
+    ) {
+        guard let allowedKeys = allowedNestedSections[path] else {
+            // If no nested rules defined, skip validation (allow any keys)
+            return
+        }
+
+        for (key, value) in table {
+            if !allowedKeys.contains(key) {
+                let keyPath = "\(path).\(key)"
+                diagnostics.append(
+                    TOMLConfigDiagnostic(
+                        severity: .error,
+                        message: "Unknown configuration key: \(keyPath)",
+                        keyPath: keyPath
+                    )
+                )
+                continue
+            }
+
+            // Recursively validate deeper nested sections
+            if case let .table(nestedTable) = value {
+                let nestedPath = "\(path).\(key)"
+                validateNestedSection(nestedTable, path: nestedPath, diagnostics: &diagnostics)
+            }
+        }
     }
 
     public static func format(contents: String) throws -> String {
