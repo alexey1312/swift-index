@@ -178,13 +178,32 @@ public actor USearchVectorStore: VectorStore {
     public func addBatch(_ items: [(id: String, vector: [Float])]) async throws {
         guard !items.isEmpty else { return }
 
-        // Proactively ensure capacity for new items
-        let currentSize = UInt32(idToKey.count)
-        let requiredCapacity = currentSize + UInt32(items.count)
+        // Validate all dimensions upfront - fail fast before any mutations
+        for (_, vector) in items {
+            guard vector.count == dimension else {
+                throw VectorStoreError.dimensionMismatch(expected: dimension, actual: vector.count)
+            }
+        }
 
+        // Remove existing vectors and prepare keys atomically
+        var keysAndVectors: [(key: USearchKey, vector: [Float], id: String)] = []
+        for (id, vector) in items {
+            if let existingKey = idToKey[id] {
+                _ = try index.remove(key: existingKey)
+                keyToId.removeValue(forKey: existingKey)
+                idToKey.removeValue(forKey: id)
+            }
+            let key = nextKey
+            nextKey += 1
+            keysAndVectors.append((key: key, vector: vector, id: id))
+        }
+
+        // Proactively ensure capacity with buffer - single reserve() call for entire batch
+        // This is critical: multiple reserve() calls can corrupt the HNSW graph
+        let requiredCapacity = UInt32(idToKey.count) + UInt32(keysAndVectors.count)
         if requiredCapacity > trackedCapacity {
             let newCapacity = max(
-                requiredCapacity,
+                requiredCapacity + Self.initialCapacity / 2, // 50% buffer
                 trackedCapacity * Self.capacityGrowthFactor
             )
             logger.info("Pre-allocating vector index capacity for batch", metadata: [
@@ -196,8 +215,12 @@ public actor USearchVectorStore: VectorStore {
             trackedCapacity = newCapacity
         }
 
-        for (id, vector) in items {
-            try await add(id: id, vector: vector)
+        // Insert all vectors atomically - NO individual expandCapacity() calls
+        // Since capacity is pre-allocated, all insertions will succeed without reserve()
+        for (key, vector, id) in keysAndVectors {
+            try index.add(key: key, vector: vector)
+            idToKey[id] = key
+            keyToId[key] = id
         }
     }
 
