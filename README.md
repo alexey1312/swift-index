@@ -395,6 +395,40 @@ MCP tools accept `expand_query` and `synthesize` flags. These require
 - [Search Enhancement Guide](docs/search-enhancement.md) — Detailed LLM provider configuration
 - [Search Features Guide](docs/search-features.md) — Query expansion, synthesis, and search tips
 
+## MCP Server
+
+SwiftIndex implements [Model Context Protocol](https://modelcontextprotocol.io/) version `2024-11-05` for AI assistant integration.
+
+| Property  | Value                           |
+| --------- | ------------------------------- |
+| Transport | stdio (stdin/stdout)            |
+| Format    | JSON-RPC 2.0                    |
+| Tools     | 5 tools for indexing and search |
+
+### Configuration by Client
+
+Different AI assistants require slightly different configuration formats:
+
+| Client      | Config File                           | Type Field                  | Notes                        |
+| ----------- | ------------------------------------- | --------------------------- | ---------------------------- |
+| Claude Code | `.mcp.json` or `~/.claude.json`       | Required: `"type": "stdio"` | Use `--global` for user-wide |
+| Cursor      | `.mcp.json` or `~/.cursor/mcp.json`   | Not needed                  | Standard MCP format          |
+| Codex       | `.mcp.json` or `~/.codex/config.toml` | Not needed                  | TOML format for global       |
+
+### Error Responses
+
+MCP tools return errors in standard format:
+
+```json
+{ "content": [{ "type": "text", "text": "Error message" }], "isError": true }
+```
+
+Common errors:
+
+- `"No index found for path: /path"` — Run `index_codebase` first
+- `"Missing required argument: query"` — Required parameter not provided
+- `"Path does not exist or is not a directory"` — Invalid path
+
 ## MCP Tools
 
 When running as an MCP server, SwiftIndex exposes the following tools:
@@ -494,6 +528,42 @@ Start, stop, or check status of watch mode for a codebase.
   "action": "start",
   "path": "/path/to/project"
 }
+```
+
+### Output Formats
+
+The MCP server supports three output formats via the `format` parameter:
+
+| Format  | Description                         | Use Case                       |
+| ------- | ----------------------------------- | ------------------------------ |
+| `toon`  | Token-optimized (default for MCP)   | AI assistants (40-60% smaller) |
+| `json`  | Verbose JSON with all metadata      | Scripting/automation           |
+| `human` | Readable with relevance percentages | Terminal/interactive           |
+
+**TOON Format Structure** (Token-Optimized Object Notation):
+
+```
+search{q,n}:                    # Query and result count
+  "query string",10
+
+results[n]{r,rel,p,l,k,s}:      # Tabular metadata
+  1,95,"path.swift",[10,25],"function",["symbolName"]
+
+meta[n]{sig,bc}:                # Signatures and breadcrumbs
+  "func example()",~            # ~ = null
+
+docs[n]:                        # Doc comments (truncated)
+  "Description of the code..."
+
+code[n]:                        # Code content (max 15 lines)
+  ---
+  func example() { ... }
+
+synthesis{sum,insights,refs}:   # LLM summary (optional)
+  "Summary of results"
+
+follow_ups[n]{q,cat}:           # Related queries (optional)
+  "related query","deeper"
 ```
 
 ## Embedding Providers

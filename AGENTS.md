@@ -99,6 +99,14 @@ MCP server uses TOON format by default for optimal token efficiency.
 | SwiftIndexMCP  | Library    | MCP server implementation                         |
 | swiftindex     | Executable | CLI entry point                                   |
 
+### MCP Architecture (SwiftIndexMCP)
+
+- `MCPServer` — Actor, JSON-RPC 2.0 over stdio
+- `MCPContext` — Shared actor for lazy resource initialization
+- `MCPToolHandler` — Protocol for tool implementations
+- Protocol version: `2024-11-05`
+- 5 tools: `index_codebase`, `search_code`, `search_docs`, `code_research`, `watch_codebase`
+
 ### Module Structure (SwiftIndexCore)
 
 - `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
