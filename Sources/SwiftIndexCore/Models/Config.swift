@@ -35,6 +35,21 @@ public struct Config: Sendable, Equatable {
     /// Default output format for search results (human, json, toon).
     public var outputFormat: String
 
+    /// Default number of search results to return.
+    public var searchLimit: Int
+
+    /// Whether to expand queries using LLM by default.
+    public var expandQueryByDefault: Bool
+
+    /// Whether to synthesize results using LLM by default.
+    public var synthesizeByDefault: Bool
+
+    /// Default file extensions to filter search results.
+    public var defaultExtensions: [String]
+
+    /// Default path filter pattern (glob syntax).
+    public var defaultPathFilter: String?
+
     // MARK: - Indexing Configuration
 
     /// Glob patterns for files/directories to exclude.
@@ -99,6 +114,11 @@ public struct Config: Sendable, Equatable {
         multiHopEnabled: Bool = false,
         multiHopDepth: Int = 2,
         outputFormat: String = "human",
+        searchLimit: Int = 20,
+        expandQueryByDefault: Bool = false,
+        synthesizeByDefault: Bool = false,
+        defaultExtensions: [String] = [],
+        defaultPathFilter: String? = nil,
         excludePatterns: [String] = Config.defaultExcludePatterns,
         includeExtensions: [String] = [],
         maxFileSize: Int = 1_000_000,
@@ -121,6 +141,11 @@ public struct Config: Sendable, Equatable {
         self.multiHopEnabled = multiHopEnabled
         self.multiHopDepth = multiHopDepth
         self.outputFormat = outputFormat
+        self.searchLimit = searchLimit
+        self.expandQueryByDefault = expandQueryByDefault
+        self.synthesizeByDefault = synthesizeByDefault
+        self.defaultExtensions = defaultExtensions
+        self.defaultPathFilter = defaultPathFilter
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
@@ -255,6 +280,11 @@ public extension Config {
         applyIfPresent(partial.multiHopEnabled, to: \.multiHopEnabled)
         applyIfPresent(partial.multiHopDepth, to: \.multiHopDepth)
         applyIfPresent(partial.outputFormat, to: \.outputFormat)
+        applyIfPresent(partial.searchLimit, to: \.searchLimit)
+        applyIfPresent(partial.expandQueryByDefault, to: \.expandQueryByDefault)
+        applyIfPresent(partial.synthesizeByDefault, to: \.synthesizeByDefault)
+        applyIfPresent(partial.defaultExtensions, to: \.defaultExtensions)
+        applyIfPresent(partial.defaultPathFilter, to: \.defaultPathFilter)
         applyIfPresent(partial.excludePatterns, to: \.excludePatterns)
         applyIfPresent(partial.includeExtensions, to: \.includeExtensions)
         applyIfPresent(partial.maxFileSize, to: \.maxFileSize)

@@ -157,6 +157,11 @@ private struct TOMLConfig: Codable {
         var multi_hop_enabled: Bool?
         var multi_hop_depth: Int?
         var output_format: String?
+        var limit: Int?
+        var expand_query_by_default: Bool?
+        var synthesize_by_default: Bool?
+        var default_extensions: [String]?
+        var default_path_filter: String?
         var enhancement: EnhancementSection?
 
         struct EnhancementSection: Codable {
@@ -212,6 +217,11 @@ private struct TOMLConfig: Codable {
             config.multiHopEnabled = search.multi_hop_enabled
             config.multiHopDepth = search.multi_hop_depth
             config.outputFormat = search.output_format
+            config.searchLimit = search.limit
+            config.expandQueryByDefault = search.expand_query_by_default
+            config.synthesizeByDefault = search.synthesize_by_default
+            config.defaultExtensions = search.default_extensions
+            config.defaultPathFilter = search.default_path_filter
 
             // Search enhancement subsection
             if let enhancement = search.enhancement {

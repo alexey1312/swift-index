@@ -33,6 +33,11 @@ public struct PartialConfig: Sendable, Equatable {
     public var multiHopEnabled: Bool?
     public var multiHopDepth: Int?
     public var outputFormat: String?
+    public var searchLimit: Int?
+    public var expandQueryByDefault: Bool?
+    public var synthesizeByDefault: Bool?
+    public var defaultExtensions: [String]?
+    public var defaultPathFilter: String?
 
     // MARK: - Indexing
 
@@ -77,6 +82,11 @@ public struct PartialConfig: Sendable, Equatable {
         multiHopEnabled: Bool? = nil,
         multiHopDepth: Int? = nil,
         outputFormat: String? = nil,
+        searchLimit: Int? = nil,
+        expandQueryByDefault: Bool? = nil,
+        synthesizeByDefault: Bool? = nil,
+        defaultExtensions: [String]? = nil,
+        defaultPathFilter: String? = nil,
         excludePatterns: [String]? = nil,
         includeExtensions: [String]? = nil,
         maxFileSize: Int? = nil,
@@ -99,6 +109,11 @@ public struct PartialConfig: Sendable, Equatable {
         self.multiHopEnabled = multiHopEnabled
         self.multiHopDepth = multiHopDepth
         self.outputFormat = outputFormat
+        self.searchLimit = searchLimit
+        self.expandQueryByDefault = expandQueryByDefault
+        self.synthesizeByDefault = synthesizeByDefault
+        self.defaultExtensions = defaultExtensions
+        self.defaultPathFilter = defaultPathFilter
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize

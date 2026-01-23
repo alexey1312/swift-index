@@ -59,12 +59,16 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### Search Enhancement Flags
 
-| Flag             | Description                                      |
-| ---------------- | ------------------------------------------------ |
-| `--expand-query` | LLM query expansion for better recall            |
-| `--synthesize`   | LLM result synthesis with summary and follow-ups |
+| Flag                | Description                                      |
+| ------------------- | ------------------------------------------------ |
+| `--expand-query`    | LLM query expansion for better recall            |
+| `--no-expand-query` | Disable query expansion (overrides config)       |
+| `--synthesize`      | LLM result synthesis with summary and follow-ups |
+| `--no-synthesize`   | Disable synthesis (overrides config)             |
 
-Requires `[search.enhancement]` config section. See `docs/search-enhancement.md`.
+Requires `[search.enhancement]` config section. Default behavior can be configured
+via `expand_query_by_default` and `synthesize_by_default` in `[search]` section.
+See `docs/search-enhancement.md`.
 
 ### Indexing Flags
 
@@ -252,11 +256,16 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 
 ### Search Configuration Options
 
-| Option          | Type   | Default | Description                           |
-| --------------- | ------ | ------- | ------------------------------------- |
-| semantic_weight | float  | 0.7     | Weight for semantic vs BM25 (0.0-1.0) |
-| rrf_k           | int    | 60      | RRF fusion constant                   |
-| output_format   | string | "human" | Default format: human, json, or toon  |
+| Option                  | Type     | Default | Description                               |
+| ----------------------- | -------- | ------- | ----------------------------------------- |
+| semantic_weight         | float    | 0.7     | Weight for semantic vs BM25 (0.0-1.0)     |
+| rrf_k                   | int      | 60      | RRF fusion constant                       |
+| output_format           | string   | "human" | Default format: human, json, or toon      |
+| limit                   | int      | 20      | Default number of search results          |
+| expand_query_by_default | bool     | false   | Enable LLM query expansion by default     |
+| synthesize_by_default   | bool     | false   | Enable LLM result synthesis by default    |
+| default_extensions      | [string] | []      | Default extension filter (empty = all)    |
+| default_path_filter     | string   | ""      | Default path filter pattern (glob syntax) |
 
 ### Search Enhancement Config
 

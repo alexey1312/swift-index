@@ -45,9 +45,9 @@ struct SearchCommand: AsyncParsableCommand {
 
     @Option(
         name: .shortAndLong,
-        help: "Maximum number of results to return"
+        help: "Maximum number of results to return (default from config: 20)"
     )
-    var limit: Int = 20
+    var limit: Int?
 
     @Option(
         name: .long,
@@ -105,15 +105,17 @@ struct SearchCommand: AsyncParsableCommand {
 
     @Flag(
         name: .long,
-        help: "Use LLM to expand query with related terms (requires search.enhancement config)"
+        inversion: .prefixedNo,
+        help: "Use LLM to expand query (requires search.enhancement). Default from config."
     )
-    var expandQuery: Bool = false
+    var expandQuery: Bool?
 
     @Flag(
         name: .long,
-        help: "Generate LLM summary and follow-up suggestions (requires search.enhancement config)"
+        inversion: .prefixedNo,
+        help: "Generate LLM summary and follow-ups (requires search.enhancement). Default from config."
     )
-    var synthesize: Bool = false
+    var synthesize: Bool?
 
     // MARK: - Execution
 
@@ -129,8 +131,25 @@ struct SearchCommand: AsyncParsableCommand {
         // Load configuration
         let configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
 
+        // Calculate effective values (CLI overrides config defaults)
+        let effectiveLimit = limit ?? configuration.searchLimit
+        let effectiveExpandQuery = expandQuery ?? configuration.expandQueryByDefault
+        let effectiveSynthesize = synthesize ?? configuration.synthesizeByDefault
+        let effectivePathFilter = pathFilter ?? configuration.defaultPathFilter
+
+        // Calculate effective extension filter
+        let effectiveExtensionFilter: Set<String>? = if let extensions {
+            // CLI provided explicit extensions
+            Set(extensions.split(separator: ",").map { String($0).lowercased() })
+        } else if !configuration.defaultExtensions.isEmpty {
+            // Use config defaults
+            Set(configuration.defaultExtensions.map { $0.lowercased() })
+        } else {
+            nil
+        }
+
         // Validate limit
-        guard limit > 0 else {
+        guard effectiveLimit > 0 else {
             throw ValidationError("Limit must be greater than 0")
         }
 
@@ -140,9 +159,11 @@ struct SearchCommand: AsyncParsableCommand {
         }
 
         logger.debug("Search configuration", metadata: [
-            "limit": "\(limit)",
+            "limit": "\(effectiveLimit)",
             "semanticWeight": "\(semanticWeight)",
             "rrfK": "\(configuration.rrfK)",
+            "expandQuery": "\(effectiveExpandQuery)",
+            "synthesize": "\(effectiveSynthesize)",
         ])
 
         // Determine index path
@@ -187,7 +208,7 @@ struct SearchCommand: AsyncParsableCommand {
         if !json {
             print("Searching: \"\(query)\"")
             print("Index: \(stats.chunkCount) chunks from \(stats.fileCount) files")
-            print("Limit: \(limit)")
+            print("Limit: \(effectiveLimit)")
         }
 
         // Create search engine using stores from index manager
@@ -200,17 +221,12 @@ struct SearchCommand: AsyncParsableCommand {
             rrfK: configuration.rrfK
         )
 
-        // Build search options
-        var extensionFilter: Set<String>?
-        if let extensions {
-            extensionFilter = Set(extensions.split(separator: ",").map { String($0).lowercased() })
-        }
-
+        // Build search options using effective values
         let searchOptions = SearchOptions(
-            limit: limit,
+            limit: effectiveLimit,
             semanticWeight: semanticWeight,
-            pathFilter: pathFilter,
-            extensionFilter: extensionFilter,
+            pathFilter: effectivePathFilter,
+            extensionFilter: effectiveExtensionFilter,
             rrfK: configuration.rrfK,
             multiHop: multiHop,
             multiHopDepth: multiHop ? 2 : 0
@@ -222,21 +238,21 @@ struct SearchCommand: AsyncParsableCommand {
         var followUpGenerator: FollowUpGenerator?
         var expandedQuery: ExpandedQuery?
 
-        if expandQuery || synthesize, configuration.searchEnhancement.enabled {
+        if effectiveExpandQuery || effectiveSynthesize, configuration.searchEnhancement.enabled {
             // Create utility provider for query expansion and follow-ups
-            if expandQuery || synthesize {
+            if effectiveExpandQuery || effectiveSynthesize {
                 do {
                     let utilityProvider = try LLMProviderFactory.createProvider(
                         from: configuration.searchEnhancement.utility,
                         openAIKey: configuration.openAIAPIKey
                     )
-                    if expandQuery {
+                    if effectiveExpandQuery {
                         queryExpander = QueryExpander(provider: utilityProvider)
                         logger.debug(
                             "Query expansion enabled with provider: \(configuration.searchEnhancement.utility.provider)"
                         )
                     }
-                    if synthesize {
+                    if effectiveSynthesize {
                         followUpGenerator = FollowUpGenerator(provider: utilityProvider)
                     }
                 } catch {
@@ -245,7 +261,7 @@ struct SearchCommand: AsyncParsableCommand {
             }
 
             // Create synthesis provider for result summarization
-            if synthesize {
+            if effectiveSynthesize {
                 do {
                     let synthesisProvider = try LLMProviderFactory.createProvider(
                         from: configuration.searchEnhancement.synthesis,
@@ -259,7 +275,7 @@ struct SearchCommand: AsyncParsableCommand {
                     logger.warning("Failed to create synthesis LLM provider: \(error)")
                 }
             }
-        } else if expandQuery || synthesize, !configuration.searchEnhancement.enabled {
+        } else if effectiveExpandQuery || effectiveSynthesize, !configuration.searchEnhancement.enabled {
             logger.warning("LLM features requested but search.enhancement.enabled is false in config")
         }
 
@@ -291,7 +307,7 @@ struct SearchCommand: AsyncParsableCommand {
         var synthesis: Synthesis?
         var followUps: [FollowUpSuggestion]?
 
-        if synthesize, !results.isEmpty {
+        if effectiveSynthesize, !results.isEmpty {
             // Convert results to synthesis inputs
             let synthesisInputs = results.map { result in
                 SynthesisInput(
