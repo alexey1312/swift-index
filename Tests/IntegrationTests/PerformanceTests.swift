@@ -131,7 +131,13 @@ struct PerformanceTests {
         print("Average parse time: \(String(format: "%.2f", elapsed / Double(iterations) * 1000)) ms")
 
         // Ensure reasonable performance (at least 10 files/second in debug builds)
-        #expect(throughput > 10, "Parser should process at least 10 files/second")
+        // Relaxed threshold for CI due to variable runner performance
+        let isCI = {
+            let value = ProcessInfo.processInfo.environment["CI"]?.lowercased()
+            return value == "1" || value == "true" || value == "yes"
+        }()
+        let minimumThroughput = isCI ? 5.0 : 10.0
+        #expect(throughput > minimumThroughput, "Parser should process at least \(minimumThroughput) files/second")
     }
 
     @Test("Parser throughput - large file")
