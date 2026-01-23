@@ -60,6 +60,10 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     /// Used to skip re-embedding unchanged chunks during re-indexing.
     public let contentHash: String
 
+    /// LLM-generated description of the code chunk's purpose and functionality.
+    /// Generated offline during indexing with `--generate-descriptions` flag.
+    public let generatedDescription: String?
+
     public init(
         id: String = UUID().uuidString,
         path: String,
@@ -76,7 +80,8 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         breadcrumb: String? = nil,
         tokenCount: Int? = nil,
         language: String? = nil,
-        contentHash: String? = nil
+        contentHash: String? = nil,
+        generatedDescription: String? = nil
     ) {
         self.id = id
         self.path = path
@@ -94,6 +99,7 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         self.tokenCount = tokenCount ?? (content.count / 4)
         self.language = language ?? CodeChunk.detectLanguage(from: path)
         self.contentHash = contentHash ?? CodeChunk.computeContentHash(content)
+        self.generatedDescription = generatedDescription
     }
 
     /// Compute SHA-256 hash of content for change detection.

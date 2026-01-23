@@ -52,6 +52,12 @@ struct IndexCommand: AsyncParsableCommand {
     )
     var verbose: Bool = false
 
+    @Flag(
+        name: .long,
+        help: "Generate LLM descriptions for code chunks (requires LLM provider)"
+    )
+    var generateDescriptions: Bool = false
+
     // MARK: - Execution
 
     mutating func run() async throws {
@@ -100,12 +106,33 @@ struct IndexCommand: AsyncParsableCommand {
 
         print("Found \(files.count) files to process")
 
+        // Create description generator if requested
+        let descriptionGenerator: DescriptionGenerator? = if generateDescriptions {
+            createDescriptionGenerator(config: configuration, logger: logger)
+        } else {
+            nil
+        }
+
+        if generateDescriptions {
+            if let generator = descriptionGenerator {
+                let available = await generator.isAvailable()
+                if available {
+                    print("Description generation: enabled")
+                } else {
+                    print("Warning: LLM provider not available, descriptions will be skipped")
+                }
+            } else {
+                print("Warning: Could not create description generator")
+            }
+        }
+
         // Index files in parallel
         let stats = AtomicIndexingStats()
         let indexingContext = IndexingContext(
             indexManager: indexManager,
             parser: parser,
             embeddingProvider: embeddingProvider,
+            descriptionGenerator: descriptionGenerator,
             logger: logger
         )
 
@@ -148,6 +175,9 @@ struct IndexCommand: AsyncParsableCommand {
         print("Chunks indexed: \(finalStats.chunksIndexed)")
         if finalStats.chunksReused > 0 {
             print("Chunks reused (no re-embedding): \(finalStats.chunksReused)")
+        }
+        if finalStats.descriptionsGenerated > 0 {
+            print("Descriptions generated: \(finalStats.descriptionsGenerated)")
         }
         print("Total chunks in index: \(statistics.chunkCount)")
         print("Total files in index: \(statistics.fileCount)")
@@ -303,6 +333,7 @@ struct IndexCommand: AsyncParsableCommand {
                     config.stats.incrementFilesProcessed()
                     config.stats.addChunksIndexed(result.chunksIndexed)
                     config.stats.addChunksReused(result.chunksReused)
+                    config.stats.addDescriptionsGenerated(result.descriptionsGenerated)
                     if result.skipped {
                         config.stats.incrementFilesSkipped()
                     }
@@ -444,6 +475,37 @@ struct IndexCommand: AsyncParsableCommand {
         }
     }
 
+    private func createDescriptionGenerator(
+        config: Config,
+        logger: Logger
+    ) -> DescriptionGenerator? {
+        // Use the utility tier provider for description generation (fast)
+        guard config.searchEnhancement.enabled else {
+            // If enhancement is not enabled, try to use a default provider
+            let provider = ClaudeCodeCLIProvider()
+            return DescriptionGenerator(
+                provider: provider,
+                batchSize: 5,
+                timeout: 30
+            )
+        }
+
+        do {
+            let provider = try LLMProviderFactory.createProvider(
+                from: config.searchEnhancement.utility,
+                openAIKey: config.openAIAPIKey
+            )
+            return DescriptionGenerator(
+                provider: provider,
+                batchSize: 5,
+                timeout: config.searchEnhancement.utility.timeout
+            )
+        } catch {
+            logger.warning("Failed to create description generator: \(error)")
+            return nil
+        }
+    }
+
     private func collectFiles(
         at path: String,
         config: Config,
@@ -542,11 +604,45 @@ struct IndexCommand: AsyncParsableCommand {
             return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: false)
         }
 
-        let chunks = parseResult.chunks
+        var chunks = parseResult.chunks
         guard !chunks.isEmpty else {
             // Record file as indexed even if no chunks (to avoid re-processing)
             try await context.indexManager.recordIndexed(fileHash: fileHash, path: path)
             return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: false)
+        }
+
+        // Generate descriptions if enabled
+        var descriptionsGenerated = 0
+        if let generator = context.descriptionGenerator {
+            let descriptions = await generator.generateBatch(for: chunks)
+            if !descriptions.isEmpty {
+                // Create new chunks with descriptions
+                chunks = chunks.map { chunk in
+                    if let description = descriptions[chunk.id] {
+                        return CodeChunk(
+                            id: chunk.id,
+                            path: chunk.path,
+                            content: chunk.content,
+                            startLine: chunk.startLine,
+                            endLine: chunk.endLine,
+                            kind: chunk.kind,
+                            symbols: chunk.symbols,
+                            references: chunk.references,
+                            fileHash: chunk.fileHash,
+                            createdAt: chunk.createdAt,
+                            docComment: chunk.docComment,
+                            signature: chunk.signature,
+                            breadcrumb: chunk.breadcrumb,
+                            tokenCount: chunk.tokenCount,
+                            language: chunk.language,
+                            contentHash: chunk.contentHash,
+                            generatedDescription: description
+                        )
+                    }
+                    return chunk
+                }
+                descriptionsGenerated = descriptions.count
+            }
         }
 
         // Re-index the file with content-hash-based change detection
@@ -565,11 +661,13 @@ struct IndexCommand: AsyncParsableCommand {
             "total": "\(reindexResult.totalChunks)",
             "embedded": "\(reindexResult.embeddedChunks)",
             "reused": "\(reindexResult.reusedChunks)",
+            "descriptions": "\(descriptionsGenerated)",
         ])
 
         return FileIndexResult(
             chunksIndexed: reindexResult.totalChunks,
             chunksReused: reindexResult.reusedChunks,
+            descriptionsGenerated: descriptionsGenerated,
             skipped: false
         )
     }
@@ -589,6 +687,7 @@ private struct IndexingContext: Sendable {
     let indexManager: IndexManager
     let parser: HybridParser
     let embeddingProvider: EmbeddingProviderChain
+    let descriptionGenerator: DescriptionGenerator?
     let logger: Logger
 }
 
@@ -597,6 +696,7 @@ private struct IndexingStats: Sendable {
     var filesSkipped: Int = 0
     var chunksIndexed: Int = 0
     var chunksReused: Int = 0
+    var descriptionsGenerated: Int = 0
     var errors: Int = 0
 }
 
@@ -607,6 +707,7 @@ private final class AtomicIndexingStats: @unchecked Sendable {
     private var _filesSkipped: Int = 0
     private var _chunksIndexed: Int = 0
     private var _chunksReused: Int = 0
+    private var _descriptionsGenerated: Int = 0
     private var _errors: Int = 0
 
     var filesProcessed: Int {
@@ -631,6 +732,12 @@ private final class AtomicIndexingStats: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _chunksReused
+    }
+
+    var descriptionsGenerated: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _descriptionsGenerated
     }
 
     var errors: Int {
@@ -663,6 +770,12 @@ private final class AtomicIndexingStats: @unchecked Sendable {
         lock.unlock()
     }
 
+    func addDescriptionsGenerated(_ count: Int) {
+        lock.lock()
+        _descriptionsGenerated += count
+        lock.unlock()
+    }
+
     func incrementErrors() {
         lock.lock()
         _errors += 1
@@ -677,6 +790,7 @@ private final class AtomicIndexingStats: @unchecked Sendable {
             filesSkipped: _filesSkipped,
             chunksIndexed: _chunksIndexed,
             chunksReused: _chunksReused,
+            descriptionsGenerated: _descriptionsGenerated,
             errors: _errors
         )
     }
@@ -685,5 +799,13 @@ private final class AtomicIndexingStats: @unchecked Sendable {
 private struct FileIndexResult: Sendable {
     let chunksIndexed: Int
     let chunksReused: Int
+    let descriptionsGenerated: Int
     let skipped: Bool
+
+    init(chunksIndexed: Int, chunksReused: Int, descriptionsGenerated: Int = 0, skipped: Bool) {
+        self.chunksIndexed = chunksIndexed
+        self.chunksReused = chunksReused
+        self.descriptionsGenerated = descriptionsGenerated
+        self.skipped = skipped
+    }
 }

@@ -539,6 +539,197 @@ struct FollowUpGeneratorTests {
     }
 }
 
+// MARK: - DescriptionGenerator Tests
+
+@Suite("DescriptionGenerator")
+struct DescriptionGeneratorTests {
+    @Test("Generate description for code chunk")
+    func generateDescription() async throws {
+        let response = "Authenticates users via OAuth2 and stores tokens securely."
+
+        let provider = MockLLMProvider(response: response)
+        let generator = DescriptionGenerator(provider: provider)
+
+        let chunk = CodeChunk(
+            path: "test.swift",
+            content: "func authenticate() { }",
+            startLine: 1,
+            endLine: 3,
+            kind: .function,
+            fileHash: "abc123",
+            docComment: "/// Handles user authentication",
+            signature: "func authenticate() -> Bool",
+            breadcrumb: "AuthManager > authenticate"
+        )
+
+        let description = try await generator.generate(for: chunk)
+        #expect(description.contains("OAuth2") || description.contains("Authenticates"))
+    }
+
+    @Test("Generate batch descriptions")
+    func generateBatch() async throws {
+        let provider = MockLLMProvider(response: "Test description.")
+        let generator = DescriptionGenerator(provider: provider, batchSize: 2)
+
+        let chunks = [
+            CodeChunk(
+                id: "chunk1",
+                path: "test.swift",
+                content: "func test1() {}",
+                startLine: 1,
+                endLine: 1,
+                kind: .function,
+                fileHash: "abc123"
+            ),
+            CodeChunk(
+                id: "chunk2",
+                path: "test.swift",
+                content: "func test2() {}",
+                startLine: 2,
+                endLine: 2,
+                kind: .function,
+                fileHash: "abc123"
+            ),
+            CodeChunk(
+                id: "chunk3",
+                path: "test.swift",
+                content: "func test3() {}",
+                startLine: 3,
+                endLine: 3,
+                kind: .function,
+                fileHash: "abc123"
+            ),
+        ]
+
+        let descriptions = await generator.generateBatch(for: chunks)
+
+        #expect(descriptions.count == 3)
+        #expect(descriptions["chunk1"] != nil)
+        #expect(descriptions["chunk2"] != nil)
+        #expect(descriptions["chunk3"] != nil)
+    }
+
+    @Test("Batch generation handles failures gracefully")
+    func batchHandlesFailures() async throws {
+        let failingProvider = FailingMockProvider(failOnNthCall: 2)
+        let generator = DescriptionGenerator(provider: failingProvider, batchSize: 2)
+
+        let chunks = [
+            CodeChunk(
+                id: "chunk1",
+                path: "test.swift",
+                content: "func test1() {}",
+                startLine: 1,
+                endLine: 1,
+                kind: .function,
+                fileHash: "abc"
+            ),
+            CodeChunk(
+                id: "chunk2",
+                path: "test.swift",
+                content: "func test2() {}",
+                startLine: 2,
+                endLine: 2,
+                kind: .function,
+                fileHash: "abc"
+            ),
+            CodeChunk(
+                id: "chunk3",
+                path: "test.swift",
+                content: "func test3() {}",
+                startLine: 3,
+                endLine: 3,
+                kind: .function,
+                fileHash: "abc"
+            ),
+        ]
+
+        let descriptions = await generator.generateBatch(for: chunks)
+
+        // Should have 2 descriptions (one failed)
+        #expect(descriptions.count == 2)
+    }
+
+    @Test("Response parsing removes common prefixes")
+    func responseParsingPrefixes() async throws {
+        let responses = [
+            "This function authenticates users.",
+            "This code validates input data.",
+            "Description: Handles API requests.",
+        ]
+
+        for response in responses {
+            let provider = MockLLMProvider(response: response)
+            let generator = DescriptionGenerator(provider: provider)
+
+            let chunk = CodeChunk(
+                path: "test.swift",
+                content: "func test() {}",
+                startLine: 1,
+                endLine: 1,
+                kind: .function,
+                fileHash: "abc"
+            )
+
+            let description = try await generator.generate(for: chunk)
+
+            // Description should not start with common prefixes
+            #expect(!description.hasPrefix("This function "))
+            #expect(!description.hasPrefix("This code "))
+            #expect(!description.hasPrefix("Description: "))
+        }
+    }
+
+    @Test("Response parsing ensures period ending")
+    func responseParsingPeriod() async throws {
+        let provider = MockLLMProvider(response: "Validates user credentials")
+        let generator = DescriptionGenerator(provider: provider)
+
+        let chunk = CodeChunk(
+            path: "test.swift",
+            content: "func validate() {}",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            fileHash: "abc"
+        )
+
+        let description = try await generator.generate(for: chunk)
+        #expect(description.hasSuffix("."))
+    }
+
+    @Test("Response parsing truncates long descriptions")
+    func responseParsingTruncation() async throws {
+        let longResponse = String(repeating: "This is a very long description. ", count: 20)
+        let provider = MockLLMProvider(response: longResponse)
+        let generator = DescriptionGenerator(provider: provider)
+
+        let chunk = CodeChunk(
+            path: "test.swift",
+            content: "func test() {}",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            fileHash: "abc"
+        )
+
+        let description = try await generator.generate(for: chunk)
+        #expect(description.count <= 260) // Some tolerance for truncation
+    }
+
+    @Test("Check availability")
+    func checkAvailability() async {
+        let availableProvider = MockLLMProvider(available: true)
+        let unavailableProvider = MockLLMProvider(available: false)
+
+        let availableGenerator = DescriptionGenerator(provider: availableProvider)
+        let unavailableGenerator = DescriptionGenerator(provider: unavailableProvider)
+
+        #expect(await availableGenerator.isAvailable() == true)
+        #expect(await unavailableGenerator.isAvailable() == false)
+    }
+}
+
 // MARK: - Mock LLM Provider
 
 /// Mock LLM provider for testing.
@@ -596,5 +787,33 @@ private final class CountingMockProvider: LLMProvider, @unchecked Sendable {
     ) async throws -> String {
         onCall()
         return "1. test query - rationale"
+    }
+}
+
+/// Mock provider that fails on a specific call number.
+private final class FailingMockProvider: LLMProvider, @unchecked Sendable {
+    let id: String = "failing-mock"
+    let name: String = "Failing Mock Provider"
+    private var callCount = 0
+    private let failOnNthCall: Int
+
+    init(failOnNthCall: Int) {
+        self.failOnNthCall = failOnNthCall
+    }
+
+    func isAvailable() async -> Bool {
+        true
+    }
+
+    func complete(
+        messages: [LLMMessage],
+        model: String?,
+        timeout: TimeInterval
+    ) async throws -> String {
+        callCount += 1
+        if callCount == failOnNthCall {
+            throw LLMError.timeout(seconds: timeout)
+        }
+        return "Test description."
     }
 }

@@ -100,12 +100,12 @@
 - [x] 3.2.7 Add `ReindexResult` struct for tracking reuse statistics
 - [x] 3.2.8 Write change detection tests
 
-### 3.3 LLM Description Generation (Optional - DEFERRED)
+### 3.3 LLM Description Generation
 
-- [ ] 3.3.1 Add `--generate-descriptions` CLI flag
-- [ ] 3.3.2 Implement offline batch generation via MLX
-- [ ] 3.3.3 Store `generatedDescription` in CodeChunk
-- [ ] 3.3.4 Write generation tests
+- [x] 3.3.1 Add `--generate-descriptions` CLI flag
+- [x] 3.3.2 Implement offline batch generation via LLM providers
+- [x] 3.3.3 Store `generatedDescription` in CodeChunk (v5 migration)
+- [x] 3.3.4 Write generation tests
 
 **Gate**: Build + all tests pass ✓
 
@@ -197,8 +197,8 @@
 | ----- | --------- | ----- | ----------- |
 | 1     | COMPLETED | 20/20 | ~15         |
 | 2     | COMPLETED | 18/18 | ~12         |
-| 3     | COMPLETED | 12/16 | ~8          |
+| 3     | COMPLETED | 16/16 | ~12         |
 | 4     | COMPLETED | 27/27 | ~25         |
 | 5     | COMPLETED | 10/10 | 0           |
 
-Note: Phase 3.3 (LLM Description Generation) deferred as optional feature.
+**Total**: 91/91 tasks completed.

@@ -15,7 +15,8 @@ func makeChunk(
     docComment: String? = nil,
     signature: String? = nil,
     breadcrumb: String? = nil,
-    language: String = "swift"
+    language: String = "swift",
+    generatedDescription: String? = nil
 ) -> CodeChunk {
     CodeChunk(
         id: id,
@@ -30,7 +31,8 @@ func makeChunk(
         docComment: docComment,
         signature: signature,
         breadcrumb: breadcrumb,
-        language: language
+        language: language,
+        generatedDescription: generatedDescription
     )
 }
 

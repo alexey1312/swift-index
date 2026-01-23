@@ -144,11 +144,12 @@ timeout = 30
 
 Different operations have different latency characteristics:
 
-| Operation            | Typical Latency | Recommended Timeout |
-| -------------------- | --------------- | ------------------- |
-| Query expansion      | 2-5s            | 30s                 |
-| Follow-up generation | 2-5s            | 30s                 |
-| Result synthesis     | 5-30s           | 120s                |
+| Operation              | Typical Latency | Recommended Timeout |
+| ---------------------- | --------------- | ------------------- |
+| Query expansion        | 2-5s            | 30s                 |
+| Follow-up generation   | 2-5s            | 30s                 |
+| Description generation | 2-5s per chunk  | 30s                 |
+| Result synthesis       | 5-30s           | 120s                |
 
 ## CLI Usage
 
@@ -188,6 +189,22 @@ Use both flags for the most comprehensive results:
 ```bash
 swiftindex search --expand-query --synthesize "error handling"
 ```
+
+## Description Generation
+
+Generate AI descriptions for code chunks during indexing:
+
+```bash
+swiftindex index --generate-descriptions .
+```
+
+This creates human-readable summaries explaining each code chunk's purpose. Descriptions are:
+
+- Stored in the database alongside code chunks
+- Used to improve search relevance
+- Visible in search results (JSON/TOON formats)
+
+**Note:** Description generation uses the **utility tier** LLM provider. For large codebases, consider using a fast provider like `ollama` or `gpt-4o-mini` to avoid long indexing times.
 
 ## MCP Server Behavior
 

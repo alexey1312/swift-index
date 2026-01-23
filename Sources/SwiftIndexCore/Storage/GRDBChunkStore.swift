@@ -71,6 +71,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerRichMetadataMigration(&migrator)
         registerInfoSnippetsMigration(&migrator)
         registerContentHashMigration(&migrator)
+        registerGeneratedDescriptionMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -282,6 +283,19 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
             // Create index for content hash lookups
             try db.create(index: "chunks_content_hash_idx", on: "chunks", columns: ["content_hash"])
+        }
+    }
+
+    private nonisolated func registerGeneratedDescriptionMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 5: LLM-generated descriptions for code chunks
+        migrator.registerMigration("v5_generated_description") { db in
+            // Add generated_description column to chunks table
+            // Nullable - only populated when --generate-descriptions flag is used
+            try db.alter(table: "chunks") { table in
+                table.add(column: "generated_description", .text)
+            }
         }
     }
 
@@ -620,6 +634,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     let tokenCount: Int
     let language: String
     let contentHash: String?
+    let generatedDescription: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -638,6 +653,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case tokenCount = "token_count"
         case language
         case contentHash = "content_hash"
+        case generatedDescription = "generated_description"
     }
 
     init(chunk: CodeChunk) {
@@ -659,6 +675,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         tokenCount = chunk.tokenCount
         language = chunk.language
         contentHash = chunk.contentHash
+        generatedDescription = chunk.generatedDescription
     }
 
     init(row: Row) {
@@ -678,6 +695,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         tokenCount = row["token_count"] ?? 0
         language = row["language"] ?? "unknown"
         contentHash = row["content_hash"]
+        generatedDescription = row["generated_description"]
     }
 
     func toCodeChunk() throws -> CodeChunk {
@@ -711,7 +729,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             breadcrumb: breadcrumb,
             tokenCount: tokenCount,
             language: language,
-            contentHash: contentHash
+            contentHash: contentHash,
+            generatedDescription: generatedDescription
         )
     }
 }

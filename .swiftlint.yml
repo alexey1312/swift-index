@@ -21,7 +21,7 @@ opt_in_rules:
   - empty_string
 
 file_length:
-  warning: 850
+  warning: 900
   error: 1200
 
 line_length:

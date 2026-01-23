@@ -229,6 +229,53 @@ struct GRDBChunkStoreTests {
         #expect(retrieved?.breadcrumb == "NewClass > updated")
     }
 
+    @Test("Store and retrieve chunk with generatedDescription")
+    func storeAndRetrieveGeneratedDescription() async throws {
+        let store = try GRDBChunkStore()
+        let chunk = makeChunk(
+            id: "desc-1",
+            docComment: "/// Authentication handler",
+            signature: "func authenticate()",
+            generatedDescription: "Authenticates users via OAuth2 and stores tokens securely."
+        )
+
+        try await store.insert(chunk)
+        let retrieved = try await store.get(id: "desc-1")
+
+        #expect(retrieved != nil)
+        #expect(retrieved?.generatedDescription == "Authenticates users via OAuth2 and stores tokens securely.")
+        #expect(retrieved?.docComment == "/// Authentication handler")
+    }
+
+    @Test("Batch insert preserves generatedDescription")
+    func batchInsertPreservesGeneratedDescription() async throws {
+        let store = try GRDBChunkStore()
+        let chunks = [
+            makeChunk(
+                id: "gen-1",
+                generatedDescription: "Validates user credentials against the database."
+            ),
+            makeChunk(
+                id: "gen-2",
+                generatedDescription: "Handles network request failures with retry logic."
+            ),
+            makeChunk(
+                id: "gen-3"
+                // No generated description
+            ),
+        ]
+
+        try await store.insertBatch(chunks)
+
+        let retrieved1 = try await store.get(id: "gen-1")
+        let retrieved2 = try await store.get(id: "gen-2")
+        let retrieved3 = try await store.get(id: "gen-3")
+
+        #expect(retrieved1?.generatedDescription == "Validates user credentials against the database.")
+        #expect(retrieved2?.generatedDescription == "Handles network request failures with retry logic.")
+        #expect(retrieved3?.generatedDescription == nil)
+    }
+
     // MARK: - FTS Search
 
     @Test("FTS search finds matching content")

@@ -12,6 +12,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 - **Local-First Embeddings**: Privacy-preserving embedding generation using MLX (Apple Silicon) or swift-embeddings
 - **Parallel Indexing**: Concurrent file processing with bounded concurrency for faster indexing
 - **Content-Based Change Detection**: SHA-256 content hashing for precise incremental re-indexing
+- **LLM Description Generation**: Optional AI-generated descriptions for code chunks during indexing
 - **Watch Mode**: Automatically updates the index when files change
 - **MCP Server**: Exposes search capabilities to AI assistants via Model Context Protocol
 
@@ -128,6 +129,9 @@ swiftindex index --watch .
 
 # Use custom config
 swiftindex index --config custom.toml .
+
+# Generate LLM descriptions for code chunks (requires LLM provider)
+swiftindex index --generate-descriptions .
 ```
 
 ### `swiftindex search <query>`

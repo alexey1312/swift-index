@@ -66,6 +66,15 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 Requires `[search.enhancement]` config section. See `docs/search-enhancement.md`.
 
+### Indexing Flags
+
+| Flag                      | Description                                   |
+| ------------------------- | --------------------------------------------- |
+| `--force`                 | Re-index all files, ignoring change detection |
+| `--generate-descriptions` | Generate LLM descriptions for code chunks     |
+
+`--generate-descriptions` requires `[search.enhancement]` config with an LLM provider.
+
 ### Search Output Formats
 
 | Format | Flag             | Description                                |

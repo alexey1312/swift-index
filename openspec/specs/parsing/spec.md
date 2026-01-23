@@ -53,53 +53,38 @@ Supported Swift constructs:
 
 ### Requirement: tree-sitter Parsing for Other Languages
 
-The system SHALL use tree-sitter to parse non-Swift files in the project.
+The system SHALL use tree-sitter to parse non-Swift files with metadata extraction.
 
-Supported languages:
+Supported languages with metadata:
 
-- Objective-C (`.m`, `.mm`, `.h`)
-- C/C++ (`.c`, `.cpp`, `.cc`, `.cxx`, `.h`, `.hpp`)
-- JSON (`.json`)
-- YAML (`.yaml`, `.yml`)
-- Markdown (`.md`, `.markdown`)
+- Objective-C (`.m`, `.mm`, `.h`) — extracts doc comments, signatures
+- C/C++ (`.c`, `.cpp`, `.h`) — extracts doc comments, signatures
+- JSON (`.json`) — language detection
+- YAML (`.yaml`, `.yml`) — language detection
+- Markdown (`.md`) — extracts breadcrumb from header hierarchy
 
-#### Scenario: Parse Objective-C interface
+#### Scenario: Parse Objective-C with doc comment
 
-- **WHEN** file is `MyClass.h` with `@interface MyClass : NSObject`
-- **THEN** parser uses tree-sitter-objc grammar
-- **AND** creates chunk for interface declaration
+- **WHEN** parsing method with `/** Performs login */` comment
+- **THEN** chunk.docComment contains "Performs login"
+- **AND** chunk.language is "objective-c"
 
-#### Scenario: Parse Objective-C implementation
+#### Scenario: Parse C function with signature
 
-- **WHEN** file is `MyClass.m` with method implementations
-- **THEN** parser creates chunks for each method
-- **AND** extracts method signatures
+- **WHEN** parsing `int calculateSum(int a, int b) { ... }`
+- **THEN** chunk.signature contains "int calculateSum(int a, int b)"
+- **AND** chunk.language is "c"
 
-#### Scenario: Parse C function
+#### Scenario: Parse Markdown with breadcrumb
 
-- **WHEN** file is `helpers.c` with `int calculateSum(int a, int b)`
-- **THEN** parser creates chunk with function body
-- **AND** extracts function name
+- **WHEN** parsing section under `# Guide` > `## Authentication` > `### Login`
+- **THEN** chunk.breadcrumb is "Guide > Authentication > Login"
+- **AND** chunk.language is "markdown"
 
-#### Scenario: Parse JSON object
+#### Scenario: Language detection from extension
 
-- **WHEN** file is `package.json`
-- **THEN** parser extracts top-level keys
-- **AND** creates navigable structure
-
-#### Scenario: Parse YAML config
-
-- **WHEN** file is `.swiftlint.yml`
-- **THEN** parser extracts configuration keys
-- **AND** preserves hierarchy
-
-#### Scenario: Parse Markdown documentation
-
-- **WHEN** file is `README.md` with sections
-- **THEN** parser creates chunks per section
-- **AND** extracts code blocks separately
-
----
+- **WHEN** parsing file `config.json`
+- **THEN** chunk.language is "json"
 
 ### Requirement: Hybrid Parser Routing
 
@@ -160,7 +145,7 @@ Chunk boundaries:
 
 ### Requirement: Chunk Metadata Extraction
 
-The system SHALL extract metadata from each chunk.
+The system SHALL extract rich metadata from each chunk.
 
 Extracted metadata:
 
@@ -171,6 +156,11 @@ Extracted metadata:
 - `symbols` — declared symbol names
 - `references` — referenced symbol names
 - `imports` — import statements in scope
+- `docComment` — extracted documentation comment (`///` or `/** */`)
+- `signature` — full declaration signature
+- `breadcrumb` — hierarchy path built from type stack
+- `tokenCount` — approximate token count (content.count / 4)
+- `language` — programming language based on file extension
 
 #### Scenario: Extract function metadata
 
@@ -178,11 +168,33 @@ Extracted metadata:
 - **THEN** chunk.symbols contains "login"
 - **AND** chunk.references contains "Credentials"
 
+#### Scenario: Extract function with doc comment
+
+- **WHEN** parsing function with `/// Authenticates the user with credentials`
+- **THEN** chunk.docComment contains "Authenticates the user with credentials"
+- **AND** chunk.signature contains "func authenticate(user: String) -> Bool"
+
+#### Scenario: Extract nested method breadcrumb
+
+- **WHEN** parsing method inside `class AuthManager` inside `extension Auth`
+- **THEN** chunk.breadcrumb is "Auth (extension) > AuthManager > methodName"
+
+#### Scenario: Calculate token count
+
+- **WHEN** parsing chunk with 400-character content
+- **THEN** chunk.tokenCount is approximately 100
+
+#### Scenario: Detect Swift language
+
+- **WHEN** parsing file with `.swift` extension
+- **THEN** chunk.language is "swift"
+
 #### Scenario: Extract class metadata
 
 - **WHEN** parsing `class AuthManager: NSObject, AuthProtocol`
 - **THEN** chunk.symbols contains "AuthManager"
 - **AND** chunk.references contains ["NSObject", "AuthProtocol"]
+- **AND** chunk.signature contains full class declaration line
 
 ---
 
