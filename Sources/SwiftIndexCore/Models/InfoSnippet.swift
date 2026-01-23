@@ -93,6 +93,14 @@ public struct InfoSnippet: Sendable, Equatable, Identifiable, Codable {
     }
 }
 
+// MARK: - Equatable
+
+public extension InfoSnippet {
+    static func == (lhs: InfoSnippet, rhs: InfoSnippet) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
 // MARK: - Hashable
 
 extension InfoSnippet: Hashable {
