@@ -409,6 +409,11 @@ Search for code in the indexed codebase.
 - `limit` (optional): Maximum results (default: 20)
 - `semantic_weight` (optional): Weight for semantic search (0.0-1.0, default: 0.7)
 - `format` (optional): Output format - `toon`, `json`, or `human` (default from config)
+- `path` (optional): Path to indexed codebase (default: current directory)
+- `extensions` (optional): Comma-separated extension filter (e.g., `swift,ts`)
+- `path_filter` (optional): Path filter (glob syntax)
+- `expand_query` (optional): Enable LLM query expansion (requires search.enhancement)
+- `synthesize` (optional): Enable LLM synthesis + follow-ups (requires search.enhancement)
 
 **Example:**
 
@@ -440,6 +445,7 @@ Search indexed documentation (Markdown files, README sections, etc.).
 - `limit` (optional): Maximum results (default: 10)
 - `path_filter` (optional): Filter by path pattern (glob syntax)
 - `format` (optional): Output format - `toon`, `json`, or `human`
+- `path` (optional): Path to indexed codebase (default: current directory)
 
 **Example:**
 
@@ -455,9 +461,43 @@ Search indexed documentation (Markdown files, README sections, etc.).
 
 Perform multi-step research over the indexed codebase.
 
+**Parameters:**
+
+- `query` (required): Research question or task
+- `path` (optional): Path to indexed codebase (default: current directory)
+- `format` (optional): Output format - `toon`, `json`, or `human` (default from config)
+- `step_limit` (optional): Maximum number of steps (default: 6)
+- `include_snippets` (optional): Include code snippets in the result (default: true)
+
+**Example:**
+
+```json
+{
+  "query": "How is search enhancement configured and used?",
+  "step_limit": 4,
+  "format": "toon"
+}
+```
+
 ### `watch_codebase`
 
 Start, stop, or check status of watch mode for a codebase.
+
+**Parameters:**
+
+- `action` (required): One of `start`, `stop`, or `status`
+- `path` (optional): Path to indexed codebase (default: current directory)
+- `debounce_ms` (optional): Debounce interval in milliseconds (default: config value)
+
+**Example:**
+
+```json
+{
+  "action": "start",
+  "path": ".",
+  "debounce_ms": 500
+}
+```
 
 ## Embedding Providers
 
