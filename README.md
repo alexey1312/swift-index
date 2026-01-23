@@ -1,5 +1,7 @@
 # SwiftIndex
 
+![SwiftIndex Logo](docs/assets/swiftindex-logo.png)
+
 [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/alexey1312/swift-index)
 [![Swift-versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/alexey1312/swift-index)
 [![CI](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml/badge.svg)](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml)
