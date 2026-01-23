@@ -52,6 +52,16 @@ struct WatchCommand: AsyncParsableCommand {
     // MARK: - Execution
 
     mutating func run() async throws {
+        // Capture verbose flag before escaping closure
+        let verboseFlag = verbose
+
+        // Configure logging to stderr
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardError(label: label)
+            handler.logLevel = verboseFlag ? .debug : .info
+            return handler
+        }
+
         let logger = CLIUtils.makeLogger(verbose: verbose)
         logger.info("Starting watch mode")
 

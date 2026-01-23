@@ -1,5 +1,11 @@
 # SwiftIndex
 
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/alexey1312/swift-index)
+[![Swift-versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/alexey1312/swift-index)
+[![CI](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml/badge.svg)](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml)
+[![Release](https://github.com/alexey1312/swift-index/actions/workflows/release.yml/badge.svg)](https://github.com/alexey1312/swift-index/actions/workflows/release.yml)
+[![License](https://img.shields.io/github/license/alexey1312/swift-index.svg)](LICENSE)
+
 A semantic code search engine for Swift codebases, available as both a CLI tool and an MCP server for AI assistants like Claude Code.
 
 ## Features
