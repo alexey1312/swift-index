@@ -1,6 +1,8 @@
 # SwiftIndex
 
-![SwiftIndex Logo](docs/assets/swiftindex-logo.png)
+<p align="center">
+  <img src="docs/assets/swiftindex-logo.png" alt="SwiftIndex Logo" width="250">
+</p>
 
 [![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/alexey1312/swift-index)
 [![Swift-versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/alexey1312/swift-index)
