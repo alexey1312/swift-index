@@ -189,10 +189,17 @@ public actor FileWatcher {
     private func startDispatchSourceWatcher() {
         // Create FSEventStream callback context
         let callback: FSEventStreamCallback = { _, contextInfo, numEvents, eventPaths, eventFlags, _ in
-            guard let contextInfo,
-                  let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String]
-            else {
-                return
+            guard let contextInfo else { return }
+
+            // Safely extract paths from the C string array
+            // eventPaths is UnsafeMutableRawPointer pointing to char** (array of C strings)
+            let pathsPtr = eventPaths.assumingMemoryBound(to: UnsafePointer<CChar>.self)
+            var paths: [String] = []
+            paths.reserveCapacity(numEvents)
+
+            for i in 0 ..< numEvents {
+                let cString = pathsPtr[i]
+                paths.append(String(cString: cString))
             }
 
             let context = Unmanaged<FileWatcherContext>.fromOpaque(contextInfo).takeUnretainedValue()

@@ -29,6 +29,8 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 - **Hybrid search**: BM25 + semantic + RRF fusion
 - **Privacy-first**: local embeddings by default
 
+> **Note**: `CLAUDE.md` is a symlink to `AGENTS.md` — editing either file modifies both.
+
 ## Quick Reference
 
 ### Build & Test Commands
@@ -248,6 +250,14 @@ let object = try JSONCodec.deserialize(data)
   Don't specify dimension for `swift` provider — it will cause index corruption.
 
 ## Distribution
+
+### One-Line Install (via GitHub Pages)
+
+- **Script**: `docs/install.sh` (served at `alexey1312.github.io/swift-index/install.sh`)
+- **Install**: `curl -fsSL https://alexey1312.github.io/swift-index/install.sh | sh`
+- **Default path**: `~/.local/bin` (no sudo required)
+- **Checksums**: Release workflow generates `checksums.txt` for verification
+- **GitHub Pages**: Enable in repo Settings → Pages → Source: `main` branch, `/docs` folder
 
 ### GitHub Releases (Ready)
 
