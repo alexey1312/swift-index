@@ -1,5 +1,11 @@
 # SwiftIndex
 
+[![Platforms](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dplatforms)](https://swiftpackageindex.com/alexey1312/swift-index)
+[![Swift-versions](https://img.shields.io/endpoint?url=https%3A%2F%2Fswiftpackageindex.com%2Fapi%2Fpackages%2Falexey1312%2Fswift-index%2Fbadge%3Ftype%3Dswift-versions)](https://swiftpackageindex.com/alexey1312/swift-index)
+[![CI](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml/badge.svg)](https://github.com/alexey1312/swift-index/actions/workflows/ci.yml)
+[![Release](https://github.com/alexey1312/swift-index/actions/workflows/release.yml/badge.svg)](https://github.com/alexey1312/swift-index/actions/workflows/release.yml)
+[![License](https://img.shields.io/github/license/alexey1312/swift-index.svg)](LICENSE)
+
 A semantic code search engine for Swift codebases, available as both a CLI tool and an MCP server for AI assistants like Claude Code.
 
 ## Features
@@ -19,7 +25,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 ## System Requirements
 
 - **macOS 14 (Sonoma)** or later
-- **Swift 6.2+** (included with Xcode 16.2+)
+- **Swift 6.1+** (Xcode 16+). Swift 6.2.3 recommended.
 - **Apple Silicon** (recommended for MLX embeddings) or Intel x86_64
 
 ## Installation
@@ -37,20 +43,6 @@ mise use -g github:alexey1312/swift-index@latest
 ```
 
 This installs SwiftIndex from GitHub Releases.
-
-### GitHub Releases
-
-Download the latest universal binary:
-
-```bash
-# Download latest release
-curl -L -O https://github.com/alexey1312/swift-index/releases/latest/download/swiftindex-macos.zip
-
-# Extract and install
-unzip swiftindex-macos.zip
-mv dist/swiftindex /usr/local/bin/
-mv dist/default.metallib dist/mlx.metallib /usr/local/bin/
-```
 
 ### From Source
 
@@ -125,7 +117,7 @@ swiftindex index .
 swiftindex index --force .
 
 # Watch for changes and re-index automatically
-swiftindex index --watch .
+swiftindex watch .
 
 # Use custom config
 swiftindex index --config custom.toml .
@@ -205,6 +197,18 @@ Flags for format:
 - `-a/--all` format all `.swiftindex.toml` under current directory
 - `-c/--check` check formatting without writing
 - `-s/--stdin` read from stdin and write formatted output to stdout
+
+### `swiftindex watch`
+
+Watch a directory and update the index incrementally.
+
+```bash
+# Watch current directory
+swiftindex watch
+
+# Watch a specific path
+swiftindex watch /path/to/project
+```
 
 ### `swiftindex install-claude-code`
 
@@ -375,18 +379,53 @@ swiftindex search --synthesize "authentication flow"
 swiftindex search --expand-query --synthesize "error handling"
 ```
 
-The MCP server automatically uses search enhancement when configured.
+MCP tools accept `expand_query` and `synthesize` flags. These require
+`[search.enhancement]` to be enabled in config.
 
 **Further Reading:**
 
 - [Search Enhancement Guide](docs/search-enhancement.md) — Detailed LLM provider configuration
 - [Search Features Guide](docs/search-features.md) — Query expansion, synthesis, and search tips
 
+## MCP Server
+
+SwiftIndex implements [Model Context Protocol](https://modelcontextprotocol.io/) version `2024-11-05` for AI assistant integration.
+
+| Property  | Value                           |
+| --------- | ------------------------------- |
+| Transport | stdio (stdin/stdout)            |
+| Format    | JSON-RPC 2.0                    |
+| Tools     | 5 tools for indexing and search |
+
+### Configuration by Client
+
+Different AI assistants require slightly different configuration formats:
+
+| Client      | Config File                           | Type Field                  | Notes                        |
+| ----------- | ------------------------------------- | --------------------------- | ---------------------------- |
+| Claude Code | `.mcp.json` or `~/.claude.json`       | Required: `"type": "stdio"` | Use `--global` for user-wide |
+| Cursor      | `.mcp.json` or `~/.cursor/mcp.json`   | Not needed                  | Standard MCP format          |
+| Codex       | `.mcp.json` or `~/.codex/config.toml` | Not needed                  | TOML format for global       |
+
+### Error Responses
+
+MCP tools return errors in standard format:
+
+```json
+{ "content": [{ "type": "text", "text": "Error message" }], "isError": true }
+```
+
+Common errors:
+
+- `"No index found for path: /path"` — Run `index_codebase` first
+- `"Missing required argument: query"` — Required parameter not provided
+- `"Path does not exist or is not a directory"` — Invalid path
+
 ## MCP Tools
 
 When running as an MCP server, SwiftIndex exposes the following tools:
 
-### `swiftindex_search`
+### `search_code`
 
 Search for code in the indexed codebase.
 
@@ -396,6 +435,11 @@ Search for code in the indexed codebase.
 - `limit` (optional): Maximum results (default: 20)
 - `semantic_weight` (optional): Weight for semantic search (0.0-1.0, default: 0.7)
 - `format` (optional): Output format - `toon`, `json`, or `human` (default from config)
+- `path` (optional): Path to indexed codebase (default: current directory)
+- `extensions` (optional): Comma-separated extension filter (e.g., `swift,ts`)
+- `path_filter` (optional): Path filter (glob syntax)
+- `expand_query` (optional): Enable LLM query expansion (requires search.enhancement)
+- `synthesize` (optional): Enable LLM synthesis + follow-ups (requires search.enhancement)
 
 **Example:**
 
@@ -408,7 +452,7 @@ Search for code in the indexed codebase.
 }
 ```
 
-### `swiftindex_index`
+### `index_codebase`
 
 Trigger indexing of the codebase.
 
@@ -417,7 +461,7 @@ Trigger indexing of the codebase.
 - `path` (optional): Path to index (default: current directory)
 - `force` (optional): Force re-index all files (default: false)
 
-### `swiftindex_search_docs`
+### `search_docs`
 
 Search indexed documentation (Markdown files, README sections, etc.).
 
@@ -427,6 +471,7 @@ Search indexed documentation (Markdown files, README sections, etc.).
 - `limit` (optional): Maximum results (default: 10)
 - `path_filter` (optional): Filter by path pattern (glob syntax)
 - `format` (optional): Output format - `toon`, `json`, or `human`
+- `path` (optional): Path to indexed codebase (default: current directory)
 
 **Example:**
 
@@ -438,16 +483,80 @@ Search indexed documentation (Markdown files, README sections, etc.).
 }
 ```
 
-### `swiftindex_status`
+### `code_research`
 
-Get the current index status.
+Perform multi-step research over the indexed codebase.
 
-**Returns:**
+**Parameters:**
 
-- Indexed file count
-- Total chunks
-- Last index time
-- Provider status
+- `query` (required): Research query or topic to investigate
+- `path` (optional): Path to indexed codebase (default: current directory)
+- `depth` (optional): Maximum reference depth (1-5, default: 2)
+- `focus` (optional): One of `architecture`, `dependencies`, `patterns`, `flow`
+
+**Example:**
+
+```json
+{
+  "query": "How is search enhancement configured and used?",
+  "depth": 3,
+  "focus": "architecture"
+}
+```
+
+### `watch_codebase`
+
+Start, stop, or check status of watch mode for a codebase.
+
+**Parameters:**
+
+- `path` (required): Absolute path to the directory to watch
+- `action` (optional): One of `start`, `stop`, or `status` (default: `start`)
+
+**Example:**
+
+```json
+{
+  "action": "start",
+  "path": "/path/to/project"
+}
+```
+
+### Output Formats
+
+The MCP server supports three output formats via the `format` parameter:
+
+| Format  | Description                         | Use Case                       |
+| ------- | ----------------------------------- | ------------------------------ |
+| `toon`  | Token-optimized (default for MCP)   | AI assistants (40-60% smaller) |
+| `json`  | Verbose JSON with all metadata      | Scripting/automation           |
+| `human` | Readable with relevance percentages | Terminal/interactive           |
+
+**TOON Format Structure** (Token-Optimized Object Notation):
+
+```
+search{q,n}:                    # Query and result count
+  "query string",10
+
+results[n]{r,rel,p,l,k,s}:      # Tabular metadata
+  1,95,"path.swift",[10,25],"function",["symbolName"]
+
+meta[n]{sig,bc}:                # Signatures and breadcrumbs
+  "func example()",~            # ~ = null
+
+docs[n]:                        # Doc comments (truncated)
+  "Description of the code..."
+
+code[n]:                        # Code content (max 15 lines)
+  ---
+  func example() { ... }
+
+synthesis{sum,insights,refs}:   # LLM summary (optional)
+  "Summary of results"
+
+follow_ups[n]{q,cat}:           # Related queries (optional)
+  "related query","deeper"
+```
 
 ## Embedding Providers
 
@@ -542,7 +651,9 @@ SwiftIndexMCP/
 └── Tools/           # MCP tool handlers
     ├── SearchCodeTool
     ├── SearchDocsTool
-    └── IndexTool
+    ├── IndexCodebaseTool
+    ├── CodeResearchTool
+    └── WatchCodebaseTool
 
 swiftindex/
 └── Commands/        # CLI commands
@@ -677,6 +788,33 @@ brew uninstall swiftindex
 rm /usr/local/bin/swiftindex
 rm -rf ~/.swiftindex  # Optional: remove cached models
 ```
+
+## Comparison with Alternatives
+
+SwiftIndex is designed specifically for Swift developers on macOS. Here's how it compares to other code search tools:
+
+| Feature           | SwiftIndex            | [mgrep](https://github.com/mixedbread-ai/mgrep) | [ChunkHound](https://github.com/chunkhound/chunkhound) |
+| ----------------- | --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| **Privacy**       | ✅ Local-first (MLX)  | ❌ Cloud-only                                   | ✅ Local-first                                         |
+| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                          |
+| **Apple Silicon** | ✅ MLX optimized      | ❌                                              | ❌                                                     |
+| **Search Method** | BM25 + Semantic + RRF | Semantic + reranking                            | Multi-hop semantic                                     |
+| **MCP Server**    | ✅ Native             | ✅ Agent support                                | ❌                                                     |
+| **Language**      | Swift (native)        | Rust/Cloud                                      | Python                                                 |
+
+### Why SwiftIndex?
+
+- **Swift-First**: Native SwiftSyntax parsing extracts rich metadata (doc comments, signatures, breadcrumbs) that generic parsers miss
+- **Apple Silicon Native**: MLX embeddings are 2-3x faster than Ollama on M1/M2/M3, with zero network latency
+- **True Hybrid Search**: RRF fusion of BM25 + semantic search provides better recall than pure semantic approaches
+- **Token Efficient**: TOON output format saves 40-60% tokens for AI assistants
+- **Privacy**: All processing happens locally — your code never leaves your machine
+
+### When to Use Alternatives
+
+- **mgrep**: If you need multimodal search (PDFs, images) or web search integration
+- **ChunkHound**: If you work primarily with Python/JS codebases and don't need Swift-specific features
+- **[Context7](https://github.com/upstash/context7)**: For external library documentation (complements SwiftIndex, not a competitor)
 
 ## License
 

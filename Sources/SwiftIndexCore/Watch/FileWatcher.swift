@@ -61,6 +61,15 @@ public actor FileWatcher {
     /// Whether the watcher is currently active.
     private var isWatching: Bool = false
 
+    /// Whether shutdown has been initiated (prevents new callback tasks).
+    private var isShuttingDown: Bool = false
+
+    /// Count of in-flight callback tasks (must reach 0 before releasing stream).
+    private var activeCallbackCount: Int = 0
+
+    /// Continuation for coordinated shutdown (resumed when activeCallbackCount reaches 0).
+    private var shutdownContinuation: CheckedContinuation<Void, Never>?
+
     /// Pending events waiting to be debounced.
     private var pendingEvents: [String: Event] = [:]
 
@@ -112,13 +121,29 @@ public actor FileWatcher {
     }
 
     /// Stops watching for file changes.
-    public func stop() {
+    ///
+    /// This method performs a graceful shutdown:
+    /// 1. Signals shutdown to prevent new callback tasks
+    /// 2. Waits for in-flight callback tasks to complete
+    /// 3. Releases FSEventStream resources safely
+    public func stop() async {
         guard isWatching else { return }
 
+        // 1. Signal shutdown - prevents new callback tasks from being created
+        isShuttingDown = true
         isWatching = false
         debounceTask?.cancel()
         debounceTask = nil
 
+        // 2. Wait for in-flight callbacks to complete
+        if activeCallbackCount > 0 {
+            logger.debug("Waiting for \(activeCallbackCount) in-flight callbacks")
+            await withCheckedContinuation { continuation in
+                shutdownContinuation = continuation
+            }
+        }
+
+        // 3. Now safe to release stream - no callbacks can access it
         if let stream = eventStream {
             FSEventStreamStop(stream)
             FSEventStreamInvalidate(stream)
@@ -129,6 +154,9 @@ public actor FileWatcher {
         eventContinuation?.finish()
         eventContinuation = nil
 
+        // Reset shutdown state for potential reuse
+        isShuttingDown = false
+
         logger.info("FileWatcher stopped")
     }
 
@@ -137,7 +165,8 @@ public actor FileWatcher {
     private func setupContinuation(_ continuation: AsyncStream<Event>.Continuation) {
         eventContinuation = continuation
 
-        continuation.onTermination = { _ in
+        continuation.onTermination = { [weak self] _ in
+            guard let self else { return }
             Task {
                 await self.stop()
             }
@@ -160,10 +189,17 @@ public actor FileWatcher {
     private func startDispatchSourceWatcher() {
         // Create FSEventStream callback context
         let callback: FSEventStreamCallback = { _, contextInfo, numEvents, eventPaths, eventFlags, _ in
-            guard let contextInfo,
-                  let paths = unsafeBitCast(eventPaths, to: NSArray.self) as? [String]
-            else {
-                return
+            guard let contextInfo else { return }
+
+            // Safely extract paths from the C string array
+            // eventPaths is UnsafeMutableRawPointer pointing to char** (array of C strings)
+            let pathsPtr = eventPaths.assumingMemoryBound(to: UnsafePointer<CChar>.self)
+            var paths: [String] = []
+            paths.reserveCapacity(numEvents)
+
+            for i in 0 ..< numEvents {
+                let cString = pathsPtr[i]
+                paths.append(String(cString: cString))
             }
 
             let context = Unmanaged<FileWatcherContext>.fromOpaque(contextInfo).takeUnretainedValue()
@@ -176,7 +212,18 @@ public actor FileWatcher {
                 let flags = eventFlags[i]
 
                 Task { [weak watcher] in
-                    await watcher?.handleEvent(path: path, flags: flags)
+                    guard let watcher else { return }
+
+                    // Check shutdown flag before processing - prevents new work during shutdown
+                    guard await !watcher.isShuttingDown else { return }
+
+                    // Track this callback task for graceful shutdown
+                    await watcher.incrementActiveCount()
+                    defer {
+                        Task { await watcher.decrementActiveCount() }
+                    }
+
+                    await watcher.handleEvent(path: path, flags: flags)
                 }
             }
         }
@@ -288,6 +335,23 @@ public actor FileWatcher {
         }
 
         logger.debug("Flushed \(events.count) events")
+    }
+
+    // MARK: - Shutdown Coordination
+
+    /// Increment the count of active callback tasks.
+    private func incrementActiveCount() {
+        activeCallbackCount += 1
+    }
+
+    /// Decrement the count of active callback tasks.
+    /// Resumes shutdown continuation when count reaches zero.
+    private func decrementActiveCount() {
+        activeCallbackCount -= 1
+        if activeCallbackCount == 0, let continuation = shutdownContinuation {
+            shutdownContinuation = nil
+            continuation.resume()
+        }
     }
 }
 

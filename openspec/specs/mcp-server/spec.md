@@ -2,7 +2,7 @@
 
 ## Purpose
 
-TBD - created by archiving change add-swiftindex-core. Update Purpose after archive.
+Expose SwiftIndex semantic search capabilities to AI assistants via MCP protocol (version 2024-11-05).
 
 ## Requirements
 
@@ -26,7 +26,7 @@ Protocol requirements:
 #### Scenario: Tool discovery
 
 - **WHEN** client sends `tools/list` request
-- **THEN** server returns all 4 tools with schemas
+- **THEN** server returns all 5 tools with schemas
 
 ---
 
@@ -43,10 +43,8 @@ Tool schema:
   "inputSchema": {
     "type": "object",
     "properties": {
-      "path": { "type": "string", "description": "Path to codebase root" },
-      "provider": { "type": "string", "enum": ["mlx", "ollama", "swift-embeddings", "voyage", "openai"] },
-      "include_tests": { "type": "boolean", "default": false },
-      "rebuild": { "type": "boolean", "default": false }
+      "path": { "type": "string", "description": "Absolute path to the directory to index" },
+      "force": { "type": "boolean", "default": false, "description": "Force re-indexing even if files haven't changed" }
     },
     "required": ["path"]
   }
@@ -57,7 +55,7 @@ Tool schema:
 
 - **WHEN** calling index_codebase with path
 - **THEN** project is indexed
-- **AND** returns statistics (files, chunks, duration)
+- **AND** returns statistics (files, chunks, errors)
 
 #### Scenario: Incremental index
 
@@ -65,17 +63,11 @@ Tool schema:
 - **THEN** only changed files are re-indexed
 - **AND** returns incremental stats
 
-#### Scenario: Index with specific provider
+#### Scenario: Force re-index
 
-- **WHEN** calling with `provider: "ollama"`
-- **THEN** uses Ollama for embeddings
-- **AND** ignores default provider chain
-
-#### Scenario: Include test files
-
-- **WHEN** calling with `include_tests: true`
-- **THEN** test files are indexed
-- **AND** searchable alongside production code
+- **WHEN** calling with `force: true`
+- **THEN** all files are re-indexed regardless of change status
+- **AND** index is rebuilt from scratch
 
 ---
 
@@ -92,10 +84,15 @@ Tool schema:
   "inputSchema": {
     "type": "object",
     "properties": {
-      "query": { "type": "string", "description": "Natural language search query" },
-      "limit": { "type": "integer", "default": 10 },
-      "semantic_weight": { "type": "number", "default": 0.7 },
-      "file_filter": { "type": "string", "description": "Glob pattern to filter files" }
+      "query": { "type": "string", "description": "Natural language search query or code pattern" },
+      "path": { "type": "string", "default": ".", "description": "Path to indexed codebase" },
+      "limit": { "type": "integer", "default": 20 },
+      "semantic_weight": { "type": "number", "default": 0.7, "description": "Weight for semantic search (0.0-1.0)" },
+      "extensions": { "type": "string", "description": "Filter by file extensions (comma-separated)" },
+      "path_filter": { "type": "string", "description": "Filter by path pattern (glob syntax)" },
+      "format": { "type": "string", "enum": ["toon", "json", "human"], "description": "Output format" },
+      "expand_query": { "type": "boolean", "default": false, "description": "Use LLM to expand query" },
+      "synthesize": { "type": "boolean", "default": false, "description": "Generate LLM summary" }
     },
     "required": ["query"]
   }
@@ -113,10 +110,16 @@ Tool schema:
 - **WHEN** calling with `limit: 5`
 - **THEN** returns at most 5 results
 
-#### Scenario: Search with file filter
+#### Scenario: Search with path filter
 
-- **WHEN** calling with `file_filter: "Sources/Auth/**"`
+- **WHEN** calling with `path_filter: "Sources/Auth/**"`
 - **THEN** only searches in Auth directory
+
+#### Scenario: Search with LLM enhancement
+
+- **WHEN** calling with `expand_query: true` and `synthesize: true`
+- **THEN** query is expanded with related terms
+- **AND** results include AI summary and follow-up suggestions
 
 #### Scenario: Search result format
 
@@ -124,9 +127,50 @@ Tool schema:
 - **THEN** each result includes:
   - `content` — code snippet
   - `path` — file path
-  - `startLine` / `endLine` — location
-  - `score` — relevance score
+  - `start_line` / `end_line` — location
+  - `relevance_percent` — relevance score (0-100)
   - `kind` — chunk type
+  - `symbols` — extracted symbol names
+  - `signature` — function/type signature (optional)
+  - `breadcrumb` — hierarchy path (optional)
+  - `doc_comment` — documentation comment (optional)
+
+---
+
+### Requirement: search_docs Tool
+
+The system SHALL provide `search_docs` MCP tool for documentation search.
+
+Tool schema:
+
+```json
+{
+  "name": "search_docs",
+  "description": "Search indexed documentation using full-text search",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string", "description": "Natural language search query" },
+      "path": { "type": "string", "default": ".", "description": "Path to indexed codebase" },
+      "limit": { "type": "integer", "default": 10 },
+      "path_filter": { "type": "string", "description": "Filter by path pattern (glob syntax)" },
+      "format": { "type": "string", "enum": ["toon", "json", "human"], "description": "Output format" }
+    },
+    "required": ["query"]
+  }
+}
+```
+
+#### Scenario: Search documentation
+
+- **WHEN** calling search_docs with query "installation"
+- **THEN** returns relevant documentation snippets
+- **AND** results include file paths and line numbers
+
+#### Scenario: Filter by path
+
+- **WHEN** calling with `path_filter: "docs/*.md"`
+- **THEN** only searches in docs directory markdown files
 
 ---
 
@@ -144,7 +188,9 @@ Tool schema:
     "type": "object",
     "properties": {
       "query": { "type": "string", "description": "Research question about codebase" },
-      "depth": { "type": "integer", "default": 2, "minimum": 1, "maximum": 3 }
+      "path": { "type": "string", "default": ".", "description": "Path to indexed codebase" },
+      "depth": { "type": "integer", "default": 2, "minimum": 1, "maximum": 5 },
+      "focus": { "type": "string", "enum": ["architecture", "dependencies", "patterns", "flow"], "description": "Optional focus area" }
     },
     "required": ["query"]
   }
@@ -159,9 +205,15 @@ Tool schema:
 
 #### Scenario: Research with depth
 
-- **WHEN** calling with `depth: 3`
-- **THEN** follows references 3 levels deep
+- **WHEN** calling with `depth: 5`
+- **THEN** follows references 5 levels deep
 - **AND** maps dependency graph
+
+#### Scenario: Research with focus
+
+- **WHEN** calling with `focus: "architecture"`
+- **THEN** analysis emphasizes architectural patterns
+- **AND** identifies system structure
 
 #### Scenario: Research call graph
 
@@ -214,19 +266,23 @@ Tool schema:
 
 ### Requirement: Error Handling
 
-The system SHALL return structured errors for tool failures.
+The system SHALL return structured errors for tool failures using MCP ToolCallResult format.
 
 Error format:
 
 ```json
 {
-  "error": {
-    "code": -32000,
-    "message": "Index not found",
-    "data": { "path": "/project", "suggestion": "Run index_codebase first" }
-  }
+  "content": [{ "type": "text", "text": "Error message describing the failure" }],
+  "isError": true
 }
 ```
+
+Common error messages:
+
+- `"No index found for path: /path. Run 'index_codebase' tool first."`
+- `"Missing required argument: query"`
+- `"Path does not exist or is not a directory: /path"`
+- `"Query cannot be empty"`
 
 #### Scenario: Search without index
 
@@ -238,10 +294,10 @@ Error format:
 - **WHEN** calling with non-existent path
 - **THEN** returns error with path validation message
 
-#### Scenario: Provider unavailable
+#### Scenario: Missing required argument
 
-- **WHEN** specified provider is unavailable
-- **THEN** returns error with available providers list
+- **WHEN** calling without required argument
+- **THEN** returns error identifying the missing argument
 
 ---
 

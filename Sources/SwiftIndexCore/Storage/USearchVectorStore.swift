@@ -1,6 +1,7 @@
 // MARK: - USearchVectorStore
 
 import Foundation
+import Logging
 import USearch
 
 /// HNSW-based vector storage using USearch for approximate nearest neighbor search.
@@ -13,8 +14,20 @@ import USearch
 public actor USearchVectorStore: VectorStore {
     // MARK: - Properties
 
+    /// Logger for diagnostics.
+    private let logger = Logger(label: "USearchVectorStore")
+
+    /// Growth factor for capacity expansion.
+    private static let capacityGrowthFactor: UInt32 = 2
+
+    /// Initial capacity for new indexes.
+    private static let initialCapacity: UInt32 = 10000
+
     /// The HNSW index.
     private var index: USearchIndex
+
+    /// Tracked capacity (since USearch's capacity property is internal).
+    private var trackedCapacity: UInt32
 
     /// Mapping from chunk ID to internal index key.
     private var idToKey: [String: USearchKey]
@@ -52,6 +65,7 @@ public actor USearchVectorStore: VectorStore {
         idToKey = [:]
         keyToId = [:]
         nextKey = 0
+        trackedCapacity = Self.initialCapacity
 
         if let path {
             indexPath = path
@@ -77,7 +91,28 @@ public actor USearchVectorStore: VectorStore {
         )
 
         // Reserve initial capacity
-        try index.reserve(10000)
+        try index.reserve(Self.initialCapacity)
+    }
+
+    // MARK: - Capacity Management
+
+    /// Expand index capacity when exhausted.
+    private func expandCapacity() throws {
+        let currentSize = UInt32(idToKey.count)
+
+        let newCapacity = max(
+            trackedCapacity * Self.capacityGrowthFactor,
+            currentSize + Self.initialCapacity
+        )
+
+        logger.info("Expanding vector index capacity", metadata: [
+            "currentCapacity": "\(trackedCapacity)",
+            "currentSize": "\(currentSize)",
+            "newCapacity": "\(newCapacity)",
+        ])
+
+        try index.reserve(newCapacity)
+        trackedCapacity = newCapacity
     }
 
     // MARK: - VectorStore Protocol
@@ -99,33 +134,93 @@ public actor USearchVectorStore: VectorStore {
         let key = nextKey
         nextKey += 1
 
-        do {
-            try index.add(key: key, vector: vector)
-        } catch {
-            // USearch error 15 typically indicates dimension mismatch with existing index
-            let errorString = String(describing: error)
-            if errorString.contains("error 15") {
-                throw VectorStoreError.indexDimensionMismatch(
-                    indexDimension: dimension,
-                    message: """
-                    The existing index was created with a different vector dimension.
-                    This usually happens when you change the embedding provider or model.
+        // Retry loop for handling burst insertions during capacity expansion
+        var retries = 0
+        let maxRetries = 3
 
-                    To fix this, delete the index and reindex:
-                      rm -rf .swiftindex
-                      swiftindex index .
-                    """
-                )
+        while true {
+            do {
+                try index.add(key: key, vector: vector)
+                break // Success - exit retry loop
+            } catch let usearchError as USearchError {
+                if case .reservationError = usearchError {
+                    // Capacity exhausted - expand and retry
+                    retries += 1
+                    if retries > maxRetries {
+                        logger.error("Vector index capacity exhausted after retries", metadata: [
+                            "retries": "\(retries)",
+                            "id": "\(id)",
+                        ])
+                        throw VectorStoreError.capacityExhausted(retries: retries)
+                    }
+                    logger.debug("Expanding capacity (retry \(retries)/\(maxRetries))")
+                    try expandCapacity()
+                } else {
+                    logger.warning("USearch add failed", metadata: [
+                        "error": "\(usearchError)",
+                        "id": "\(id)",
+                    ])
+                    throw usearchError
+                }
+            } catch {
+                logger.warning("USearch add failed", metadata: [
+                    "error": "\(error)",
+                    "id": "\(id)",
+                ])
+                throw error
             }
-            throw error
         }
+
         idToKey[id] = key
         keyToId[key] = id
     }
 
     public func addBatch(_ items: [(id: String, vector: [Float])]) async throws {
+        guard !items.isEmpty else { return }
+
+        // Validate all dimensions upfront - fail fast before any mutations
+        for (_, vector) in items {
+            guard vector.count == dimension else {
+                throw VectorStoreError.dimensionMismatch(expected: dimension, actual: vector.count)
+            }
+        }
+
+        // Remove existing vectors and prepare keys atomically
+        var keysAndVectors: [(key: USearchKey, vector: [Float], id: String)] = []
         for (id, vector) in items {
-            try await add(id: id, vector: vector)
+            if let existingKey = idToKey[id] {
+                _ = try index.remove(key: existingKey)
+                keyToId.removeValue(forKey: existingKey)
+                idToKey.removeValue(forKey: id)
+            }
+            let key = nextKey
+            nextKey += 1
+            keysAndVectors.append((key: key, vector: vector, id: id))
+        }
+
+        // Proactively ensure capacity with buffer - single reserve() call for entire batch
+        // This is critical: multiple reserve() calls can corrupt the HNSW graph
+        let requiredCapacity = UInt32(idToKey.count) + UInt32(keysAndVectors.count)
+        if requiredCapacity > trackedCapacity {
+            let newCapacity = max(
+                requiredCapacity + Self.initialCapacity / 2, // 50% buffer
+                trackedCapacity * Self.capacityGrowthFactor
+            )
+            logger.info("Pre-allocating vector index capacity for batch", metadata: [
+                "batchSize": "\(items.count)",
+                "currentCapacity": "\(trackedCapacity)",
+                "newCapacity": "\(newCapacity)",
+            ])
+            try index.reserve(newCapacity)
+            trackedCapacity = newCapacity
+        }
+
+        // Insert all vectors atomically - NO individual expandCapacity() calls
+        // Since capacity is pre-allocated, all insertions will succeed without reserve()
+        for (key, vector, id) in keysAndVectors {
+            try index.add(key: key, vector: vector)
+            idToKey[id] = key
+            keyToId[key] = id
         }
     }
 
@@ -184,11 +279,13 @@ public actor USearchVectorStore: VectorStore {
         // Save the HNSW index
         try index.save(path: indexPath)
 
-        // Save ID mappings
+        // Save ID mappings (including dimension for validation on load)
         let mapping = VectorStoreMapping(
             idToKey: idToKey,
             keyToId: keyToId.reduce(into: [:]) { $0[String($1.key)] = $1.value },
-            nextKey: nextKey
+            nextKey: nextKey,
+            dimension: dimension,
+            capacity: trackedCapacity
         )
 
         let data = try JSONCodec.encodePretty(mapping)
@@ -207,12 +304,27 @@ public actor USearchVectorStore: VectorStore {
             throw VectorStoreError.indexNotFound(indexPath)
         }
 
-        // Load the HNSW index
-        try index.load(path: indexPath)
-
-        // Load ID mappings
+        // Load ID mappings first to validate dimension before loading index
         let data = try Data(contentsOf: URL(fileURLWithPath: mappingPath))
         let mapping = try JSONCodec.makeDecoder().decode(VectorStoreMapping.self, from: data)
+
+        // Validate dimension matches if stored in mapping
+        if let storedDimension = mapping.dimension, storedDimension != dimension {
+            throw VectorStoreError.indexDimensionMismatch(
+                indexDimension: storedDimension,
+                message: """
+                Index has dimension \(storedDimension), expected \(dimension).
+                This usually happens when you change the embedding provider or model.
+
+                To fix this, delete the index and reindex:
+                  rm -rf .swiftindex
+                  swiftindex index .
+                """
+            )
+        }
+
+        // Load the HNSW index
+        try index.load(path: indexPath)
 
         idToKey = mapping.idToKey
         keyToId = mapping.keyToId.reduce(into: [:]) {
@@ -221,6 +333,7 @@ public actor USearchVectorStore: VectorStore {
             }
         }
         nextKey = mapping.nextKey
+        trackedCapacity = mapping.capacity ?? max(Self.initialCapacity, UInt32(idToKey.count) * 2)
     }
 
     public func clear() async throws {
@@ -282,6 +395,10 @@ private struct VectorStoreMapping: Codable {
     let idToKey: [String: USearchKey]
     let keyToId: [String: String] // String key for JSON compatibility
     let nextKey: USearchKey
+    /// Dimension of vectors (added for validation on load).
+    let dimension: Int?
+    /// Tracked capacity (added for restoration on load).
+    let capacity: UInt32?
 }
 
 // MARK: - VectorStoreError
@@ -294,6 +411,7 @@ public enum VectorStoreError: Error, Sendable {
     case noPersistencePath
     case saveFailed(String)
     case loadFailed(String)
+    case capacityExhausted(retries: Int)
 }
 
 extension VectorStoreError: LocalizedError {
@@ -311,6 +429,8 @@ extension VectorStoreError: LocalizedError {
             "Failed to save vector index: \(message)"
         case let .loadFailed(message):
             "Failed to load vector index: \(message)"
+        case let .capacityExhausted(retries):
+            "Vector index capacity exhausted after \(retries) expansion attempts"
         }
     }
 }

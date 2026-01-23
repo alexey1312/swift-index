@@ -29,6 +29,8 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 - **Hybrid search**: BM25 + semantic + RRF fusion
 - **Privacy-first**: local embeddings by default
 
+> **Note**: `CLAUDE.md` is a symlink to `AGENTS.md` — editing either file modifies both.
+
 ## Quick Reference
 
 ### Build & Test Commands
@@ -99,6 +101,14 @@ MCP server uses TOON format by default for optimal token efficiency.
 | SwiftIndexMCP  | Library    | MCP server implementation                         |
 | swiftindex     | Executable | CLI entry point                                   |
 
+### MCP Architecture (SwiftIndexMCP)
+
+- `MCPServer` — Actor, JSON-RPC 2.0 over stdio
+- `MCPContext` — Shared actor for lazy resource initialization
+- `MCPToolHandler` — Protocol for tool implementations
+- Protocol version: `2024-11-05`
+- 5 tools: `index_codebase`, `search_code`, `search_docs`, `code_research`, `watch_codebase`
+
 ### Module Structure (SwiftIndexCore)
 
 - `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
@@ -140,6 +150,22 @@ MCP server uses TOON format by default for optimal token efficiency.
 | swift-log              | 1.9.0   | Structured logging            |
 | swift-async-algorithms | 1.1.0   | Async sequence utilities      |
 | swift-crypto           | 4.0.0   | Cryptographic operations      |
+
+### USearch Library Notes
+
+**Important**: The USearch Swift wrapper has limited public API:
+
+- `capacity`, `length`, `dimensions` properties are `internal` (not accessible)
+- `USearchError` does not conform to `Equatable` — use pattern matching:
+  ```swift
+  if case .reservationError = usearchError { ... }
+  ```
+- **Error 15** = `USearchError.reservationError` ("Reserve capacity ahead of insertions!")
+  - This is capacity exhaustion, NOT dimension mismatch
+  - Handle by calling `index.reserve(newCapacity)` and retrying
+
+`USearchVectorStore` tracks capacity internally (`trackedCapacity`) and stores
+dimension in the mapping file for validation on load.
 
 ## Code Conventions
 
@@ -225,14 +251,14 @@ let object = try JSONCodec.deserialize(data)
 
 ## Distribution
 
-### GitHub Releases (Ready)
+### GitHub Releases
 
 - **Workflow**: `.github/workflows/release.yml`
 - **Trigger**: Push tag `v*.*.*` (e.g., `git tag v0.1.0 && git push --tags`)
 - **Artifacts**: Universal binary (arm64 + x86_64) in `swiftindex-macos.zip`
 - **Auto-updates**: Homebrew formula SHA256 on stable releases
 
-### Homebrew (Ready)
+### Homebrew
 
 - **Tap**: `alexey1312/swift-index` (published)
 - **Formula**: `homebrew-swift-index/Formula/swiftindex.rb`

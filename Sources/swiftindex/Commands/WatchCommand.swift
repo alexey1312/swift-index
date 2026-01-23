@@ -52,6 +52,16 @@ struct WatchCommand: AsyncParsableCommand {
     // MARK: - Execution
 
     mutating func run() async throws {
+        // Capture verbose flag before escaping closure
+        let verboseFlag = verbose
+
+        // Configure logging to stderr
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardError(label: label)
+            handler.logLevel = verboseFlag ? .debug : .info
+            return handler
+        }
+
         let logger = CLIUtils.makeLogger(verbose: verbose)
         logger.info("Starting watch mode")
 
@@ -147,17 +157,25 @@ struct WatchCommand: AsyncParsableCommand {
             try await withTaskCancellationHandler {
                 try await incrementalIndexer.watchAndIndex(path: resolvedPath)
             } onCancel: {
+                // Note: This Task is detached and not awaited, but we ensure
+                // stop() completes via the explicit call below
                 Task {
                     await incrementalIndexer.stop()
                 }
             }
         } catch {
             if Task.isCancelled {
-                // Normal cancellation
+                // Normal cancellation - fall through to cleanup
             } else {
                 throw error
             }
         }
+
+        // Ensure graceful shutdown completes before process exit.
+        // This is critical because the onCancel handler creates a detached Task
+        // that may not complete before we reach the end of run().
+        // Calling stop() again is safe - it's a no-op if already stopped.
+        await incrementalIndexer.stop()
 
         // Cancel stats task
         statsTask.cancel()
