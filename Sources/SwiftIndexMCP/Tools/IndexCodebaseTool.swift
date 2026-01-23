@@ -219,10 +219,11 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         // Parse file
         let parseResult = parser.parse(content: content, path: path)
 
-        guard case let .success(chunks) = parseResult else {
+        if case .failure = parseResult {
             return FileIndexResult(chunksIndexed: 0, skipped: false)
         }
 
+        let chunks = parseResult.chunks
         guard !chunks.isEmpty else {
             try await indexManager.recordIndexed(fileHash: fileHash, path: path)
             return FileIndexResult(chunksIndexed: 0, skipped: false)

@@ -740,37 +740,3 @@ struct IndexManagerTests {
         return IndexManager(chunkStore: chunkStore, vectorStore: vectorStore)
     }
 }
-
-// MARK: - Test Helpers
-
-private func makeChunk(
-    id: String,
-    path: String = "/test/file.swift",
-    content: String = "func testFunction() { }",
-    startLine: Int = 1,
-    endLine: Int = 1,
-    kind: ChunkKind = .function,
-    symbols: [String] = ["testFunction"],
-    references: [String] = [],
-    fileHash: String = "testhash123",
-    docComment: String? = nil,
-    signature: String? = nil,
-    breadcrumb: String? = nil,
-    language: String = "swift"
-) -> CodeChunk {
-    CodeChunk(
-        id: id,
-        path: path,
-        content: content,
-        startLine: startLine,
-        endLine: endLine,
-        kind: kind,
-        symbols: symbols,
-        references: references,
-        fileHash: fileHash,
-        docComment: docComment,
-        signature: signature,
-        breadcrumb: breadcrumb,
-        language: language
-    )
-}

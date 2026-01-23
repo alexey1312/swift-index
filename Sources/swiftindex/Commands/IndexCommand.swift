@@ -391,13 +391,12 @@ struct IndexCommand: AsyncParsableCommand {
         // Parse file
         let parseResult = context.parser.parse(content: content, path: path)
 
-        guard case let .success(chunks) = parseResult else {
-            if case let .failure(error) = parseResult {
-                context.logger.debug("Parse failed for \(path): \(error)")
-            }
+        if case let .failure(error) = parseResult {
+            context.logger.debug("Parse failed for \(path): \(error)")
             return FileIndexResult(chunksIndexed: 0, skipped: false)
         }
 
+        let chunks = parseResult.chunks
         guard !chunks.isEmpty else {
             // Record file as indexed even if no chunks (to avoid re-processing)
             try await context.indexManager.recordIndexed(fileHash: fileHash, path: path)

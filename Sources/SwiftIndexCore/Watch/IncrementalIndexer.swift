@@ -175,17 +175,18 @@ public actor IncrementalIndexer {
         // Parse file
         let parseResult = parser.parse(content: content, path: path)
 
-        guard case let .success(chunks) = parseResult else {
-            if case let .failure(error) = parseResult {
-                logger.warning("Parse failed", metadata: [
-                    "path": "\(path)",
-                    "error": "\(error)",
-                ])
-            }
+        if case let .failure(error) = parseResult {
+            logger.warning("Parse failed", metadata: [
+                "path": "\(path)",
+                "error": "\(error)",
+            ])
             return
         }
 
-        // Generate embeddings and index
+        let chunks = parseResult.chunks
+        let snippets = parseResult.snippets
+
+        // Generate embeddings and index chunks
         for chunk in chunks {
             do {
                 let embedding = try await embeddingProvider.embed(chunk.content)
@@ -199,9 +200,26 @@ public actor IncrementalIndexer {
             }
         }
 
+        // Store info snippets
+        if !snippets.isEmpty {
+            do {
+                try await indexManager.chunkStore.insertSnippetBatch(snippets)
+                logger.debug("Indexed info snippets", metadata: [
+                    "path": "\(path)",
+                    "snippets": "\(snippets.count)",
+                ])
+            } catch {
+                logger.error("Failed to index info snippets", metadata: [
+                    "path": "\(path)",
+                    "error": "\(error.localizedDescription)",
+                ])
+            }
+        }
+
         logger.info("Indexed new file", metadata: [
             "path": "\(path)",
             "chunks": "\(chunks.count)",
+            "snippets": "\(snippets.count)",
         ])
     }
 
@@ -217,18 +235,20 @@ public actor IncrementalIndexer {
         // Parse file
         let parseResult = parser.parse(content: content, path: path)
 
-        guard case let .success(chunks) = parseResult else {
-            if case let .failure(error) = parseResult {
-                logger.warning("Parse failed", metadata: [
-                    "path": "\(path)",
-                    "error": "\(error)",
-                ])
-            }
+        if case let .failure(error) = parseResult {
+            logger.warning("Parse failed", metadata: [
+                "path": "\(path)",
+                "error": "\(error)",
+            ])
             return
         }
 
-        // Re-index file (delete old chunks, add new)
+        let chunks = parseResult.chunks
+        let snippets = parseResult.snippets
+
+        // Re-index file (delete old chunks and snippets, add new)
         try await indexManager.chunkStore.deleteByPath(path)
+        try await indexManager.chunkStore.deleteSnippetsByPath(path)
 
         for chunk in chunks {
             do {
@@ -243,17 +263,35 @@ public actor IncrementalIndexer {
             }
         }
 
+        // Store info snippets
+        if !snippets.isEmpty {
+            do {
+                try await indexManager.chunkStore.insertSnippetBatch(snippets)
+                logger.debug("Indexed info snippets", metadata: [
+                    "path": "\(path)",
+                    "snippets": "\(snippets.count)",
+                ])
+            } catch {
+                logger.error("Failed to index info snippets", metadata: [
+                    "path": "\(path)",
+                    "error": "\(error.localizedDescription)",
+                ])
+            }
+        }
+
         logger.info("Re-indexed modified file", metadata: [
             "path": "\(path)",
             "newChunks": "\(chunks.count)",
+            "newSnippets": "\(snippets.count)",
         ])
     }
 
     private func handleFileDeleted(_ path: String) async throws {
         logger.debug("File deleted", metadata: ["path": "\(path)"])
 
-        // Delete all chunks for this file
+        // Delete all chunks and snippets for this file
         try await indexManager.chunkStore.deleteByPath(path)
+        try await indexManager.chunkStore.deleteSnippetsByPath(path)
 
         // Delete file hash record
         try await indexManager.chunkStore.deleteFileHash(path: path)

@@ -445,6 +445,9 @@ struct E2ETests {
         case let .success(chunks):
             // PlainTextParser handles unknown extensions as fallback and returns chunks
             #expect(!chunks.isEmpty, "Plain text fallback should return chunks")
+        case let .successWithSnippets(chunks, _):
+            // PlainTextParser handles unknown extensions as fallback and returns chunks
+            #expect(!chunks.isEmpty, "Plain text fallback should return chunks")
         case .failure:
             // Acceptable - unknown extension may fail gracefully
             #expect(Bool(true), "Parser returned failure for unknown extension")

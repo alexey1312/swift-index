@@ -270,6 +270,49 @@ public actor HybridSearchEngine: SearchEngine {
         let range = NSRange(path.startIndex..., in: path)
         return regex.firstMatch(in: path, range: range) != nil
     }
+
+    // MARK: - Info Snippet Search
+
+    /// Searches for info snippets (documentation) using BM25 full-text search.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - limit: Maximum number of results to return.
+    ///   - pathFilter: Optional glob pattern to filter results by path.
+    /// - Returns: Array of info snippet search results ranked by relevance.
+    public func searchInfoSnippets(
+        query: String,
+        limit: Int = 10,
+        pathFilter: String? = nil
+    ) async throws -> [InfoSnippetSearchResult] {
+        // Check if chunk store supports info snippets
+        guard let snippetStore = chunkStore as? InfoSnippetStore else {
+            return []
+        }
+
+        // Perform FTS search
+        let rawResults = try await snippetStore.searchSnippetsFTS(query: query, limit: limit * 2)
+
+        // Filter and convert results
+        var results: [InfoSnippetSearchResult] = []
+
+        for (snippet, score) in rawResults {
+            // Apply path filter if specified
+            if let pathFilter {
+                guard matchesGlob(snippet.path, pattern: pathFilter) else {
+                    continue
+                }
+            }
+
+            results.append(InfoSnippetSearchResult(snippet: snippet, score: score))
+
+            if results.count >= limit {
+                break
+            }
+        }
+
+        return results.sorted()
+    }
 }
 
 // MARK: - Search Strategy

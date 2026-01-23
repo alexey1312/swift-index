@@ -25,8 +25,35 @@ public enum ParseResult: Sendable, Equatable {
     /// Successful parse with extracted chunks.
     case success([CodeChunk])
 
+    /// Successful parse with extracted chunks and info snippets.
+    case successWithSnippets([CodeChunk], [InfoSnippet])
+
     /// Parse failure with error details.
     case failure(ParseError)
+
+    /// Extract chunks from the result, regardless of variant.
+    public var chunks: [CodeChunk] {
+        switch self {
+        case let .success(chunks):
+            chunks
+        case let .successWithSnippets(chunks, _):
+            chunks
+        case .failure:
+            []
+        }
+    }
+
+    /// Extract info snippets from the result.
+    public var snippets: [InfoSnippet] {
+        switch self {
+        case .success:
+            []
+        case let .successWithSnippets(_, snippets):
+            snippets
+        case .failure:
+            []
+        }
+    }
 }
 
 /// Errors that can occur during parsing.

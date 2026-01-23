@@ -45,36 +45,38 @@
 
 ---
 
-## Phase 2: Info Snippets (PENDING)
+## Phase 2: Info Snippets (COMPLETED)
 
 ### 2.1 InfoSnippet Model
 
-- [ ] 2.1.1 Create `InfoSnippet.swift` model with fields: `id`, `chunkId`, `content`, `breadcrumb`, `tokenCount`
-- [ ] 2.1.2 Write tests for `InfoSnippet` model
-- [ ] 2.1.3 Add `InfoSnippetStore` protocol
+- [x] 2.1.1 Create `InfoSnippet.swift` model with fields: `id`, `chunkId`, `content`, `breadcrumb`, `tokenCount`, etc.
+- [x] 2.1.2 Write tests for `InfoSnippet` model
+- [x] 2.1.3 Add `InfoSnippetStore` protocol
 
 ### 2.2 Database Support
 
-- [ ] 2.2.1 Add `info_snippets` table in v3 migration
-- [ ] 2.2.2 Add FTS5 index `info_snippets_fts` for documentation search
-- [ ] 2.2.3 Implement CRUD operations for info snippets
-- [ ] 2.2.4 Write storage tests
+- [x] 2.2.1 Add `info_snippets` table in v3 migration
+- [x] 2.2.2 Add FTS5 index `info_snippets_fts` for documentation search
+- [x] 2.2.3 Implement CRUD operations for info snippets
+- [x] 2.2.4 Write storage tests
 
 ### 2.3 Parser Extraction
 
-- [ ] 2.3.1 Extract standalone doc comments as InfoSnippet in `SwiftSyntaxParser`
-- [ ] 2.3.2 Extract Markdown sections as InfoSnippet in `TreeSitterParser`
-- [ ] 2.3.3 Link InfoSnippet to parent CodeChunk via `chunkId`
-- [ ] 2.3.4 Write extraction tests
+- [x] 2.3.1 Add `ParseResult.successWithSnippets` case for combined chunk/snippet results
+- [x] 2.3.2 Extract Markdown sections as InfoSnippet in `TreeSitterParser`
+- [x] 2.3.3 Link InfoSnippet to parent CodeChunk via `chunkId`
+- [x] 2.3.4 Update all production code to handle new ParseResult variant
+- [x] 2.3.5 Write extraction tests
 
 ### 2.4 Search Integration
 
-- [ ] 2.4.1 Add `searchInfoSnippets()` method to `HybridSearchEngine`
-- [ ] 2.4.2 Integrate info snippet results into main `search()` method
-- [ ] 2.4.3 Update output formatters to include info snippets
-- [ ] 2.4.4 Write search integration tests
+- [x] 2.4.1 Add `searchInfoSnippets()` method to `HybridSearchEngine`
+- [x] 2.4.2 Create `InfoSnippetSearchResult` model for search results
+- [x] 2.4.3 Create `SearchDocsTool` MCP tool for documentation search
+- [x] 2.4.4 Add formatters for TOON, JSON, and human-readable output
+- [x] 2.4.5 Write search integration tests
 
-**Gate**: Build + all tests pass
+**Gate**: Build + all tests pass ✓
 
 ---
 
@@ -189,7 +191,7 @@
 | Phase | Status    | Tasks | Tests Added |
 | ----- | --------- | ----- | ----------- |
 | 1     | COMPLETED | 20/20 | ~15         |
-| 2     | PENDING   | 0/16  | 0           |
+| 2     | COMPLETED | 18/18 | ~12         |
 | 3     | PENDING   | 0/11  | 0           |
 | 4     | PENDING   | 0/27  | 0           |
 | 5     | PENDING   | 0/10  | 0           |

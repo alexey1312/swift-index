@@ -159,11 +159,7 @@ struct TreeSitterParserTests {
         """
 
         let result = parser.parse(content: content, path: "README.md")
-
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
         // Should have chunks for different sections
@@ -185,13 +181,64 @@ struct TreeSitterParserTests {
         """
 
         let result = parser.parse(content: content, path: "example.md")
-
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
+    }
+
+    @Test("Extract InfoSnippets from Markdown")
+    func extractMarkdownInfoSnippets() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Getting Started
+
+        Welcome to the documentation.
+
+        ## Installation
+
+        Install via Homebrew.
+
+        ## Usage
+
+        Run the command.
+        """
+
+        let result = parser.parse(content: content, path: "README.md")
+        let snippets = result.snippets
+
+        #expect(!snippets.isEmpty)
+        #expect(snippets.count >= 3) // 3 sections
+
+        // Verify snippet properties
+        let installSnippet = snippets.first { $0.content.contains("Installation") }
+        #expect(installSnippet != nil)
+        #expect(installSnippet?.kind == .markdownSection)
+        #expect(installSnippet?.language == "markdown")
+        #expect(installSnippet?.breadcrumb == "Getting Started > Installation")
+    }
+
+    @Test("InfoSnippets have correct chunkId linkage")
+    func infoSnippetChunkIdLinkage() {
+        let parser = TreeSitterParser()
+        let content = """
+        # Documentation
+
+        Some content here.
+        """
+
+        let result = parser.parse(content: content, path: "doc.md")
+        let chunks = result.chunks
+        let snippets = result.snippets
+
+        #expect(chunks.count == snippets.count)
+
+        // Each snippet should link to its corresponding chunk
+        for snippet in snippets {
+            let matchingChunk = chunks.first { $0.id == snippet.chunkId }
+            #expect(matchingChunk != nil)
+            #expect(matchingChunk?.startLine == snippet.startLine)
+            #expect(matchingChunk?.endLine == snippet.endLine)
+        }
     }
 
     // MARK: - Objective-C Tests
@@ -382,10 +429,7 @@ struct TreeSitterParserTests {
         """
 
         let result = parser.parse(content: content, path: "README.md")
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         #expect(chunks.first?.language == "markdown")
     }
@@ -408,10 +452,7 @@ struct TreeSitterParserTests {
         """
 
         let result = parser.parse(content: content, path: "README.md")
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         // First section should have breadcrumb
         let gettingStarted = chunks.first { $0.symbols.contains("Getting Started") }
@@ -435,10 +476,7 @@ struct TreeSitterParserTests {
         """
 
         let result = parser.parse(content: content, path: "test.md")
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         let chunk = chunks.first
         #expect(chunk != nil)
@@ -617,11 +655,7 @@ struct HybridParserTests {
         """
 
         let result = parser.parse(content: content, path: "README.md")
-
-        guard case let .success(chunks) = result else {
-            Issue.record("Expected successful parse")
-            return
-        }
+        let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
     }

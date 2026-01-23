@@ -5,12 +5,12 @@ import GRDB
 
 /// SQLite-based chunk storage using GRDB with FTS5 full-text search.
 ///
-/// GRDBChunkStore provides persistent storage for `CodeChunk` objects with:
+/// GRDBChunkStore provides persistent storage for `CodeChunk` and `InfoSnippet` objects with:
 /// - Type-safe SQLite operations via GRDB
 /// - FTS5 full-text search with BM25 ranking
 /// - File hash tracking for incremental indexing
 /// - Batch operations for efficient bulk inserts
-public actor GRDBChunkStore: ChunkStore {
+public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     // MARK: - Properties
 
     /// The database writer (can be DatabasePool or DatabaseQueue).
@@ -67,6 +67,16 @@ public actor GRDBChunkStore: ChunkStore {
     private nonisolated func migrate() throws {
         var migrator = DatabaseMigrator()
 
+        registerInitialMigration(&migrator)
+        registerRichMetadataMigration(&migrator)
+        registerInfoSnippetsMigration(&migrator)
+
+        try migrator.migrate(dbWriter)
+    }
+
+    private nonisolated func registerInitialMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
         // Version 1: Initial schema
         migrator.registerMigration("v1_initial") { db in
             // Main chunks table
@@ -127,7 +137,11 @@ public actor GRDBChunkStore: ChunkStore {
                 table.column("indexed_at", .datetime).notNull()
             }
         }
+    }
 
+    private nonisolated func registerRichMetadataMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
         // Version 2: Rich metadata fields
         migrator.registerMigration("v2_rich_metadata") { db in
             // Add new metadata columns to chunks table
@@ -192,8 +206,66 @@ public actor GRDBChunkStore: ChunkStore {
                 SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''), path FROM chunks
             """)
         }
+    }
 
-        try migrator.migrate(dbWriter)
+    private nonisolated func registerInfoSnippetsMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 3: Info snippets for standalone documentation
+        migrator.registerMigration("v3_info_snippets") { db in
+            // Info snippets table for standalone documentation
+            try db.create(table: "info_snippets") { table in
+                table.primaryKey("id", .text)
+                table.column("path", .text).notNull().indexed()
+                table.column("content", .text).notNull()
+                table.column("start_line", .integer).notNull()
+                table.column("end_line", .integer).notNull()
+                table.column("breadcrumb", .text)
+                table.column("token_count", .integer).notNull().defaults(to: 0)
+                table.column("language", .text).notNull().defaults(to: "unknown")
+                table.column("chunk_id", .text).indexed() // Optional FK to chunks
+                table.column("kind", .text).notNull().defaults(to: "documentation")
+                table.column("file_hash", .text).notNull().indexed()
+                table.column("created_at", .datetime).notNull()
+            }
+
+            // FTS5 virtual table for info snippet search
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE info_snippets_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    breadcrumb,
+                    path UNINDEXED,
+                    content='info_snippets',
+                    content_rowid='rowid',
+                    tokenize='porter unicode61'
+                )
+            """)
+
+            // Triggers to keep FTS in sync
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_ai AFTER INSERT ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(rowid, id, content, breadcrumb, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, COALESCE(NEW.breadcrumb, ''), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_ad AFTER DELETE ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(info_snippets_fts, rowid, id, content, breadcrumb, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, COALESCE(OLD.breadcrumb, ''), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_au AFTER UPDATE ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(info_snippets_fts, rowid, id, content, breadcrumb, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, COALESCE(OLD.breadcrumb, ''), OLD.path);
+                    INSERT INTO info_snippets_fts(rowid, id, content, breadcrumb, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, COALESCE(NEW.breadcrumb, ''), NEW.path);
+                END
+            """)
+        }
     }
 
     // MARK: - ChunkStore Protocol
@@ -312,7 +384,119 @@ public actor GRDBChunkStore: ChunkStore {
     public func clear() async throws {
         try await dbWriter.write { db in
             try db.execute(sql: "DELETE FROM chunks")
+            try db.execute(sql: "DELETE FROM info_snippets")
             try db.execute(sql: "DELETE FROM file_hashes")
+        }
+    }
+
+    // MARK: - InfoSnippetStore Protocol
+
+    public func insertSnippet(_ snippet: InfoSnippet) async throws {
+        try await dbWriter.write { db in
+            try InfoSnippetRecord(snippet: snippet).insert(db)
+        }
+    }
+
+    public func insertSnippetBatch(_ snippets: [InfoSnippet]) async throws {
+        guard !snippets.isEmpty else { return }
+
+        try await dbWriter.write { db in
+            for snippet in snippets {
+                try InfoSnippetRecord(snippet: snippet).insert(db)
+            }
+        }
+    }
+
+    public func getSnippet(id: String) async throws -> InfoSnippet? {
+        try await dbWriter.read { db in
+            try InfoSnippetRecord
+                .filter(Column("id") == id)
+                .fetchOne(db)?
+                .toInfoSnippet()
+        }
+    }
+
+    public func getSnippetsByPath(_ path: String) async throws -> [InfoSnippet] {
+        try await dbWriter.read { db in
+            try InfoSnippetRecord
+                .filter(Column("path") == path)
+                .order(Column("start_line"))
+                .fetchAll(db)
+                .map { try $0.toInfoSnippet() }
+        }
+    }
+
+    public func getSnippetsByChunkId(_ chunkId: String) async throws -> [InfoSnippet] {
+        try await dbWriter.read { db in
+            try InfoSnippetRecord
+                .filter(Column("chunk_id") == chunkId)
+                .order(Column("start_line"))
+                .fetchAll(db)
+                .map { try $0.toInfoSnippet() }
+        }
+    }
+
+    public func deleteSnippet(id: String) async throws {
+        _ = try await dbWriter.write { db in
+            try InfoSnippetRecord.deleteOne(db, key: id)
+        }
+    }
+
+    public func deleteSnippetsByPath(_ path: String) async throws {
+        _ = try await dbWriter.write { db in
+            try InfoSnippetRecord
+                .filter(Column("path") == path)
+                .deleteAll(db)
+        }
+    }
+
+    public func deleteSnippetsByChunkId(_ chunkId: String) async throws {
+        _ = try await dbWriter.write { db in
+            try InfoSnippetRecord
+                .filter(Column("chunk_id") == chunkId)
+                .deleteAll(db)
+        }
+    }
+
+    public func searchSnippetsFTS(
+        query: String,
+        limit: Int
+    ) async throws -> [(snippet: InfoSnippet, score: Double)] {
+        guard !query.isEmpty else { return [] }
+
+        let sanitizedQuery = sanitizeFTSQuery(query)
+
+        return try await dbWriter.read { db in
+            let sql = """
+                SELECT info_snippets.*, bm25(info_snippets_fts) AS score
+                FROM info_snippets_fts
+                JOIN info_snippets ON info_snippets.id = info_snippets_fts.id
+                WHERE info_snippets_fts MATCH ?
+                ORDER BY score
+                LIMIT ?
+            """
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: [sanitizedQuery, limit])
+
+            return try rows.map { row in
+                let record = InfoSnippetRecord(row: row)
+                let snippet = try record.toInfoSnippet()
+                // BM25 returns negative scores (more negative = better match)
+                let score = -(row["score"] as Double? ?? 0.0)
+                return (snippet: snippet, score: score)
+            }
+        }
+    }
+
+    public func snippetCount() async throws -> Int {
+        try await dbWriter.read { db in
+            try InfoSnippetRecord.fetchCount(db)
+        }
+    }
+
+    public func clearSnippets() async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM info_snippets")
         }
     }
 
@@ -480,6 +664,92 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             breadcrumb: breadcrumb,
             tokenCount: tokenCount,
             language: language
+        )
+    }
+}
+
+// MARK: - InfoSnippetRecord
+
+/// GRDB record for InfoSnippet persistence.
+private struct InfoSnippetRecord: Codable, PersistableRecord, FetchableRecord {
+    static let databaseTableName = "info_snippets"
+
+    let id: String
+    let path: String
+    let content: String
+    let startLine: Int
+    let endLine: Int
+    let breadcrumb: String?
+    let tokenCount: Int
+    let language: String
+    let chunkId: String?
+    let kind: String
+    let fileHash: String
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case path
+        case content
+        case startLine = "start_line"
+        case endLine = "end_line"
+        case breadcrumb
+        case tokenCount = "token_count"
+        case language
+        case chunkId = "chunk_id"
+        case kind
+        case fileHash = "file_hash"
+        case createdAt = "created_at"
+    }
+
+    init(snippet: InfoSnippet) {
+        id = snippet.id
+        path = snippet.path
+        content = snippet.content
+        startLine = snippet.startLine
+        endLine = snippet.endLine
+        breadcrumb = snippet.breadcrumb
+        tokenCount = snippet.tokenCount
+        language = snippet.language
+        chunkId = snippet.chunkId
+        kind = snippet.kind.rawValue
+        fileHash = snippet.fileHash
+        createdAt = snippet.createdAt
+    }
+
+    init(row: Row) {
+        id = row["id"]
+        path = row["path"]
+        content = row["content"]
+        startLine = row["start_line"]
+        endLine = row["end_line"]
+        breadcrumb = row["breadcrumb"]
+        tokenCount = row["token_count"] ?? 0
+        language = row["language"] ?? "unknown"
+        chunkId = row["chunk_id"]
+        kind = row["kind"] ?? "documentation"
+        fileHash = row["file_hash"]
+        createdAt = row["created_at"]
+    }
+
+    func toInfoSnippet() throws -> InfoSnippet {
+        guard let snippetKind = InfoSnippetKind(rawValue: kind) else {
+            throw ChunkStoreError.invalidKind(kind)
+        }
+
+        return InfoSnippet(
+            id: id,
+            path: path,
+            content: content,
+            startLine: startLine,
+            endLine: endLine,
+            breadcrumb: breadcrumb,
+            tokenCount: tokenCount,
+            language: language,
+            chunkId: chunkId,
+            kind: snippetKind,
+            fileHash: fileHash,
+            createdAt: createdAt
         )
     }
 }

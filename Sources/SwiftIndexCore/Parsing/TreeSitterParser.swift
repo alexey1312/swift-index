@@ -335,6 +335,7 @@ public struct TreeSitterParser: Parser, Sendable {
     private func parseMarkdown(content: String, path: String) -> ParseResult {
         let fileHash = computeHash(content)
         var chunks: [CodeChunk] = []
+        var snippets: [InfoSnippet] = []
 
         let lines = content.components(separatedBy: "\n")
         var currentSection = ""
@@ -350,8 +351,11 @@ public struct TreeSitterParser: Parser, Sendable {
                 // Save previous section if it has content
                 if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     let breadcrumb = headerStack.isEmpty ? nil : headerStack.joined(separator: " > ")
+
+                    // Create CodeChunk for code search
+                    let chunkId = generateChunkId(path: path, content: currentSection, startLine: currentSectionStart)
                     let chunk = CodeChunk(
-                        id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
+                        id: chunkId,
                         path: path,
                         content: currentSection,
                         startLine: currentSectionStart,
@@ -364,6 +368,20 @@ public struct TreeSitterParser: Parser, Sendable {
                         language: "markdown"
                     )
                     chunks.append(chunk)
+
+                    // Create InfoSnippet for documentation search
+                    let snippet = InfoSnippet(
+                        path: path,
+                        content: currentSection,
+                        startLine: currentSectionStart,
+                        endLine: lineNumber - 1,
+                        breadcrumb: breadcrumb,
+                        language: "markdown",
+                        chunkId: chunkId,
+                        kind: .markdownSection,
+                        fileHash: fileHash
+                    )
+                    snippets.append(snippet)
                 }
 
                 // Calculate header level
@@ -387,8 +405,11 @@ public struct TreeSitterParser: Parser, Sendable {
         // Don't forget the last section
         if !currentSection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             let breadcrumb = headerStack.isEmpty ? nil : headerStack.joined(separator: " > ")
+
+            // Create CodeChunk
+            let chunkId = generateChunkId(path: path, content: currentSection, startLine: currentSectionStart)
             let chunk = CodeChunk(
-                id: generateChunkId(path: path, content: currentSection, startLine: currentSectionStart),
+                id: chunkId,
                 path: path,
                 content: currentSection,
                 startLine: currentSectionStart,
@@ -401,14 +422,43 @@ public struct TreeSitterParser: Parser, Sendable {
                 language: "markdown"
             )
             chunks.append(chunk)
+
+            // Create InfoSnippet
+            let snippet = InfoSnippet(
+                path: path,
+                content: currentSection,
+                startLine: currentSectionStart,
+                endLine: lines.count,
+                breadcrumb: breadcrumb,
+                language: "markdown",
+                chunkId: chunkId,
+                kind: .markdownSection,
+                fileHash: fileHash
+            )
+            snippets.append(snippet)
         }
 
         // If no sections found, create a single document chunk
         if chunks.isEmpty {
-            chunks.append(createDocumentChunk(content: content, path: path, fileHash: fileHash))
+            let chunk = createDocumentChunk(content: content, path: path, fileHash: fileHash)
+            chunks.append(chunk)
+
+            // Also create a documentation snippet for the whole document
+            let snippet = InfoSnippet(
+                path: path,
+                content: content,
+                startLine: 1,
+                endLine: lines.count,
+                breadcrumb: nil,
+                language: "markdown",
+                chunkId: chunk.id,
+                kind: .documentation,
+                fileHash: fileHash
+            )
+            snippets.append(snippet)
         }
 
-        return .success(chunks)
+        return .successWithSnippets(chunks, snippets)
     }
 
     // MARK: - Helper Methods
