@@ -57,20 +57,6 @@ mise use -g github:alexey1312/swift-index@latest
 
 This installs SwiftIndex from GitHub Releases.
 
-### GitHub Releases
-
-Download the latest universal binary:
-
-```bash
-# Download latest release
-curl -L -O https://github.com/alexey1312/swift-index/releases/latest/download/swiftindex-macos.zip
-
-# Extract and install
-unzip swiftindex-macos.zip
-mv dist/swiftindex /usr/local/bin/
-mv dist/default.metallib dist/mlx.metallib /usr/local/bin/
-```
-
 ### From Source
 
 ```bash
