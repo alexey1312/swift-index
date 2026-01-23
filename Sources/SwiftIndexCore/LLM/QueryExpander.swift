@@ -186,7 +186,9 @@ public struct ExpandedQuery: Sendable, Equatable {
     /// Estimated improvement in recall.
     public var recallBoost: Float {
         let termCount = Float(allTerms.count)
-        return min(1.0 + (termCount - 1) * 0.1, 2.0)
+        let maxBoostTerms: Float = 10
+        let clampedTerms = min(termCount, maxBoostTerms)
+        return 1.0 + (clampedTerms - 1.0) / (maxBoostTerms - 1.0)
     }
 }
 
