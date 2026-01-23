@@ -38,8 +38,8 @@ jobs:
       - name: Build release binary (Universal)
         run: |
           set -euo pipefail
-          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift -f toon
-          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift -f toon
+          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
+          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
           mkdir -p .build/universal
           lipo -create \
             .build/arm64-apple-macosx/release/swiftindex \
