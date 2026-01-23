@@ -6,8 +6,12 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 
 - **Hybrid Search**: Combines BM25 full-text search with semantic vector search using RRF fusion
 - **Swift-First Parsing**: Uses SwiftSyntax for accurate Swift parsing with tree-sitter fallback for ObjC, C, JSON, YAML, and Markdown
+- **Rich Metadata Indexing**: Extracts doc comments, signatures, and breadcrumbs for improved search quality
+- **Documentation Search**: Indexes standalone documentation (Markdown sections, file headers) as InfoSnippets
+- **LLM-Powered Search Enhancement**: Optional query expansion, result synthesis, and follow-up suggestions
 - **Local-First Embeddings**: Privacy-preserving embedding generation using MLX (Apple Silicon) or swift-embeddings
-- **Incremental Indexing**: Only re-indexes changed files based on content hashes
+- **Parallel Indexing**: Concurrent file processing with bounded concurrency for faster indexing
+- **Content-Based Change Detection**: SHA-256 content hashing for precise incremental re-indexing
 - **Watch Mode**: Automatically updates the index when files change
 - **MCP Server**: Exposes search capabilities to AI assistants via Model Context Protocol
 
@@ -147,6 +151,10 @@ swiftindex search --json "error handling"
 
 # Adjust semantic weight (0.0 = BM25 only, 1.0 = semantic only)
 swiftindex search --semantic-weight 0.7 "networking code"
+
+# LLM-enhanced search (requires [search.enhancement] config)
+swiftindex search --expand-query "async networking"     # Expand query with related terms
+swiftindex search --synthesize "authentication flow"   # Generate summary and follow-ups
 ```
 
 **Output Formats:**
@@ -156,6 +164,15 @@ swiftindex search --semantic-weight 0.7 "networking code"
 | `human` | Readable with relevance percentages | Terminal/interactive use       |
 | `json`  | Verbose JSON with all metadata      | Scripting/automation           |
 | `toon`  | Token-optimized (TOON format)       | AI assistants (40-60% smaller) |
+
+**Search Enhancement Flags:**
+
+| Flag             | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| `--expand-query` | Use LLM to generate related search terms for better recall |
+| `--synthesize`   | Generate AI summary of results with follow-up suggestions  |
+
+Both flags require `[search.enhancement]` configuration. See [Search Enhancement](#search-enhancement).
 
 ### `swiftindex init`
 
@@ -301,8 +318,65 @@ Configuration is loaded from multiple sources with the following priority (highe
 | `SWIFTINDEX_EMBEDDING_MODEL`    | Embedding model name             |
 | `SWIFTINDEX_LIMIT`              | Default search limit             |
 | `OPENAI_API_KEY`                | API key for OpenAI embeddings    |
-| `VOYAGE_API_KEY`                | API key for Voyage embeddings    |
 | `VOYAGE_API_KEY`                | API key for Voyage AI embeddings |
+
+## Search Enhancement
+
+SwiftIndex supports optional LLM-powered search enhancements for improved results:
+
+- **Query Expansion**: Automatically expands search queries with synonyms and related terms
+- **Result Synthesis**: Generates AI summaries of search results with key insights
+- **Follow-up Suggestions**: Suggests related queries to explore further
+
+### Configuration
+
+Add the `[search.enhancement]` section to your `.swiftindex.toml`:
+
+```toml
+[search.enhancement]
+enabled = true  # Enable LLM features
+
+# Utility tier: fast operations (query expansion, follow-ups)
+[search.enhancement.utility]
+provider = "claude-code-cli"  # or: codex-cli, ollama, openai
+# model = "claude-haiku-4-5-20251001"  # optional model override
+timeout = 30
+
+# Synthesis tier: deep analysis (result summarization)
+[search.enhancement.synthesis]
+provider = "claude-code-cli"
+# model = "claude-sonnet-4-20250514"  # optional model override
+timeout = 120
+```
+
+### Supported Providers
+
+| Provider          | Requirement              | Best For                   |
+| ----------------- | ------------------------ | -------------------------- |
+| `claude-code-cli` | `claude` CLI installed   | Best quality, Claude users |
+| `codex-cli`       | `codex` CLI installed    | OpenAI Codex users         |
+| `ollama`          | Ollama server running    | Local, privacy-preserving  |
+| `openai`          | `OPENAI_API_KEY` env var | Cloud, high availability   |
+
+### Usage
+
+```bash
+# Expand query with related terms before searching
+swiftindex search --expand-query "async networking"
+
+# Get AI synthesis of results
+swiftindex search --synthesize "authentication flow"
+
+# Both together
+swiftindex search --expand-query --synthesize "error handling"
+```
+
+The MCP server automatically uses search enhancement when configured.
+
+**Further Reading:**
+
+- [Search Enhancement Guide](docs/search-enhancement.md) — Detailed LLM provider configuration
+- [Search Features Guide](docs/search-features.md) — Query expansion, synthesis, and search tips
 
 ## MCP Tools
 
@@ -338,6 +412,27 @@ Trigger indexing of the codebase.
 
 - `path` (optional): Path to index (default: current directory)
 - `force` (optional): Force re-index all files (default: false)
+
+### `swiftindex_search_docs`
+
+Search indexed documentation (Markdown files, README sections, etc.).
+
+**Parameters:**
+
+- `query` (required): Natural language search query
+- `limit` (optional): Maximum results (default: 10)
+- `path_filter` (optional): Filter by path pattern (glob syntax)
+- `format` (optional): Output format - `toon`, `json`, or `human`
+
+**Example:**
+
+```json
+{
+  "query": "installation instructions",
+  "limit": 5,
+  "path_filter": "*.md"
+}
+```
 
 ### `swiftindex_status`
 
@@ -413,33 +508,71 @@ SwiftIndex follows a modular architecture:
 
 ```
 SwiftIndexCore/
-├── Config/          # Configuration loading and merging
-├── Embedding/       # Embedding providers (MLX, OpenAI, etc.)
-├── Models/          # Core data models (CodeChunk, SearchResult)
+├── Configuration/   # Configuration loading and merging
+├── Embedding/       # Embedding providers (MLX, OpenAI, Voyage, Ollama)
+├── Index/           # IndexManager (orchestrates storage and embedding)
+├── LLM/             # LLM providers for search enhancement
+│   ├── ClaudeCodeCLIProvider  # Claude Code CLI integration
+│   ├── CodexCLIProvider       # Codex CLI integration
+│   ├── OllamaLLMProvider      # Ollama HTTP API
+│   ├── OpenAILLMProvider      # OpenAI HTTP API
+│   ├── QueryExpander          # LLM-powered query expansion
+│   ├── ResultSynthesizer      # Multi-result summarization
+│   └── FollowUpGenerator      # Suggested follow-up queries
+├── Models/          # Core data models
+│   ├── CodeChunk              # Code constructs with metadata
+│   ├── InfoSnippet            # Standalone documentation snippets
+│   └── SearchResult           # Search result container
 ├── Parsing/         # SwiftSyntax and tree-sitter parsers
-├── Protocols/       # Core protocol definitions
+├── Protocols/       # Core abstractions
+│   ├── EmbeddingProvider      # Embedding generation
+│   ├── LLMProvider            # LLM text generation
+│   ├── ChunkStore             # Code chunk persistence
+│   ├── InfoSnippetStore       # Documentation snippet persistence
+│   └── VectorStore            # Vector index operations
 ├── Search/          # Hybrid search engine with RRF fusion
 └── Storage/         # GRDB chunk store + USearch vector store
 
 SwiftIndexMCP/
-└── MCPServer.swift  # MCP server implementation
+├── MCPServer.swift  # MCP server implementation
+└── Tools/           # MCP tool handlers
+    ├── SearchCodeTool
+    ├── SearchDocsTool
+    └── IndexTool
 
 swiftindex/
-└── main.swift       # CLI entry point
+└── Commands/        # CLI commands
 ```
 
 ### Storage
 
 - **Chunk Store**: SQLite database with FTS5 for full-text search (GRDB)
+- **Info Snippet Store**: Separate FTS5 index for documentation search
 - **Vector Store**: HNSW index for approximate nearest neighbor search (USearch)
 
 ### Search Algorithm
 
 1. Generate query embedding
-2. Perform BM25 full-text search
-3. Perform semantic similarity search
-4. Combine results using Reciprocal Rank Fusion (RRF)
-5. Return top-k results sorted by fused score
+2. (Optional) Expand query using LLM for better recall
+3. Perform BM25 full-text search (on code chunks and/or info snippets)
+4. Perform semantic similarity search
+5. Combine results using Reciprocal Rank Fusion (RRF)
+6. (Optional) Synthesize results using LLM for summary
+7. Return top-k results sorted by fused score
+
+### Indexed Metadata
+
+Each code chunk includes rich metadata for improved search:
+
+| Field         | Description                                      |
+| ------------- | ------------------------------------------------ |
+| `content`     | The actual code                                  |
+| `docComment`  | Associated documentation comment                 |
+| `signature`   | Function/type signature (if applicable)          |
+| `breadcrumb`  | Hierarchy path (e.g., "Module > Class > Method") |
+| `tokenCount`  | Approximate token count (content.count / 4)      |
+| `language`    | Programming language                             |
+| `contentHash` | SHA-256 hash for change detection                |
 
 ## Development
 

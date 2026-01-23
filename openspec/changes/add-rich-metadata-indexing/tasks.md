@@ -166,28 +166,28 @@
 
 ---
 
-## Phase 5: Documentation Update (PENDING)
+## Phase 5: Documentation Update (COMPLETED)
 
 ### 5.1 User Documentation
 
-- [ ] 5.1.1 Update `README.md` with all new features (metadata, info snippets, LLM)
-- [ ] 5.1.2 Create `docs/search-enhancement.md` — LLM provider configuration guide
-- [ ] 5.1.3 Create `docs/search-features.md` — query expansion & synthesis docs
-- [ ] 5.1.4 Add usage examples for each new CLI flag
+- [x] 5.1.1 Update `README.md` with all new features (metadata, info snippets, LLM)
+- [x] 5.1.2 Create `docs/search-enhancement.md` — LLM provider configuration guide
+- [x] 5.1.3 Create `docs/search-features.md` — query expansion & synthesis docs
+- [x] 5.1.4 Add usage examples for each new CLI flag
 
 ### 5.2 Developer Documentation
 
-- [ ] 5.2.1 Update `CLAUDE.md` project guide with new commands/architecture
-- [ ] 5.2.2 Document new protocols (`LLMProvider`, `InfoSnippetStore`)
-- [ ] 5.2.3 Add inline documentation to config template in `init` command
+- [x] 5.2.1 Update `CLAUDE.md` project guide with new commands/architecture
+- [x] 5.2.2 Document new protocols (`LLMProvider`, `InfoSnippetStore`)
+- [x] 5.2.3 Add inline documentation to config template in `init` command
 
 ### 5.3 Release Preparation
 
-- [ ] 5.3.1 Update CHANGELOG with all phases
-- [ ] 5.3.2 Review and update Homebrew formula description
-- [ ] 5.3.3 Final review of all doc links and references
+- [x] 5.3.1 Update CHANGELOG with all phases
+- [x] 5.3.2 Review and update Homebrew formula description (auto-updates via workflow)
+- [x] 5.3.3 Final review of all doc links and references
 
-**Gate**: Documentation complete and reviewed
+**Gate**: Documentation complete and reviewed ✓
 
 ---
 
@@ -199,6 +199,6 @@
 | 2     | COMPLETED | 18/18 | ~12         |
 | 3     | COMPLETED | 12/16 | ~8          |
 | 4     | COMPLETED | 27/27 | ~25         |
-| 5     | PENDING   | 0/10  | 0           |
+| 5     | COMPLETED | 10/10 | 0           |
 
 Note: Phase 3.3 (LLM Description Generation) deferred as optional feature.

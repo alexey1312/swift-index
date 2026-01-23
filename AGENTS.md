@@ -44,17 +44,27 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### CLI Commands
 
-| Command                          | Description              |
-| -------------------------------- | ------------------------ |
-| `swiftindex index [PATH]`        | Index a codebase         |
-| `swiftindex search <QUERY>`      | Search indexed code      |
-| `swiftindex watch [PATH]`        | Watch mode (incremental) |
-| `swiftindex serve`               | Start MCP server         |
-| `swiftindex providers`           | List embedding providers |
-| `swiftindex init`                | Initialize config        |
-| `swiftindex install-claude-code` | Configure Claude Code    |
-| `swiftindex install-cursor`      | Configure Cursor         |
-| `swiftindex install-codex`       | Configure Codex          |
+| Command                          | Description                   |
+| -------------------------------- | ----------------------------- |
+| `swiftindex index [PATH]`        | Index a codebase              |
+| `swiftindex search <QUERY>`      | Search indexed code           |
+| `swiftindex search-docs <QUERY>` | Search documentation snippets |
+| `swiftindex watch [PATH]`        | Watch mode (incremental)      |
+| `swiftindex serve`               | Start MCP server              |
+| `swiftindex providers`           | List embedding providers      |
+| `swiftindex init`                | Initialize config             |
+| `swiftindex install-claude-code` | Configure Claude Code         |
+| `swiftindex install-cursor`      | Configure Cursor              |
+| `swiftindex install-codex`       | Configure Codex               |
+
+### Search Enhancement Flags
+
+| Flag             | Description                                      |
+| ---------------- | ------------------------------------------------ |
+| `--expand-query` | LLM query expansion for better recall            |
+| `--synthesize`   | LLM result synthesis with summary and follow-ups |
+
+Requires `[search.enhancement]` config section. See `docs/search-enhancement.md`.
 
 ### Search Output Formats
 
@@ -78,15 +88,26 @@ MCP server uses TOON format by default for optimal token efficiency.
 
 ### Module Structure (SwiftIndexCore)
 
-- `/Configuration` — TOML config loading (TOMLConfigLoader, Config)
+- `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
 - `/Embedding` — Providers (MLX, Ollama, Voyage, OpenAI, SwiftEmbeddings), HubModelManager
-- `/Models` — Data structures (CodeChunk, SearchResult, ChunkKind)
+- `/Index` — IndexManager (orchestrates storage and embedding)
+- `/LLM` — LLM providers and search enhancement features
+  - `LLMProvider` protocol, `LLMMessage`, `LLMProviderChain`
+  - `ClaudeCodeCLIProvider`, `CodexCLIProvider`, `OllamaLLMProvider`, `OpenAILLMProvider`
+  - `QueryExpander` — LLM-powered query expansion
+  - `ResultSynthesizer` — multi-result summarization
+  - `FollowUpGenerator` — suggested follow-up queries
+- `/Models` — Data structures
+  - `CodeChunk` — code with docComment, signature, breadcrumb, contentHash
+  - `InfoSnippet` — standalone documentation (Markdown sections, headers)
+  - `SearchResult`, `ChunkKind`
 - `/Parsing` — Parsers (SwiftSyntax, Tree-sitter, Plain), HybridParser
-- `/Protocols` — Core abstractions (EmbeddingProvider, ChunkStore, VectorStore)
+- `/Protocols` — Core abstractions
+  - `EmbeddingProvider`, `LLMProvider`
+  - `ChunkStore`, `InfoSnippetStore`, `VectorStore`
 - `/Search` — BM25, Semantic, HybridSearchEngine, RRFFusion
 - `/Storage` — GRDBChunkStore (SQLite/FTS5), USearchVectorStore (HNSW)
 - `/Watch` — FileWatcher, IncrementalIndexer
-- `/Index` — IndexManager (orchestrates storage and embedding)
 
 ### Key Dependencies
 
@@ -202,6 +223,21 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 | semantic_weight | float  | 0.7     | Weight for semantic vs BM25 (0.0-1.0) |
 | rrf_k           | int    | 60      | RRF fusion constant                   |
 | output_format   | string | "human" | Default format: human, json, or toon  |
+
+### Search Enhancement Config
+
+```toml
+[search.enhancement]
+enabled = false  # opt-in
+
+[search.enhancement.utility]
+provider = "claude-code-cli"  # claude-code-cli | codex-cli | ollama | openai
+timeout = 30
+
+[search.enhancement.synthesis]
+provider = "claude-code-cli"
+timeout = 120
+```
 
 ### Environment Variables
 
