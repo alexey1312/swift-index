@@ -463,19 +463,18 @@ Perform multi-step research over the indexed codebase.
 
 **Parameters:**
 
-- `query` (required): Research question or task
+- `query` (required): Research query or topic to investigate
 - `path` (optional): Path to indexed codebase (default: current directory)
-- `format` (optional): Output format - `toon`, `json`, or `human` (default from config)
-- `step_limit` (optional): Maximum number of steps (default: 6)
-- `include_snippets` (optional): Include code snippets in the result (default: true)
+- `depth` (optional): Maximum reference depth (1-5, default: 2)
+- `focus` (optional): One of `architecture`, `dependencies`, `patterns`, `flow`
 
 **Example:**
 
 ```json
 {
   "query": "How is search enhancement configured and used?",
-  "step_limit": 4,
-  "format": "toon"
+  "depth": 3,
+  "focus": "architecture"
 }
 ```
 
@@ -485,17 +484,15 @@ Start, stop, or check status of watch mode for a codebase.
 
 **Parameters:**
 
-- `action` (required): One of `start`, `stop`, or `status`
-- `path` (optional): Path to indexed codebase (default: current directory)
-- `debounce_ms` (optional): Debounce interval in milliseconds (default: config value)
+- `path` (required): Absolute path to the directory to watch
+- `action` (optional): One of `start`, `stop`, or `status` (default: `start`)
 
 **Example:**
 
 ```json
 {
   "action": "start",
-  "path": ".",
-  "debounce_ms": 500
+  "path": "/path/to/project"
 }
 ```
 
