@@ -141,6 +141,22 @@ MCP server uses TOON format by default for optimal token efficiency.
 | swift-async-algorithms | 1.1.0   | Async sequence utilities      |
 | swift-crypto           | 4.0.0   | Cryptographic operations      |
 
+### USearch Library Notes
+
+**Important**: The USearch Swift wrapper has limited public API:
+
+- `capacity`, `length`, `dimensions` properties are `internal` (not accessible)
+- `USearchError` does not conform to `Equatable` — use pattern matching:
+  ```swift
+  if case .reservationError = usearchError { ... }
+  ```
+- **Error 15** = `USearchError.reservationError` ("Reserve capacity ahead of insertions!")
+  - This is capacity exhaustion, NOT dimension mismatch
+  - Handle by calling `index.reserve(newCapacity)` and retrying
+
+`USearchVectorStore` tracks capacity internally (`trackedCapacity`) and stores
+dimension in the mapping file for validation on load.
+
 ## Code Conventions
 
 ### Swift 6 Requirements
