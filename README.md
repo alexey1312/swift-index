@@ -727,6 +727,33 @@ rm /usr/local/bin/swiftindex
 rm -rf ~/.swiftindex  # Optional: remove cached models
 ```
 
+## Comparison with Alternatives
+
+SwiftIndex is designed specifically for Swift developers on macOS. Here's how it compares to other code search tools:
+
+| Feature           | SwiftIndex            | [mgrep](https://github.com/mixedbread-ai/mgrep) | [ChunkHound](https://github.com/chunkhound/chunkhound) |
+| ----------------- | --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
+| **Privacy**       | ✅ Local-first (MLX)  | ❌ Cloud-only                                   | ✅ Local-first                                         |
+| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                          |
+| **Apple Silicon** | ✅ MLX optimized      | ❌                                              | ❌                                                     |
+| **Search Method** | BM25 + Semantic + RRF | Semantic + reranking                            | Multi-hop semantic                                     |
+| **MCP Server**    | ✅ Native             | ✅ Agent support                                | ❌                                                     |
+| **Language**      | Swift (native)        | Rust/Cloud                                      | Python                                                 |
+
+### Why SwiftIndex?
+
+- **Swift-First**: Native SwiftSyntax parsing extracts rich metadata (doc comments, signatures, breadcrumbs) that generic parsers miss
+- **Apple Silicon Native**: MLX embeddings are 2-3x faster than Ollama on M1/M2/M3, with zero network latency
+- **True Hybrid Search**: RRF fusion of BM25 + semantic search provides better recall than pure semantic approaches
+- **Token Efficient**: TOON output format saves 40-60% tokens for AI assistants
+- **Privacy**: All processing happens locally — your code never leaves your machine
+
+### When to Use Alternatives
+
+- **mgrep**: If you need multimodal search (PDFs, images) or web search integration
+- **ChunkHound**: If you work primarily with Python/JS codebases and don't need Swift-specific features
+- **[Context7](https://github.com/upstash/context7)**: For external library documentation (complements SwiftIndex, not a competitor)
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
