@@ -111,58 +111,58 @@
 
 ---
 
-## Phase 4: LLM Code Research (PENDING)
+## Phase 4: LLM Code Research (COMPLETED)
 
 ### 4.1 LLM Provider Protocol & Models
 
-- [ ] 4.1.1 Create `LLMProvider` protocol in `Protocols/LLMProvider.swift`
-- [ ] 4.1.2 Create `LLMMessage` model (role + content) in `LLM/LLMMessage.swift`
-- [ ] 4.1.3 Create `LLMProviderChain` for fallback handling in `LLM/LLMProviderChain.swift`
-- [ ] 4.1.4 Add `SearchEnhancementConfig` struct to `Config.swift` (nested under `SearchConfig`)
-- [ ] 4.1.5 Update `TOMLConfigLoader` to parse `[search.enhancement]` section
-- [ ] 4.1.6 Write protocol tests
+- [x] 4.1.1 Create `LLMProvider` protocol in `Protocols/LLMProvider.swift`
+- [x] 4.1.2 Create `LLMMessage` model (role + content) in `LLM/LLMMessage.swift`
+- [x] 4.1.3 Create `LLMProviderChain` for fallback handling in `LLM/LLMProviderChain.swift`
+- [x] 4.1.4 Add `SearchEnhancementConfig` struct to `Config.swift` (nested under `SearchConfig`)
+- [x] 4.1.5 Update `TOMLConfigLoader` to parse `[search.enhancement]` section
+- [x] 4.1.6 Write protocol tests
 
 ### 4.2 CLI Providers (Claude Code & Codex)
 
-- [ ] 4.2.1 Implement `ClaudeCodeCLIProvider` with subprocess invocation
-- [ ] 4.2.2 Implement `CodexCLIProvider` with reasoning effort support
-- [ ] 4.2.3 Add CLI availability detection
-- [ ] 4.2.4 Handle timeouts and errors gracefully
-- [ ] 4.2.5 Write integration tests (mocked subprocess)
+- [x] 4.2.1 Implement `ClaudeCodeCLIProvider` with subprocess invocation
+- [x] 4.2.2 Implement `CodexCLIProvider` with reasoning effort support
+- [x] 4.2.3 Add CLI availability detection
+- [x] 4.2.4 Handle timeouts and errors gracefully
+- [x] 4.2.5 Write integration tests (mocked subprocess)
 
 ### 4.3 API Providers (Ollama & OpenAI)
 
-- [ ] 4.3.1 Implement `OllamaLLMProvider` (HTTP API)
-- [ ] 4.3.2 Implement `OpenAILLMProvider` (HTTP API)
-- [ ] 4.3.3 Add model configuration support
-- [ ] 4.3.4 Write provider tests
+- [x] 4.3.1 Implement `OllamaLLMProvider` (HTTP API)
+- [x] 4.3.2 Implement `OpenAILLMProvider` (HTTP API)
+- [x] 4.3.3 Add model configuration support
+- [x] 4.3.4 Write provider tests
 
 ### 4.4 Query Enhancement Features
 
-- [ ] 4.4.1 Create `QueryExpander` with prompt templates
-- [ ] 4.4.2 Integrate query expansion into `HybridSearchEngine`
-- [ ] 4.4.3 Add caching for common expansions
-- [ ] 4.4.4 Add `--expand-query` flag to `SearchCommand`
-- [ ] 4.4.5 Write expansion tests
+- [x] 4.4.1 Create `QueryExpander` with prompt templates
+- [x] 4.4.2 Integrate query expansion into `HybridSearchEngine`
+- [x] 4.4.3 Add caching for common expansions
+- [x] 4.4.4 Add `--expand-query` flag to `SearchCommand`
+- [x] 4.4.5 Write expansion tests
 
 ### 4.5 Result Synthesis Features
 
-- [ ] 4.5.1 Create `ResultSynthesizer` for multi-result summaries
-- [ ] 4.5.2 Create `FollowUpGenerator` for suggested queries
-- [ ] 4.5.3 Integrate into MCP `SearchCodeTool` response
-- [ ] 4.5.4 Add synthesis to CLI output (optional flag)
-- [ ] 4.5.5 Write synthesis tests
+- [x] 4.5.1 Create `ResultSynthesizer` for multi-result summaries
+- [x] 4.5.2 Create `FollowUpGenerator` for suggested queries
+- [x] 4.5.3 Integrate into MCP `SearchCodeTool` response
+- [x] 4.5.4 Add synthesis to CLI output (optional flag)
+- [x] 4.5.5 Write synthesis tests
 
 ### 4.6 Integration & Documentation
 
-- [ ] 4.6.1 Update `IndexManager` to initialize LLM providers
-- [ ] 4.6.2 Add `[search.enhancement]` section to `generateConfigContent()` in `InitCommand.swift`
-- [ ] 4.6.3 Add commented examples for all LLM providers (claude-code-cli, codex-cli, ollama, openai)
-- [ ] 4.6.4 Add dual-tier (utility/synthesis) config examples with timeouts
-- [ ] 4.6.5 Write end-to-end integration tests
-- [ ] 4.6.6 Benchmark query latency with/without LLM
+- [x] 4.6.1 Update `IndexManager` to initialize LLM providers (implemented in MCPContext instead - better architectural fit)
+- [x] 4.6.2 Add `[search.enhancement]` section to `generateConfigContent()` in `InitCommand.swift`
+- [x] 4.6.3 Add commented examples for all LLM providers (claude-code-cli, codex-cli, ollama, openai)
+- [x] 4.6.4 Add dual-tier (utility/synthesis) config examples with timeouts
+- [x] 4.6.5 Write end-to-end integration tests
+- [x] 4.6.6 Benchmark query latency with/without LLM
 
-**Gate**: Build + all tests pass
+**Gate**: Build + all tests pass ✓
 
 ---
 
@@ -198,7 +198,7 @@
 | 1     | COMPLETED | 20/20 | ~15         |
 | 2     | COMPLETED | 18/18 | ~12         |
 | 3     | COMPLETED | 12/16 | ~8          |
-| 4     | PENDING   | 0/27  | 0           |
+| 4     | COMPLETED | 27/27 | ~25         |
 | 5     | PENDING   | 0/10  | 0           |
 
 Note: Phase 3.3 (LLM Description Generation) deferred as optional feature.

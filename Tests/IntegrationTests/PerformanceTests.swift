@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import Testing
 
@@ -613,5 +614,448 @@ private struct SeededRNG: RandomNumberGenerator {
         state ^= state >> 7
         state ^= state << 17
         return state
+    }
+}
+
+// MARK: - LLM Search Enhancement Performance Tests
+
+/// Performance benchmarks for LLM-enhanced search features.
+///
+/// Compares search latency with and without LLM enhancement to measure overhead.
+@Suite("LLM Search Enhancement Performance")
+struct LLMSearchEnhancementPerformanceTests {
+    // MARK: - Test Fixtures
+
+    /// Sample code for indexing.
+    private let sampleCode = """
+    import Foundation
+
+    /// User model with authentication support.
+    struct User: Identifiable, Codable {
+        let id: UUID
+        var name: String
+        var email: String
+
+        init(name: String, email: String) {
+            self.id = UUID()
+            self.name = name
+            self.email = email
+        }
+    }
+
+    /// Authentication service actor.
+    actor AuthenticationService {
+        private var currentUser: User?
+
+        func login(email: String, password: String) async throws -> User {
+            let user = User(name: "Test", email: email)
+            currentUser = user
+            return user
+        }
+
+        func logout() {
+            currentUser = nil
+        }
+    }
+    """
+
+    // MARK: - Baseline Search Latency (No LLM)
+
+    @Test("Baseline search latency without LLM enhancement")
+    func baselineSearchLatency() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftindex-llm-perf-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        let storageDir = tempDir.appendingPathComponent(".swiftindex").path
+        let indexManager = try IndexManager(directory: storageDir, dimension: 384)
+        let mockProvider = MockLLMEmbeddingProvider(dimension: 384)
+        let parser = HybridParser()
+
+        // Index test data
+        let result = parser.parse(content: sampleCode, path: "User.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Parser should succeed")
+            return
+        }
+
+        for i in 0 ..< 200 {
+            let baseChunk = chunks[i % chunks.count]
+            let uniqueChunk = CodeChunk(
+                id: "baseline-\(i)",
+                path: "File\(i).swift",
+                content: baseChunk.content + " variant \(i)",
+                startLine: baseChunk.startLine,
+                endLine: baseChunk.endLine,
+                kind: baseChunk.kind,
+                symbols: baseChunk.symbols,
+                references: baseChunk.references,
+                fileHash: baseChunk.fileHash
+            )
+            let embedding = try await mockProvider.embed(uniqueChunk.content)
+            try await indexManager.index(chunk: uniqueChunk, vector: embedding)
+        }
+
+        let chunkStore = await indexManager.chunkStore
+        let vectorStore = await indexManager.vectorStore
+        let searchEngine = HybridSearchEngine(
+            chunkStore: chunkStore,
+            vectorStore: vectorStore,
+            embeddingProvider: mockProvider
+        )
+
+        // Measure baseline search latency
+        let queries = ["authentication", "user login", "email validation"]
+        var latencies: [Double] = []
+
+        for _ in 0 ..< 10 {
+            for query in queries {
+                let start = CFAbsoluteTimeGetCurrent()
+                let results = try await searchEngine.search(
+                    query: query,
+                    options: SearchOptions(limit: 10)
+                )
+                let elapsed = CFAbsoluteTimeGetCurrent() - start
+                latencies.append(elapsed)
+
+                #expect(!results.isEmpty, "Should return results")
+            }
+        }
+
+        let avgLatency = latencies.reduce(0, +) / Double(latencies.count)
+        let p95Latency = latencies.sorted()[Int(Double(latencies.count) * 0.95)]
+
+        print("=== Baseline Search (No LLM) ===")
+        print("Average latency: \(String(format: "%.2f", avgLatency * 1000)) ms")
+        print("P95 latency: \(String(format: "%.2f", p95Latency * 1000)) ms")
+        print("Min: \(String(format: "%.2f", latencies.min()! * 1000)) ms")
+        print("Max: \(String(format: "%.2f", latencies.max()! * 1000)) ms")
+
+        #expect(avgLatency < 0.1, "Baseline search should be under 100ms")
+    }
+
+    // MARK: - Query Expansion Latency
+
+    @Test("Query expansion adds minimal overhead with caching")
+    func queryExpansionLatency() async throws {
+        // Use fast mock LLM provider
+        let mockLLM = FastMockLLMProvider(responseDelay: 0.01) // 10ms simulated delay
+        let expander = QueryExpander(provider: mockLLM)
+
+        let queries = ["authentication", "user login", "email validation", "error handling"]
+
+        // Cold cache - first expansion
+        var coldLatencies: [Double] = []
+        for query in queries {
+            let start = CFAbsoluteTimeGetCurrent()
+            _ = try await expander.expand(query, timeout: 5)
+            coldLatencies.append(CFAbsoluteTimeGetCurrent() - start)
+        }
+
+        // Warm cache - cached expansions
+        var warmLatencies: [Double] = []
+        for _ in 0 ..< 10 {
+            for query in queries {
+                let start = CFAbsoluteTimeGetCurrent()
+                _ = try await expander.expand(query, timeout: 5)
+                warmLatencies.append(CFAbsoluteTimeGetCurrent() - start)
+            }
+        }
+
+        let avgCold = coldLatencies.reduce(0, +) / Double(coldLatencies.count)
+        let avgWarm = warmLatencies.reduce(0, +) / Double(warmLatencies.count)
+
+        print("=== Query Expansion Latency ===")
+        print("Cold (uncached) average: \(String(format: "%.2f", avgCold * 1000)) ms")
+        print("Warm (cached) average: \(String(format: "%.4f", avgWarm * 1000)) ms")
+        print("Cache speedup: \(String(format: "%.0f", avgCold / avgWarm))x")
+
+        // Cached lookups should be nearly instant
+        #expect(avgWarm < 0.001, "Cached expansion should be under 1ms")
+    }
+
+    // MARK: - Result Synthesis Latency
+
+    @Test("Result synthesis latency scales with result count")
+    func resultSynthesisLatency() async throws {
+        let mockLLM = FastMockLLMProvider(responseDelay: 0.02) // 20ms simulated delay
+        let synthesizer = ResultSynthesizer(provider: mockLLM)
+
+        // Test with varying result counts
+        let resultCounts = [1, 5, 10, 20]
+        var latenciesByCount: [Int: Double] = [:]
+
+        for count in resultCounts {
+            let inputs = (0 ..< count).map { i in
+                SynthesisInput(
+                    filePath: "File\(i).swift",
+                    content: "func test\(i)() { }",
+                    kind: "function"
+                )
+            }
+
+            var latencies: [Double] = []
+            for _ in 0 ..< 5 {
+                let start = CFAbsoluteTimeGetCurrent()
+                _ = try await synthesizer.synthesize(
+                    query: "test query",
+                    results: inputs,
+                    timeout: 5
+                )
+                latencies.append(CFAbsoluteTimeGetCurrent() - start)
+            }
+
+            latenciesByCount[count] = latencies.reduce(0, +) / Double(latencies.count)
+        }
+
+        print("=== Result Synthesis Latency ===")
+        for count in resultCounts {
+            print("\(count) results: \(String(format: "%.2f", latenciesByCount[count]! * 1000)) ms")
+        }
+
+        // Synthesis should complete in reasonable time even for 20 results
+        #expect(latenciesByCount[20]! < 0.1, "Synthesis of 20 results should be under 100ms")
+    }
+
+    // MARK: - Follow-Up Generation Latency
+
+    @Test("Follow-up generation latency with caching")
+    func followUpGenerationLatency() async throws {
+        let mockLLM = FastMockLLMProvider(responseDelay: 0.015) // 15ms simulated delay
+        let generator = FollowUpGenerator(provider: mockLLM)
+
+        // Cold cache
+        var coldLatencies: [Double] = []
+        for i in 0 ..< 5 {
+            let start = CFAbsoluteTimeGetCurrent()
+            _ = try await generator.generate(
+                query: "test query \(i)",
+                resultSummary: "Summary \(i)",
+                timeout: 5
+            )
+            coldLatencies.append(CFAbsoluteTimeGetCurrent() - start)
+        }
+
+        // Warm cache (same queries)
+        var warmLatencies: [Double] = []
+        for _ in 0 ..< 10 {
+            for i in 0 ..< 5 {
+                let start = CFAbsoluteTimeGetCurrent()
+                _ = try await generator.generate(
+                    query: "test query \(i)",
+                    resultSummary: "Summary \(i)",
+                    timeout: 5
+                )
+                warmLatencies.append(CFAbsoluteTimeGetCurrent() - start)
+            }
+        }
+
+        let avgCold = coldLatencies.reduce(0, +) / Double(coldLatencies.count)
+        let avgWarm = warmLatencies.reduce(0, +) / Double(warmLatencies.count)
+
+        print("=== Follow-Up Generation Latency ===")
+        print("Cold average: \(String(format: "%.2f", avgCold * 1000)) ms")
+        print("Warm average: \(String(format: "%.4f", avgWarm * 1000)) ms")
+        print("Cache speedup: \(String(format: "%.0f", avgCold / avgWarm))x")
+
+        #expect(avgWarm < 0.001, "Cached follow-up should be under 1ms")
+    }
+
+    // MARK: - Full Enhanced Search Pipeline
+
+    @Test("Full enhanced search pipeline latency breakdown")
+    func fullEnhancedSearchPipeline() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftindex-llm-full-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+
+        let storageDir = tempDir.appendingPathComponent(".swiftindex").path
+        let indexManager = try IndexManager(directory: storageDir, dimension: 384)
+        let mockEmbedding = MockLLMEmbeddingProvider(dimension: 384)
+        let parser = HybridParser()
+
+        // Index test data
+        let result = parser.parse(content: sampleCode, path: "User.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Parser should succeed")
+            return
+        }
+
+        for i in 0 ..< 100 {
+            let baseChunk = chunks[i % chunks.count]
+            let uniqueChunk = CodeChunk(
+                id: "full-\(i)",
+                path: "File\(i).swift",
+                content: baseChunk.content,
+                startLine: baseChunk.startLine,
+                endLine: baseChunk.endLine,
+                kind: baseChunk.kind,
+                symbols: baseChunk.symbols,
+                references: baseChunk.references,
+                fileHash: baseChunk.fileHash
+            )
+            let embedding = try await mockEmbedding.embed(uniqueChunk.content)
+            try await indexManager.index(chunk: uniqueChunk, vector: embedding)
+        }
+
+        let chunkStore = await indexManager.chunkStore
+        let vectorStore = await indexManager.vectorStore
+        let searchEngine = HybridSearchEngine(
+            chunkStore: chunkStore,
+            vectorStore: vectorStore,
+            embeddingProvider: mockEmbedding
+        )
+
+        // Create LLM components with fast mocks
+        let mockLLM = FastMockLLMProvider(responseDelay: 0.01)
+        let expander = QueryExpander(provider: mockLLM)
+        let synthesizer = ResultSynthesizer(provider: mockLLM)
+        let generator = FollowUpGenerator(provider: mockLLM)
+
+        let query = "authentication"
+
+        // Measure each phase
+        var expandTime: Double = 0
+        var searchTime: Double = 0
+        var synthesisTime: Double = 0
+        var followUpTime: Double = 0
+
+        // Phase 1: Query Expansion
+        let expandStart = CFAbsoluteTimeGetCurrent()
+        let expanded = try await expander.expand(query, timeout: 5)
+        expandTime = CFAbsoluteTimeGetCurrent() - expandStart
+
+        // Phase 2: Search
+        let searchStart = CFAbsoluteTimeGetCurrent()
+        let results = try await searchEngine.search(
+            query: expanded.combinedQuery,
+            options: SearchOptions(limit: 10)
+        )
+        searchTime = CFAbsoluteTimeGetCurrent() - searchStart
+
+        // Phase 3: Synthesis
+        let synthesisStart = CFAbsoluteTimeGetCurrent()
+        let synthesisInputs = results.map { result in
+            SynthesisInput(
+                filePath: result.chunk.path,
+                content: result.chunk.content,
+                kind: result.chunk.kind.rawValue
+            )
+        }
+        let synthesis = try await synthesizer.synthesize(
+            query: query,
+            results: synthesisInputs,
+            timeout: 5
+        )
+        synthesisTime = CFAbsoluteTimeGetCurrent() - synthesisStart
+
+        // Phase 4: Follow-up Generation
+        let followUpStart = CFAbsoluteTimeGetCurrent()
+        _ = try await generator.generate(
+            query: query,
+            resultSummary: synthesis.summary,
+            timeout: 5
+        )
+        followUpTime = CFAbsoluteTimeGetCurrent() - followUpStart
+
+        let totalTime = expandTime + searchTime + synthesisTime + followUpTime
+
+        print("=== Full Enhanced Search Pipeline ===")
+        let expandPct = String(format: "%.0f", expandTime / totalTime * 100)
+        let searchPct = String(format: "%.0f", searchTime / totalTime * 100)
+        let synthPct = String(format: "%.0f", synthesisTime / totalTime * 100)
+        let followPct = String(format: "%.0f", followUpTime / totalTime * 100)
+        print("Query Expansion: \(String(format: "%.2f", expandTime * 1000)) ms (\(expandPct)%)")
+        print("Search: \(String(format: "%.2f", searchTime * 1000)) ms (\(searchPct)%)")
+        print("Synthesis: \(String(format: "%.2f", synthesisTime * 1000)) ms (\(synthPct)%)")
+        print("Follow-ups: \(String(format: "%.2f", followUpTime * 1000)) ms (\(followPct)%)")
+        print("Total: \(String(format: "%.2f", totalTime * 1000)) ms")
+        print("LLM overhead: \(String(format: "%.2f", (totalTime - searchTime) / searchTime * 100))% of search time")
+
+        // Full pipeline should complete in reasonable time with mocked LLMs
+        #expect(totalTime < 0.2, "Full enhanced search should be under 200ms with fast mocks")
+    }
+}
+
+// MARK: - LLM Performance Test Helpers
+
+/// Mock embedding provider for LLM performance tests.
+private final class MockLLMEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
+    let id = "mock-llm-perf"
+    let name = "Mock LLM Perf Provider"
+    let dimension: Int
+
+    init(dimension: Int) {
+        self.dimension = dimension
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func embed(_ text: String) async throws -> [Float] {
+        var generator = SeededRNG(seed: stableHash(text))
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
+        let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
+        if norm > 0 { embedding = embedding.map { $0 / norm } }
+        return embedding
+    }
+
+    func embed(_ texts: [String]) async throws -> [[Float]] {
+        var results: [[Float]] = []
+        for text in texts {
+            try await results.append(embed(text))
+        }
+        return results
+    }
+
+    private func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
+}
+
+/// Fast mock LLM provider with configurable delay for performance testing.
+private final class FastMockLLMProvider: LLMProvider, @unchecked Sendable {
+    let id = "fast-mock-llm"
+    let name = "Fast Mock LLM"
+    let responseDelay: TimeInterval
+
+    init(responseDelay: TimeInterval = 0.01) {
+        self.responseDelay = responseDelay
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func complete(
+        messages: [LLMMessage],
+        model: String?,
+        timeout: TimeInterval
+    ) async throws -> String {
+        // Simulate network/processing delay
+        try await Task.sleep(nanoseconds: UInt64(responseDelay * 1_000_000_000))
+
+        return """
+        SUMMARY: Test summary for performance benchmarking.
+
+        SYNONYMS: test, mock, benchmark
+        CONCEPTS: performance, latency
+        VARIATIONS: test query variation
+
+        INSIGHTS:
+        - First insight
+        - Second insight
+
+        CONFIDENCE: 85%
+
+        1. follow-up query one - rationale
+        2. follow-up query two - rationale
+        """
     }
 }

@@ -54,6 +54,16 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                         "description": "Output format: toon (compact), json, or human",
                         "enum": .array([.string("toon"), .string("json"), .string("human")]),
                     ]),
+                    "expand_query": .object([
+                        "type": "boolean",
+                        "description": "Use LLM to expand query with synonyms and related concepts",
+                        "default": false,
+                    ]),
+                    "synthesize": .object([
+                        "type": "boolean",
+                        "description": "Generate LLM summary and follow-up suggestions",
+                        "default": false,
+                    ]),
                 ]),
                 "required": .array([.string("query")]),
             ])
@@ -76,6 +86,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         let extensionsArg = arguments["extensions"]?.stringValue
         let pathFilter = arguments["path_filter"]?.stringValue
         let formatArg = arguments["format"]?.stringValue
+        let expandQuery = arguments["expand_query"]?.boolValue ?? false
+        let synthesize = arguments["synthesize"]?.boolValue ?? false
 
         // Validate arguments
         guard limit > 0 else {
@@ -119,20 +131,83 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                 rrfK: config.rrfK
             )
 
-            // Execute search
-            let results = try await searchEngine.search(query: query, options: searchOptions)
+            // Execute search with optional query expansion
+            let results: [SearchResult]
+            var expandedQuery: ExpandedQuery?
+
+            if expandQuery {
+                // Get query expander (may return nil if not configured)
+                let expander = try await context.getQueryExpander(config: config)
+                let timeout = config.searchEnhancement.utility.timeout
+
+                let enhancedResult = try await searchEngine.searchWithExpansion(
+                    query: query,
+                    options: searchOptions,
+                    expander: expander,
+                    timeout: timeout
+                )
+                results = enhancedResult.results
+                expandedQuery = enhancedResult.expandedQuery
+            } else {
+                results = try await searchEngine.search(query: query, options: searchOptions)
+            }
+
+            // Generate synthesis and follow-ups if requested
+            var synthesis: Synthesis?
+            var followUps: [FollowUpSuggestion]?
+
+            if synthesize, !results.isEmpty {
+                let synthesisTimeout = config.searchEnhancement.synthesis.timeout
+                let utilityTimeout = config.searchEnhancement.utility.timeout
+
+                // Convert SearchResults to SynthesisInputs
+                let synthesisInputs = results.map { result in
+                    SynthesisInput(
+                        filePath: result.chunk.path,
+                        content: result.chunk.content,
+                        kind: result.chunk.kind.rawValue,
+                        breadcrumb: result.chunk.breadcrumb,
+                        docComment: result.chunk.docComment
+                    )
+                }
+
+                // Get synthesizer and generator (may return nil if not configured)
+                if let synthesizer = try await context.getResultSynthesizer(config: config) {
+                    synthesis = try? await synthesizer.synthesize(
+                        query: query,
+                        results: synthesisInputs,
+                        timeout: synthesisTimeout
+                    )
+                }
+
+                // Generate follow-ups using the synthesis summary or a default summary
+                if let generator = try await context.getFollowUpGenerator(config: config) {
+                    let resultSummary = synthesis?.summary ?? "Found \(results.count) code results"
+                    followUps = try? await generator.generate(
+                        query: query,
+                        resultSummary: resultSummary,
+                        timeout: utilityTimeout
+                    )
+                }
+            }
 
             // Determine format: argument > config default
             let format = formatArg ?? config.outputFormat
 
             // Format results based on requested format
+            let enhancement = EnhancementInfo(
+                expandedQuery: expandedQuery,
+                synthesis: synthesis,
+                followUps: followUps
+            )
+
             let output: String = switch format {
             case "json":
-                formatResultsJSON(results: results, query: query)
+                formatResultsJSON(results: results, query: query, enhancement: enhancement)
             case "human":
-                formatResultsHuman(results: results, query: query)
+                formatResultsHuman(results: results, query: query, enhancement: enhancement)
             default:
-                formatResultsTOON(results: results, query: query)
+                formatResultsTOON(results: results, query: query, enhancement: enhancement)
             }
 
             return .text(output)
@@ -141,15 +216,45 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         }
     }
 
+    // MARK: - Enhancement Info
+
+    /// Container for LLM enhancement data.
+    private struct EnhancementInfo {
+        let expandedQuery: ExpandedQuery?
+        let synthesis: Synthesis?
+        let followUps: [FollowUpSuggestion]?
+
+        var hasAny: Bool {
+            expandedQuery != nil || synthesis != nil || followUps != nil
+        }
+
+        static let empty = EnhancementInfo(expandedQuery: nil, synthesis: nil, followUps: nil)
+    }
+
     // MARK: - Private
 
     /// Formats results as TOON (Token-Optimized Object Notation).
     ///
     /// TOON is a compact format that reduces token usage by 40-60% compared to JSON,
     /// making it ideal for LLM consumption.
-    private func formatResultsTOON(results: [SearchResult], query: String) -> String {
+    private func formatResultsTOON(
+        results: [SearchResult],
+        query: String,
+        enhancement: EnhancementInfo = .empty
+    ) -> String {
         var output = "search{q,n}:\n"
         output += "  \"\(escapeString(query))\",\(results.count)\n\n"
+
+        // Add expanded query info if available
+        if let expanded = enhancement.expandedQuery {
+            output += "expanded{syn,rel,var}:\n"
+            let sep = "\",\""
+            let synStr = expanded.synonyms.isEmpty ? "[]" : "[\"\(expanded.synonyms.joined(separator: sep))\"]"
+            let relStr = expanded.relatedConcepts.isEmpty
+                ? "[]" : "[\"\(expanded.relatedConcepts.joined(separator: sep))\"]"
+            let varStr = expanded.variations.isEmpty ? "[]" : "[\"\(expanded.variations.joined(separator: sep))\"]"
+            output += "  \(synStr),\(relStr),\(varStr)\n\n"
+        }
 
         if results.isEmpty {
             return output
@@ -218,6 +323,30 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             }
         }
 
+        // Add synthesis if available
+        if let synthesis = enhancement.synthesis {
+            output += "\nsynthesis{sum,insights,refs,conf}:\n"
+            let summary = escapeString(synthesis.summary)
+            let keyInsights = synthesis.keyInsights.isEmpty
+                ? "[]"
+                : "[\"\(synthesis.keyInsights.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+            let codeRefs = synthesis.codeReferences.isEmpty
+                ? "[]"
+                : "[\"\(synthesis.codeReferences.map { escapeString($0.formatted) }.joined(separator: "\",\""))\"]"
+            output += "  \"\(summary)\"\n"
+            output += "  \(keyInsights)\n"
+            output += "  \(codeRefs)\n"
+            output += "  \(synthesis.confidence)\n"
+        }
+
+        // Add follow-up suggestions if available
+        if let followUps = enhancement.followUps, !followUps.isEmpty {
+            output += "\nfollow_ups[\(followUps.count)]{q,cat}:\n"
+            for followUp in followUps {
+                output += "  \"\(escapeString(followUp.query))\",\"\(followUp.category.rawValue)\"\n"
+            }
+        }
+
         return output
     }
 
@@ -227,9 +356,19 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             .replacingOccurrences(of: "\n", with: "\\n")
     }
 
-    private func formatResultsHuman(results: [SearchResult], query: String) -> String {
+    private func formatResultsHuman(
+        results: [SearchResult],
+        query: String,
+        enhancement: EnhancementInfo = .empty
+    ) -> String {
         var output = "Search: \"\(query)\"\n"
         output += "Found \(results.count) results\n"
+
+        // Show expanded query info if available
+        if let expanded = enhancement.expandedQuery {
+            output += formatExpandedQueryHuman(expanded)
+        }
+
         output += String(repeating: "─", count: 60) + "\n"
 
         if results.isEmpty {
@@ -238,52 +377,113 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         }
 
         for (index, result) in results.enumerated() {
-            output += "\n[\(index + 1)] \(result.chunk.path):\(result.chunk.startLine)-\(result.chunk.endLine)\n"
-            output += "    Kind: \(result.chunk.kind.rawValue)\n"
+            output += formatResultItemHuman(result, index: index)
+        }
 
-            if !result.chunk.symbols.isEmpty {
-                output += "    Symbols: \(result.chunk.symbols.joined(separator: ", "))\n"
-            }
+        // Add synthesis if available
+        if let synthesis = enhancement.synthesis {
+            output += formatSynthesisHuman(synthesis)
+        }
 
-            // Show breadcrumb if available
-            if let breadcrumb = result.chunk.breadcrumb {
-                output += "    Location: \(breadcrumb)\n"
-            }
-
-            // Show signature if available
-            if let signature = result.chunk.signature {
-                output += "    Signature: \(signature)\n"
-            }
-
-            output += "    Relevance: \(result.relevancePercent)%"
-            if let bm25Rank = result.bm25Rank {
-                output += " (keyword rank #\(bm25Rank))"
-            }
-            output += "\n"
-
-            // Show doc comment if available (truncated)
-            if let docComment = result.chunk.docComment {
-                let truncated = String(docComment.prefix(100))
-                let suffix = docComment.count > 100 ? "..." : ""
-                output += "    Doc: \(truncated)\(suffix)\n"
-            }
-
-            // Show code preview (first 5 lines)
-            let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
-            let preview = lines.prefix(5)
-            output += "    ────\n"
-            for line in preview {
-                output += "    \(line)\n"
-            }
-            if lines.count > 5 {
-                output += "    ... (\(lines.count - 5) more lines)\n"
-            }
+        // Add follow-up suggestions if available
+        if let followUps = enhancement.followUps, !followUps.isEmpty {
+            output += formatFollowUpsHuman(followUps)
         }
 
         return output
     }
 
-    private func formatResultsJSON(results: [SearchResult], query: String) -> String {
+    private func formatExpandedQueryHuman(_ expanded: ExpandedQuery) -> String {
+        var output = "\nQuery Expansion:\n"
+        if !expanded.synonyms.isEmpty {
+            output += "  Synonyms: \(expanded.synonyms.joined(separator: ", "))\n"
+        }
+        if !expanded.relatedConcepts.isEmpty {
+            output += "  Related: \(expanded.relatedConcepts.joined(separator: ", "))\n"
+        }
+        if !expanded.variations.isEmpty {
+            output += "  Variations: \(expanded.variations.joined(separator: ", "))\n"
+        }
+        return output
+    }
+
+    private func formatResultItemHuman(_ result: SearchResult, index: Int) -> String {
+        var output = "\n[\(index + 1)] \(result.chunk.path):\(result.chunk.startLine)-\(result.chunk.endLine)\n"
+        output += "    Kind: \(result.chunk.kind.rawValue)\n"
+
+        if !result.chunk.symbols.isEmpty {
+            output += "    Symbols: \(result.chunk.symbols.joined(separator: ", "))\n"
+        }
+        if let breadcrumb = result.chunk.breadcrumb {
+            output += "    Location: \(breadcrumb)\n"
+        }
+        if let signature = result.chunk.signature {
+            output += "    Signature: \(signature)\n"
+        }
+
+        output += "    Relevance: \(result.relevancePercent)%"
+        if let bm25Rank = result.bm25Rank {
+            output += " (keyword rank #\(bm25Rank))"
+        }
+        output += "\n"
+
+        if let docComment = result.chunk.docComment {
+            let truncated = String(docComment.prefix(100))
+            let suffix = docComment.count > 100 ? "..." : ""
+            output += "    Doc: \(truncated)\(suffix)\n"
+        }
+
+        // Show code preview (first 5 lines)
+        let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
+        let preview = lines.prefix(5)
+        output += "    ────\n"
+        for line in preview {
+            output += "    \(line)\n"
+        }
+        if lines.count > 5 {
+            output += "    ... (\(lines.count - 5) more lines)\n"
+        }
+        return output
+    }
+
+    private func formatSynthesisHuman(_ synthesis: Synthesis) -> String {
+        var output = "\n" + String(repeating: "─", count: 60) + "\n"
+        output += "Summary:\n"
+        output += "  \(synthesis.summary)\n"
+        if !synthesis.keyInsights.isEmpty {
+            output += "\nKey Insights:\n"
+            for insight in synthesis.keyInsights {
+                output += "  • \(insight)\n"
+            }
+        }
+        if !synthesis.codeReferences.isEmpty {
+            output += "\nCode References:\n"
+            for ref in synthesis.codeReferences {
+                output += "  • \(ref.formatted)\n"
+            }
+        }
+        output += "\nConfidence: \(Int(synthesis.confidence * 100))%\n"
+        return output
+    }
+
+    private func formatFollowUpsHuman(_ followUps: [FollowUpSuggestion]) -> String {
+        var output = "\n" + String(repeating: "─", count: 60) + "\n"
+        output += "Suggested Follow-ups:\n"
+        for (index, followUp) in followUps.enumerated() {
+            var line = "  \(index + 1). \(followUp.query)"
+            if let rationale = followUp.rationale {
+                line += " - \(rationale)"
+            }
+            output += line + "\n"
+        }
+        return output
+    }
+
+    private func formatResultsJSON(
+        results: [SearchResult],
+        query: String,
+        enhancement: EnhancementInfo = .empty
+    ) -> String {
         var jsonResults: [[String: Any]] = []
 
         for result in results {
@@ -321,11 +521,44 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             jsonResults.append(item)
         }
 
-        let output: [String: Any] = [
+        var output: [String: Any] = [
             "query": query,
             "result_count": results.count,
             "results": jsonResults,
         ]
+
+        // Add expanded query info if available
+        if let expanded = enhancement.expandedQuery {
+            output["expanded_query"] = [
+                "original": expanded.originalQuery,
+                "synonyms": expanded.synonyms,
+                "related_concepts": expanded.relatedConcepts,
+                "variations": expanded.variations,
+            ]
+        }
+
+        // Add synthesis if available
+        if let synthesis = enhancement.synthesis {
+            output["synthesis"] = [
+                "summary": synthesis.summary,
+                "key_insights": synthesis.keyInsights,
+                "code_references": synthesis.codeReferences.map { [
+                    "file_path": $0.filePath,
+                    "line_number": $0.lineNumber as Any,
+                    "description": $0.description as Any,
+                ] },
+                "confidence": Double(synthesis.confidence),
+            ]
+        }
+
+        // Add follow-up suggestions if available
+        if let followUps = enhancement.followUps {
+            output["follow_up_suggestions"] = followUps.map { [
+                "query": $0.query,
+                "rationale": $0.rationale as Any,
+                "category": $0.category.rawValue,
+            ] }
+        }
 
         return formatJSON(output)
     }

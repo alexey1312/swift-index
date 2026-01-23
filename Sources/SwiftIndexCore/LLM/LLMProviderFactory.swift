@@ -1,0 +1,129 @@
+// MARK: - LLMProviderFactory
+
+import Foundation
+
+/// Factory for creating LLM providers from configuration.
+///
+/// ## Usage
+///
+/// ```swift
+/// let config = SearchEnhancementConfig.default
+/// let utilityProvider = try LLMProviderFactory.createProvider(from: config.utility)
+/// let synthesisProvider = try LLMProviderFactory.createProvider(from: config.synthesis)
+/// ```
+public enum LLMProviderFactory {
+    // MARK: - Provider IDs
+
+    /// Known provider identifiers.
+    public enum ProviderID: String, CaseIterable {
+        case claudeCodeCLI = "claude-code-cli"
+        case codexCLI = "codex-cli"
+        case ollama
+        case openai
+    }
+
+    // MARK: - Factory Methods
+
+    /// Creates an LLM provider from tier configuration.
+    ///
+    /// - Parameters:
+    ///   - config: The tier configuration.
+    ///   - openAIKey: OpenAI API key (for openai provider).
+    /// - Returns: An LLM provider instance.
+    /// - Throws: `LLMError.notAvailable` if provider is unknown.
+    public static func createProvider(
+        from config: LLMTierConfig,
+        openAIKey: String? = nil
+    ) throws -> any LLMProvider {
+        guard let providerID = ProviderID(rawValue: config.provider) else {
+            throw LLMError.notAvailable(
+                reason: "Unknown provider: \(config.provider). " +
+                    "Supported: \(ProviderID.allCases.map(\.rawValue).joined(separator: ", "))"
+            )
+        }
+
+        return createProvider(
+            id: providerID,
+            model: config.model,
+            openAIKey: openAIKey
+        )
+    }
+
+    /// Creates an LLM provider by ID.
+    ///
+    /// - Parameters:
+    ///   - id: The provider identifier.
+    ///   - model: Optional model override.
+    ///   - openAIKey: OpenAI API key (for openai provider).
+    /// - Returns: An LLM provider instance.
+    public static func createProvider(
+        id: ProviderID,
+        model: String? = nil,
+        openAIKey: String? = nil
+    ) -> any LLMProvider {
+        switch id {
+        case .claudeCodeCLI:
+            return ClaudeCodeCLIProvider(defaultModel: model)
+
+        case .codexCLI:
+            return CodexCLIProvider(defaultModel: model)
+
+        case .ollama:
+            return OllamaLLMProvider(defaultModel: model ?? "llama3.2")
+
+        case .openai:
+            let key = openAIKey ?? ProcessInfo.processInfo.environment["OPENAI_API_KEY"] ?? ""
+            let defaultModel: OpenAILLMProvider.Model = .gpt4oMini
+            return OpenAILLMProvider(
+                apiKey: key,
+                defaultModel: defaultModel
+            )
+        }
+    }
+
+    /// Creates an LLM provider chain from search enhancement configuration.
+    ///
+    /// - Parameters:
+    ///   - config: The search enhancement configuration.
+    ///   - tier: Which tier to create the chain for.
+    ///   - openAIKey: OpenAI API key.
+    /// - Returns: An LLM provider chain with fallbacks.
+    public static func createChain(
+        from config: SearchEnhancementConfig,
+        tier: Tier,
+        openAIKey: String? = nil
+    ) -> LLMProviderChain {
+        let tierConfig = tier == .utility ? config.utility : config.synthesis
+
+        // Create primary provider
+        let primary: any LLMProvider
+        do {
+            primary = try createProvider(from: tierConfig, openAIKey: openAIKey)
+        } catch {
+            // Fall back to a default provider
+            primary = ClaudeCodeCLIProvider()
+        }
+
+        // Add fallbacks based on availability
+        var providers: [any LLMProvider] = [primary]
+
+        // Add Ollama as a fallback if not already primary
+        if tierConfig.provider != ProviderID.ollama.rawValue {
+            providers.append(OllamaLLMProvider())
+        }
+
+        return LLMProviderChain(
+            providers: providers,
+            id: "\(tier.rawValue)-chain",
+            name: "\(tier.rawValue.capitalized) LLM Chain"
+        )
+    }
+
+    // MARK: - Tier
+
+    /// LLM tier type.
+    public enum Tier: String {
+        case utility
+        case synthesis
+    }
+}

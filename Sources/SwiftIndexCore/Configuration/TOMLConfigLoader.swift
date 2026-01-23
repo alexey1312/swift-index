@@ -157,6 +157,19 @@ private struct TOMLConfig: Codable {
         var multi_hop_enabled: Bool?
         var multi_hop_depth: Int?
         var output_format: String?
+        var enhancement: EnhancementSection?
+
+        struct EnhancementSection: Codable {
+            var enabled: Bool?
+            var utility: TierSection?
+            var synthesis: TierSection?
+
+            struct TierSection: Codable {
+                var provider: String?
+                var model: String?
+                var timeout: Int?
+            }
+        }
     }
 
     struct IndexingSection: Codable {
@@ -199,6 +212,37 @@ private struct TOMLConfig: Codable {
             config.multiHopEnabled = search.multi_hop_enabled
             config.multiHopDepth = search.multi_hop_depth
             config.outputFormat = search.output_format
+
+            // Search enhancement subsection
+            if let enhancement = search.enhancement {
+                var enhancementConfig = SearchEnhancementConfig.default
+                if let enabled = enhancement.enabled {
+                    enhancementConfig.enabled = enabled
+                }
+                if let utility = enhancement.utility {
+                    var tierConfig = LLMTierConfig.defaultUtility
+                    if let provider = utility.provider {
+                        tierConfig.provider = provider
+                    }
+                    tierConfig.model = utility.model
+                    if let timeout = utility.timeout {
+                        tierConfig.timeout = TimeInterval(timeout)
+                    }
+                    enhancementConfig.utility = tierConfig
+                }
+                if let synthesis = enhancement.synthesis {
+                    var tierConfig = LLMTierConfig.defaultSynthesis
+                    if let provider = synthesis.provider {
+                        tierConfig.provider = provider
+                    }
+                    tierConfig.model = synthesis.model
+                    if let timeout = synthesis.timeout {
+                        tierConfig.timeout = TimeInterval(timeout)
+                    }
+                    enhancementConfig.synthesis = tierConfig
+                }
+                config.searchEnhancement = enhancementConfig
+            }
         }
 
         // Indexing section

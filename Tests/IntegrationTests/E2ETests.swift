@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 import Foundation
 import Testing
 
@@ -545,4 +546,474 @@ private func computeHash(_ content: String) -> String {
         hash = 31 &* hash &+ Int(char.value)
     }
     return String(format: "%08x", hash)
+}
+
+// MARK: - LLM Search Enhancement E2E Tests
+
+/// End-to-end tests for LLM-enhanced search features.
+@Suite("LLM Search Enhancement E2E")
+struct LLMSearchEnhancementE2ETests {
+    // MARK: - Test Fixtures
+
+    /// Creates a temporary directory with Swift source files for testing.
+    private func createTestProject() throws -> URL {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("swiftindex-llm-e2e-\(UUID().uuidString)")
+
+        try FileManager.default.createDirectory(
+            at: tempDir,
+            withIntermediateDirectories: true
+        )
+
+        let sourcesDir = tempDir.appendingPathComponent("Sources")
+        try FileManager.default.createDirectory(at: sourcesDir, withIntermediateDirectories: true)
+
+        // Create a model file
+        let userModel = sourcesDir.appendingPathComponent("User.swift")
+        try """
+        import Foundation
+
+        /// Represents a user in the system.
+        struct User: Identifiable, Codable {
+            let id: UUID
+            var name: String
+            var email: String
+
+            /// Creates a new user with the given details.
+            init(name: String, email: String) {
+                self.id = UUID()
+                self.name = name
+                self.email = email
+            }
+        }
+        """.write(to: userModel, atomically: true, encoding: .utf8)
+
+        // Create an authentication service
+        let authService = sourcesDir.appendingPathComponent("AuthService.swift")
+        try """
+        import Foundation
+
+        /// Service handling user authentication.
+        actor AuthenticationService {
+            private var currentUser: User?
+
+            /// Authenticates a user with email and password.
+            func login(email: String, password: String) async throws -> User {
+                let user = User(name: "Test", email: email)
+                currentUser = user
+                return user
+            }
+
+            /// Logs out the current user.
+            func logout() {
+                currentUser = nil
+            }
+        }
+        """.write(to: authService, atomically: true, encoding: .utf8)
+
+        return tempDir
+    }
+
+    private func cleanupTestProject(_ dir: URL) {
+        try? FileManager.default.removeItem(at: dir)
+    }
+
+    // MARK: - Query Expansion Tests
+
+    @Test("Query expander generates expanded query terms")
+    func queryExpanderGeneratesTerms() async throws {
+        let mockProvider = MockLLMProvider(
+            response: """
+            SYNONYMS: auth, authorization, sign in
+            CONCEPTS: session management, token
+            VARIATIONS: user authentication
+            """
+        )
+        let expander = QueryExpander(provider: mockProvider)
+
+        let expanded = try await expander.expand("authentication", timeout: 5)
+
+        #expect(expanded.originalQuery == "authentication")
+        #expect(!expanded.synonyms.isEmpty, "Should have synonyms")
+        #expect(expanded.allTerms.count > 1, "Should have multiple terms")
+    }
+
+    @Test("Query expander caches results")
+    func queryExpanderCaching() async throws {
+        var callCount = 0
+        let mockProvider = CountingLLMProvider { callCount += 1 }
+        let expander = QueryExpander(provider: mockProvider)
+
+        // First call
+        _ = try await expander.expand("test query", timeout: 5)
+        #expect(callCount == 1, "First call should invoke provider")
+
+        // Second call with same query - should use cache
+        _ = try await expander.expand("test query", timeout: 5)
+        #expect(callCount == 1, "Second call should use cache")
+
+        // Third call with different query
+        _ = try await expander.expand("different query", timeout: 5)
+        #expect(callCount == 2, "Different query should invoke provider")
+    }
+
+    // MARK: - Result Synthesis Tests
+
+    @Test("Result synthesizer generates summary from search results")
+    func resultSynthesizerGeneratesSummary() async throws {
+        let mockProvider = MockLLMProvider(
+            response: """
+            SUMMARY: The codebase implements user authentication using an actor-based service.
+
+            INSIGHTS:
+            - AuthenticationService is an actor for thread-safe state management
+            - Login method validates credentials and creates User instances
+
+            REFERENCES:
+            - AuthService.swift:10 - login method
+
+            CONFIDENCE: 85%
+            """
+        )
+        let synthesizer = ResultSynthesizer(provider: mockProvider)
+
+        let inputs = [
+            SynthesisInput(
+                filePath: "AuthService.swift",
+                content: "func login() async throws -> User",
+                kind: "method",
+                breadcrumb: "AuthenticationService > login()",
+                docComment: "Authenticates a user"
+            ),
+        ]
+
+        let synthesis = try await synthesizer.synthesize(
+            query: "authentication",
+            results: inputs,
+            timeout: 5
+        )
+
+        #expect(synthesis.summary.contains("authentication"), "Summary should reference authentication")
+        #expect(!synthesis.keyInsights.isEmpty, "Should have insights")
+        #expect(synthesis.confidence > 0, "Should have confidence score")
+    }
+
+    @Test("Result synthesizer handles empty results gracefully")
+    func resultSynthesizerEmptyResults() async throws {
+        let mockProvider = MockLLMProvider(response: "No results")
+        let synthesizer = ResultSynthesizer(provider: mockProvider)
+
+        let synthesis = try await synthesizer.synthesize(
+            query: "nonexistent",
+            results: [],
+            timeout: 5
+        )
+
+        #expect(synthesis.summary.contains("No results"), "Should indicate no results")
+        #expect(synthesis.confidence == 0.0, "Confidence should be zero for empty results")
+    }
+
+    // MARK: - Follow-Up Generator Tests
+
+    @Test("Follow-up generator suggests related queries")
+    func followUpGeneratorSuggestsQueries() async throws {
+        let mockProvider = MockLLMProvider(
+            response: """
+            1. how to test authentication - testing patterns for auth
+            2. error handling in login - understanding error flows
+            3. session management - related security concept
+            """
+        )
+        let generator = FollowUpGenerator(provider: mockProvider)
+
+        let suggestions = try await generator.generate(
+            query: "authentication",
+            resultSummary: "Found authentication service with login method",
+            timeout: 5
+        )
+
+        #expect(!suggestions.isEmpty, "Should generate suggestions")
+        #expect(suggestions.count >= 2, "Should have multiple suggestions")
+    }
+
+    @Test("Follow-up generator caches results")
+    func followUpGeneratorCaching() async throws {
+        var callCount = 0
+        let mockProvider = CountingLLMProvider { callCount += 1 }
+        let generator = FollowUpGenerator(provider: mockProvider)
+
+        _ = try await generator.generate(
+            query: "test",
+            resultSummary: "summary",
+            timeout: 5
+        )
+        #expect(callCount == 1)
+
+        _ = try await generator.generate(
+            query: "test",
+            resultSummary: "summary",
+            timeout: 5
+        )
+        #expect(callCount == 1, "Should use cached result")
+
+        await generator.clearCache()
+
+        _ = try await generator.generate(
+            query: "test",
+            resultSummary: "summary",
+            timeout: 5
+        )
+        #expect(callCount == 2, "Should call after cache clear")
+    }
+
+    // MARK: - Full Enhanced Search Flow Tests
+
+    @Test("Full enhanced search flow with query expansion and synthesis")
+    func fullEnhancedSearchFlow() async throws {
+        let projectDir = try createTestProject()
+        defer { cleanupTestProject(projectDir) }
+
+        let storageDir = projectDir.appendingPathComponent(".swiftindex").path
+        let indexManager = try IndexManager(directory: storageDir, dimension: 384)
+        let mockEmbeddingProvider = MockEmbeddingProviderE2E(dimension: 384)
+        let parser = HybridParser()
+
+        // Index files
+        let sourcesDir = projectDir.appendingPathComponent("Sources")
+        let files = try FileManager.default.contentsOfDirectory(
+            at: sourcesDir,
+            includingPropertiesForKeys: nil
+        ).filter { $0.pathExtension == "swift" }
+
+        for file in files {
+            let content = try String(contentsOf: file, encoding: .utf8)
+            let result = parser.parse(content: content, path: file.path)
+            guard case let .success(chunks) = result else { continue }
+
+            for chunk in chunks {
+                let embedding = try await mockEmbeddingProvider.embed(chunk.content)
+                try await indexManager.index(chunk: chunk, vector: embedding)
+            }
+        }
+
+        // Create search engine
+        let chunkStore = await indexManager.chunkStore
+        let vectorStore = await indexManager.vectorStore
+        let searchEngine = HybridSearchEngine(
+            chunkStore: chunkStore,
+            vectorStore: vectorStore,
+            embeddingProvider: mockEmbeddingProvider
+        )
+
+        // Create LLM components with mocks
+        let mockLLMProvider = MockLLMProvider(
+            response: """
+            SYNONYMS: auth, sign in
+            CONCEPTS: session
+            VARIATIONS: user auth
+            """
+        )
+        let expander = QueryExpander(provider: mockLLMProvider)
+
+        // Step 1: Expand query
+        let expanded = try await expander.expand("login", timeout: 5)
+        #expect(expanded.allTerms.count > 1, "Query should be expanded")
+
+        // Step 2: Search with expanded terms
+        let results = try await searchEngine.search(
+            query: expanded.combinedQuery,
+            options: SearchOptions(limit: 10)
+        )
+        #expect(!results.isEmpty, "Should find results")
+
+        // Step 3: Synthesize results
+        let synthesisMockProvider = MockLLMProvider(
+            response: """
+            SUMMARY: Found login functionality in AuthenticationService actor.
+
+            INSIGHTS:
+            - Actor-based design for thread safety
+            - Async/await pattern for login flow
+
+            CONFIDENCE: 80%
+            """
+        )
+        let synthesizer = ResultSynthesizer(provider: synthesisMockProvider)
+
+        let synthesisInputs = results.map { result in
+            SynthesisInput(
+                filePath: result.chunk.path,
+                content: result.chunk.content,
+                kind: result.chunk.kind.rawValue,
+                breadcrumb: result.chunk.breadcrumb,
+                docComment: result.chunk.docComment
+            )
+        }
+
+        let synthesis = try await synthesizer.synthesize(
+            query: "login",
+            results: synthesisInputs,
+            timeout: 5
+        )
+
+        #expect(!synthesis.summary.isEmpty, "Should have synthesis summary")
+        #expect(synthesis.confidence > 0, "Should have confidence score")
+
+        // Step 4: Generate follow-ups
+        let followUpMockProvider = MockLLMProvider(
+            response: """
+            1. how to test login - testing patterns
+            2. logout implementation - related functionality
+            """
+        )
+        let generator = FollowUpGenerator(provider: followUpMockProvider)
+
+        let followUps = try await generator.generate(
+            query: "login",
+            resultSummary: synthesis.summary,
+            timeout: 5
+        )
+
+        #expect(!followUps.isEmpty, "Should generate follow-up suggestions")
+    }
+
+    // MARK: - LLM Provider Chain Tests
+
+    @Test("LLM provider chain falls back to available provider")
+    func llmProviderChainFallback() async throws {
+        let unavailable = UnavailableLLMProvider()
+        let available = MockLLMProvider(response: "Success from fallback")
+
+        let chain = LLMProviderChain(providers: [unavailable, available])
+
+        let isAvailable = await chain.isAvailable()
+        #expect(isAvailable, "Chain should be available via fallback")
+
+        let response = try await chain.complete(messages: [.user("test")])
+        #expect(response == "Success from fallback", "Should get response from fallback")
+    }
+
+    @Test("LLM provider chain throws when all providers fail")
+    func llmProviderChainAllFail() async throws {
+        let chain = LLMProviderChain(providers: [
+            UnavailableLLMProvider(),
+            UnavailableLLMProvider(),
+        ])
+
+        let isAvailable = await chain.isAvailable()
+        #expect(!isAvailable, "Chain should not be available")
+
+        await #expect(throws: LLMError.self) {
+            _ = try await chain.complete(messages: [.user("test")])
+        }
+    }
+}
+
+// MARK: - LLM Test Helpers
+
+/// Mock LLM provider for testing.
+private struct MockLLMProvider: LLMProvider {
+    let id: String
+    let name: String
+    let response: String
+
+    init(id: String = "mock-llm", response: String = "Mock response") {
+        self.id = id
+        name = "Mock LLM Provider"
+        self.response = response
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func complete(
+        messages: [LLMMessage],
+        model: String?,
+        timeout: TimeInterval
+    ) async throws -> String {
+        response
+    }
+}
+
+/// LLM provider that counts calls for testing caching.
+private final class CountingLLMProvider: LLMProvider, @unchecked Sendable {
+    let id: String = "counting-llm"
+    let name: String = "Counting LLM Provider"
+    private let onCall: () -> Void
+
+    init(onCall: @escaping () -> Void) {
+        self.onCall = onCall
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func complete(
+        messages: [LLMMessage],
+        model: String?,
+        timeout: TimeInterval
+    ) async throws -> String {
+        onCall()
+        return "1. test query - rationale"
+    }
+}
+
+/// LLM provider that is always unavailable.
+private struct UnavailableLLMProvider: LLMProvider {
+    let id = "unavailable-llm"
+    let name = "Unavailable LLM"
+
+    func isAvailable() async -> Bool { false }
+
+    func complete(
+        messages: [LLMMessage],
+        model: String?,
+        timeout: TimeInterval
+    ) async throws -> String {
+        throw LLMError.notAvailable(reason: "Provider unavailable for testing")
+    }
+}
+
+/// Mock embedding provider for LLM E2E tests.
+private final class MockEmbeddingProviderE2E: EmbeddingProvider, @unchecked Sendable {
+    let id = "mock-e2e"
+    let name = "Mock E2E Provider"
+    let dimension: Int
+
+    init(dimension: Int) {
+        self.dimension = dimension
+    }
+
+    func isAvailable() async -> Bool { true }
+
+    func embed(_ text: String) async throws -> [Float] {
+        var generator = SeededRNG(seed: stableHash(text))
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
+        let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
+        if norm > 0 { embedding = embedding.map { $0 / norm } }
+        return embedding
+    }
+
+    func embed(_ texts: [String]) async throws -> [[Float]] {
+        try await texts.asyncMap { try await embed($0) }
+    }
+
+    private func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
+}
+
+/// Async map extension for test helpers.
+private extension Array {
+    func asyncMap<T>(_ transform: (Element) async throws -> T) async rethrows -> [T] {
+        var results: [T] = []
+        results.reserveCapacity(count)
+        for element in self {
+            try await results.append(transform(element))
+        }
+        return results
+    }
 }

@@ -103,8 +103,21 @@ struct SearchCommand: AsyncParsableCommand {
     )
     var verbose: Bool = false
 
+    @Flag(
+        name: .long,
+        help: "Use LLM to expand query with related terms (requires search.enhancement config)"
+    )
+    var expandQuery: Bool = false
+
+    @Flag(
+        name: .long,
+        help: "Generate LLM summary and follow-up suggestions (requires search.enhancement config)"
+    )
+    var synthesize: Bool = false
+
     // MARK: - Execution
 
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     mutating func run() async throws {
         let logger = CLIUtils.makeLogger(verbose: verbose)
         logger.info("Starting search", metadata: ["query": "\(query)"])
@@ -203,9 +216,123 @@ struct SearchCommand: AsyncParsableCommand {
             multiHopDepth: multiHop ? 2 : 0
         )
 
-        // Execute search
+        // Create LLM components if needed
+        var queryExpander: QueryExpander?
+        var resultSynthesizer: ResultSynthesizer?
+        var followUpGenerator: FollowUpGenerator?
+        var expandedQuery: ExpandedQuery?
+
+        if expandQuery || synthesize, configuration.searchEnhancement.enabled {
+            // Create utility provider for query expansion and follow-ups
+            if expandQuery || synthesize {
+                do {
+                    let utilityProvider = try LLMProviderFactory.createProvider(
+                        from: configuration.searchEnhancement.utility,
+                        openAIKey: configuration.openAIAPIKey
+                    )
+                    if expandQuery {
+                        queryExpander = QueryExpander(provider: utilityProvider)
+                        logger.debug(
+                            "Query expansion enabled with provider: \(configuration.searchEnhancement.utility.provider)"
+                        )
+                    }
+                    if synthesize {
+                        followUpGenerator = FollowUpGenerator(provider: utilityProvider)
+                    }
+                } catch {
+                    logger.warning("Failed to create utility LLM provider: \(error)")
+                }
+            }
+
+            // Create synthesis provider for result summarization
+            if synthesize {
+                do {
+                    let synthesisProvider = try LLMProviderFactory.createProvider(
+                        from: configuration.searchEnhancement.synthesis,
+                        openAIKey: configuration.openAIAPIKey
+                    )
+                    resultSynthesizer = ResultSynthesizer(provider: synthesisProvider)
+                    logger.debug(
+                        "Result synthesis enabled with provider: \(configuration.searchEnhancement.synthesis.provider)"
+                    )
+                } catch {
+                    logger.warning("Failed to create synthesis LLM provider: \(error)")
+                }
+            }
+        } else if expandQuery || synthesize, !configuration.searchEnhancement.enabled {
+            logger.warning("LLM features requested but search.enhancement.enabled is false in config")
+        }
+
+        // Execute search (with optional expansion)
         let startTime = Date()
-        let results = try await searchEngine.search(query: query, options: searchOptions)
+        let results: [SearchResult]
+
+        if let expander = queryExpander {
+            let enhancedResult = try await searchEngine.searchWithExpansion(
+                query: query,
+                options: searchOptions,
+                expander: expander,
+                timeout: configuration.searchEnhancement.utility.timeout
+            )
+            results = enhancedResult.results
+            expandedQuery = enhancedResult.expandedQuery
+
+            if let expanded = expandedQuery {
+                logger.info("Query expanded with \(expanded.allTerms.count) terms")
+                if !json, format != .json {
+                    print("Expanded query: \(expanded.allTerms.joined(separator: ", "))")
+                }
+            }
+        } else {
+            results = try await searchEngine.search(query: query, options: searchOptions)
+        }
+
+        // Generate synthesis and follow-ups if requested
+        var synthesis: Synthesis?
+        var followUps: [FollowUpSuggestion]?
+
+        if synthesize, !results.isEmpty {
+            // Convert results to synthesis inputs
+            let synthesisInputs = results.map { result in
+                SynthesisInput(
+                    filePath: result.chunk.path,
+                    content: result.chunk.content,
+                    kind: result.chunk.kind.rawValue,
+                    breadcrumb: result.chunk.breadcrumb,
+                    docComment: result.chunk.docComment
+                )
+            }
+
+            // Generate synthesis
+            if let synthesizer = resultSynthesizer {
+                do {
+                    synthesis = try await synthesizer.synthesize(
+                        query: query,
+                        results: synthesisInputs,
+                        timeout: configuration.searchEnhancement.synthesis.timeout
+                    )
+                    logger.info("Generated synthesis with confidence: \(synthesis?.confidence ?? 0)")
+                } catch {
+                    logger.warning("Synthesis failed: \(error)")
+                }
+            }
+
+            // Generate follow-up suggestions
+            if let generator = followUpGenerator {
+                do {
+                    let resultSummary = synthesis?.summary ?? "Found \(results.count) code results"
+                    followUps = try await generator.generate(
+                        query: query,
+                        resultSummary: resultSummary,
+                        timeout: configuration.searchEnhancement.utility.timeout
+                    )
+                    logger.info("Generated \(followUps?.count ?? 0) follow-up suggestions")
+                } catch {
+                    logger.warning("Follow-up generation failed: \(error)")
+                }
+            }
+        }
+
         let elapsed = Date().timeIntervalSince(startTime)
 
         logger.info("Search completed", metadata: [
@@ -228,11 +355,30 @@ struct SearchCommand: AsyncParsableCommand {
         // Output results
         switch effectiveFormat {
         case .human:
-            outputHumanReadable(results: results, elapsed: elapsed)
+            outputHumanReadable(
+                results: results,
+                elapsed: elapsed,
+                synthesis: synthesis,
+                followUps: followUps
+            )
         case .json:
-            try outputJSON(results: results, query: query, elapsed: elapsed)
+            try outputJSON(
+                results: results,
+                query: query,
+                elapsed: elapsed,
+                expandedQuery: expandedQuery,
+                synthesis: synthesis,
+                followUps: followUps
+            )
         case .toon:
-            try outputTOON(results: results, query: query, elapsed: elapsed)
+            try outputTOON(
+                results: results,
+                query: query,
+                elapsed: elapsed,
+                expandedQuery: expandedQuery,
+                synthesis: synthesis,
+                followUps: followUps
+            )
         }
     }
 
@@ -329,7 +475,14 @@ struct SearchCommand: AsyncParsableCommand {
         }
     }
 
-    private func outputJSON(results: [SearchResult], query: String, elapsed: TimeInterval) throws {
+    private func outputJSON(
+        results: [SearchResult],
+        query: String,
+        elapsed: TimeInterval,
+        expandedQuery: ExpandedQuery?,
+        synthesis: Synthesis? = nil,
+        followUps: [FollowUpSuggestion]? = nil
+    ) throws {
         var jsonResults: [[String: Any]] = []
 
         for result in results {
@@ -377,12 +530,46 @@ struct SearchCommand: AsyncParsableCommand {
             jsonResults.append(item)
         }
 
-        let output: [String: Any] = [
+        var output: [String: Any] = [
             "query": query,
             "resultCount": results.count,
             "elapsedSeconds": elapsed,
             "results": jsonResults,
         ]
+
+        // Add expanded query info if available
+        if let expanded = expandedQuery {
+            output["queryExpansion"] = [
+                "originalQuery": expanded.originalQuery,
+                "synonyms": expanded.synonyms,
+                "relatedConcepts": expanded.relatedConcepts,
+                "variations": expanded.variations,
+                "recallBoost": expanded.recallBoost,
+            ]
+        }
+
+        // Add synthesis if available
+        if let synthesis {
+            output["synthesis"] = [
+                "summary": synthesis.summary,
+                "keyInsights": synthesis.keyInsights,
+                "codeReferences": synthesis.codeReferences.map { [
+                    "filePath": $0.filePath,
+                    "lineNumber": $0.lineNumber as Any,
+                    "description": $0.description as Any,
+                ] },
+                "confidence": Double(synthesis.confidence),
+            ]
+        }
+
+        // Add follow-up suggestions if available
+        if let followUps {
+            output["followUpSuggestions"] = followUps.map { [
+                "query": $0.query,
+                "rationale": $0.rationale as Any,
+                "category": $0.category.rawValue,
+            ] }
+        }
 
         if let jsonData = try? JSONSerialization.data(
             withJSONObject: output,
@@ -394,7 +581,12 @@ struct SearchCommand: AsyncParsableCommand {
         }
     }
 
-    private func outputHumanReadable(results: [SearchResult], elapsed: TimeInterval) {
+    private func outputHumanReadable(
+        results: [SearchResult],
+        elapsed: TimeInterval,
+        synthesis: Synthesis? = nil,
+        followUps: [FollowUpSuggestion]? = nil
+    ) {
         print("")
 
         if results.isEmpty {
@@ -454,18 +646,74 @@ struct SearchCommand: AsyncParsableCommand {
             }
         }
 
+        // Show synthesis if available
+        if let synthesis {
+            print("\n" + String(repeating: "─", count: 60))
+            print("Summary:")
+            print("  \(synthesis.summary)")
+
+            if !synthesis.keyInsights.isEmpty {
+                print("\nKey Insights:")
+                for insight in synthesis.keyInsights {
+                    print("  • \(insight)")
+                }
+            }
+
+            if !synthesis.codeReferences.isEmpty {
+                print("\nCode References:")
+                for ref in synthesis.codeReferences {
+                    print("  • \(ref.formatted)")
+                }
+            }
+
+            print("\nConfidence: \(Int(synthesis.confidence * 100))%")
+        }
+
+        // Show follow-up suggestions if available
+        if let followUps, !followUps.isEmpty {
+            print("\n" + String(repeating: "─", count: 60))
+            print("Suggested Follow-ups:")
+            for (index, followUp) in followUps.enumerated() {
+                var line = "  \(index + 1). \(followUp.query)"
+                if let rationale = followUp.rationale {
+                    line += " - \(rationale)"
+                }
+                print(line)
+            }
+        }
+
         print("")
     }
 
     // MARK: - TOON Output
 
-    private func outputTOON(results: [SearchResult], query: String, elapsed: TimeInterval) throws {
+    private func outputTOON(
+        results: [SearchResult],
+        query: String,
+        elapsed: TimeInterval,
+        expandedQuery: ExpandedQuery?,
+        synthesis: Synthesis? = nil,
+        followUps: [FollowUpSuggestion]? = nil
+    ) throws {
         // TOON format is a compact, token-efficient representation
         // Format: search{q,n,ms}: followed by tabular results
         let elapsedMs = Int(elapsed * 1000)
 
         var output = "search{q,n,ms}:\n"
-        output += "  \"\(escapeString(query))\",\(results.count),\(elapsedMs)\n\n"
+        output += "  \"\(escapeString(query))\",\(results.count),\(elapsedMs)\n"
+
+        // Add query expansion info if available
+        if let expanded = expandedQuery {
+            output += "\nexpanded{syn,rel,var}:\n"
+            let sep = "\",\""
+            let syns = expanded.synonyms.isEmpty ? "~" : "[\"\(expanded.synonyms.joined(separator: sep))\"]"
+            let rels = expanded.relatedConcepts.isEmpty
+                ? "~" : "[\"\(expanded.relatedConcepts.joined(separator: sep))\"]"
+            let vars = expanded.variations.isEmpty ? "~" : "[\"\(expanded.variations.joined(separator: sep))\"]"
+            output += "  \(syns),\(rels),\(vars)\n"
+        }
+
+        output += "\n"
 
         if results.isEmpty {
             print(output)
@@ -532,6 +780,30 @@ struct SearchCommand: AsyncParsableCommand {
             }
             if truncated {
                 output += "  ...\(lines.count - 10) more lines\n"
+            }
+        }
+
+        // Add synthesis if available
+        if let synthesis {
+            output += "\nsynthesis{sum,insights,refs,conf}:\n"
+            let summary = escapeString(synthesis.summary)
+            let keyInsights = synthesis.keyInsights.isEmpty
+                ? "[]"
+                : "[\"\(synthesis.keyInsights.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+            let codeRefs = synthesis.codeReferences.isEmpty
+                ? "[]"
+                : "[\"\(synthesis.codeReferences.map { escapeString($0.formatted) }.joined(separator: "\",\""))\"]"
+            output += "  \"\(summary)\"\n"
+            output += "  \(keyInsights)\n"
+            output += "  \(codeRefs)\n"
+            output += "  \(synthesis.confidence)\n"
+        }
+
+        // Add follow-up suggestions if available
+        if let followUps, !followUps.isEmpty {
+            output += "\nfollow_ups[\(followUps.count)]{q,cat}:\n"
+            for followUp in followUps {
+                output += "  \"\(escapeString(followUp.query))\",\"\(followUp.category.rawValue)\"\n"
             }
         }
 

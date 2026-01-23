@@ -83,6 +83,11 @@ public struct Config: Sendable, Equatable {
     /// Log level (debug, info, warning, error).
     public var logLevel: String
 
+    // MARK: - Search Enhancement (LLM)
+
+    /// LLM-powered search enhancement configuration.
+    public var searchEnhancement: SearchEnhancementConfig
+
     // MARK: - Initialization
 
     public init(
@@ -105,7 +110,8 @@ public struct Config: Sendable, Equatable {
         openAIAPIKey: String? = nil,
         maxConcurrentTasks: Int = ProcessInfo.processInfo.activeProcessorCount,
         watchDebounceMs: Int = 500,
-        logLevel: String = "info"
+        logLevel: String = "info",
+        searchEnhancement: SearchEnhancementConfig = .default
     ) {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
@@ -127,7 +133,82 @@ public struct Config: Sendable, Equatable {
         self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
+        self.searchEnhancement = searchEnhancement
     }
+}
+
+// MARK: - Search Enhancement Config
+
+/// Configuration for LLM-powered search enhancements.
+///
+/// Enables query expansion, result synthesis, and follow-up suggestions
+/// using a dual-tier LLM architecture:
+/// - **Utility tier**: Fast operations (query expansion, follow-ups)
+/// - **Synthesis tier**: Deep analysis (result summarization)
+public struct SearchEnhancementConfig: Sendable, Equatable {
+    /// Whether search enhancement is enabled.
+    public var enabled: Bool
+
+    /// Configuration for fast utility operations.
+    public var utility: LLMTierConfig
+
+    /// Configuration for deep synthesis operations.
+    public var synthesis: LLMTierConfig
+
+    public init(
+        enabled: Bool = false,
+        utility: LLMTierConfig = .defaultUtility,
+        synthesis: LLMTierConfig = .defaultSynthesis
+    ) {
+        self.enabled = enabled
+        self.utility = utility
+        self.synthesis = synthesis
+    }
+
+    /// Default configuration (disabled).
+    public static let `default` = SearchEnhancementConfig()
+}
+
+/// Configuration for a single LLM tier.
+public struct LLMTierConfig: Sendable, Equatable {
+    /// LLM provider identifier.
+    ///
+    /// Supported providers:
+    /// - `claude-code-cli`: Claude Code CLI (requires `claude` command)
+    /// - `codex-cli`: Codex CLI (requires `codex` command)
+    /// - `ollama`: Local Ollama server
+    /// - `openai`: OpenAI API
+    public var provider: String
+
+    /// Model name override (optional, uses provider default if nil).
+    public var model: String?
+
+    /// Request timeout in seconds.
+    public var timeout: TimeInterval
+
+    public init(
+        provider: String,
+        model: String? = nil,
+        timeout: TimeInterval = 60
+    ) {
+        self.provider = provider
+        self.model = model
+        self.timeout = timeout
+    }
+
+    /// Default utility tier (fast operations).
+    public static let defaultUtility = LLMTierConfig(
+        provider: "claude-code-cli",
+        model: nil,
+        timeout: 30
+    )
+
+    /// Default synthesis tier (deep analysis).
+    public static let defaultSynthesis = LLMTierConfig(
+        provider: "claude-code-cli",
+        model: nil,
+        timeout: 120
+    )
 }
 
 // MARK: - Defaults
@@ -186,6 +267,7 @@ public extension Config {
         applyIfPresent(partial.maxConcurrentTasks, to: \.maxConcurrentTasks)
         applyIfPresent(partial.watchDebounceMs, to: \.watchDebounceMs)
         applyIfPresent(partial.logLevel, to: \.logLevel)
+        applyIfPresent(partial.searchEnhancement, to: \.searchEnhancement)
     }
 
     private mutating func applyIfPresent<T>(

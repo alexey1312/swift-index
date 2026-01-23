@@ -64,6 +64,10 @@ public struct PartialConfig: Sendable, Equatable {
 
     public var logLevel: String?
 
+    // MARK: - Search Enhancement (LLM)
+
+    public var searchEnhancement: SearchEnhancementConfig?
+
     public init(
         embeddingProvider: String? = nil,
         embeddingModel: String? = nil,
@@ -84,7 +88,8 @@ public struct PartialConfig: Sendable, Equatable {
         openAIAPIKey: String? = nil,
         maxConcurrentTasks: Int? = nil,
         watchDebounceMs: Int? = nil,
-        logLevel: String? = nil
+        logLevel: String? = nil,
+        searchEnhancement: SearchEnhancementConfig? = nil
     ) {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
@@ -106,6 +111,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
+        self.searchEnhancement = searchEnhancement
     }
 
     /// Empty partial config.

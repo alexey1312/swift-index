@@ -353,3 +353,144 @@ public extension HybridSearchEngine {
         }
     }
 }
+
+// MARK: - Enhanced Search with Query Expansion
+
+public extension HybridSearchEngine {
+    /// Result of an enhanced search operation.
+    struct EnhancedSearchResult: Sendable {
+        /// The search results.
+        public let results: [SearchResult]
+
+        /// The expanded query (if expansion was performed).
+        public let expandedQuery: ExpandedQuery?
+
+        /// Whether query expansion was performed.
+        public var wasExpanded: Bool { expandedQuery != nil }
+    }
+
+    /// Performs a search with optional LLM-powered query expansion.
+    ///
+    /// Query expansion generates semantically related terms to improve recall.
+    /// The expanded terms are searched alongside the original query.
+    ///
+    /// - Parameters:
+    ///   - query: The search query string.
+    ///   - options: Search configuration options.
+    ///   - expander: The query expander (nil to skip expansion).
+    ///   - timeout: Timeout for query expansion.
+    /// - Returns: Enhanced search result with expanded query info.
+    func searchWithExpansion(
+        query: String,
+        options: SearchOptions,
+        expander: QueryExpander?,
+        timeout: TimeInterval = 30
+    ) async throws -> EnhancedSearchResult {
+        // If no expander, perform standard search
+        guard let expander else {
+            let results = try await search(query: query, options: options)
+            return EnhancedSearchResult(results: results, expandedQuery: nil)
+        }
+
+        // Try to expand the query
+        let expandedQuery: ExpandedQuery
+        do {
+            expandedQuery = try await expander.expand(query, timeout: timeout)
+        } catch {
+            // Expansion failed, fall back to standard search
+            let results = try await search(query: query, options: options)
+            return EnhancedSearchResult(results: results, expandedQuery: nil)
+        }
+
+        // Search with all expanded terms
+        // Use the original query for semantic search (best representation)
+        // Use combined terms for BM25 (keyword coverage)
+        let expandedBM25Query = expandedQuery.allTerms.joined(separator: " ")
+
+        // Fetch more results to account for overlap
+        let fetchLimit = options.limit * 4
+
+        // Run searches with original and expanded queries
+        async let originalSemanticTask = semanticSearch.searchRaw(
+            query: query,
+            limit: fetchLimit
+        )
+        async let expandedBM25Task = bm25Search.searchRaw(
+            query: expandedBM25Query,
+            limit: fetchLimit
+        )
+
+        let (semanticResults, bm25Results) = try await (
+            originalSemanticTask,
+            expandedBM25Task
+        )
+
+        // Fuse results
+        let bm25Weight = 1.0 - options.semanticWeight
+        let semanticWeight = options.semanticWeight
+
+        let fusedResults = fusion.fuse(
+            bm25Results,
+            firstWeight: bm25Weight,
+            semanticResults,
+            secondWeight: semanticWeight
+        )
+
+        // Build results
+        var results: [SearchResult] = []
+        let bm25Scores: [String: (score: Float, rank: Int)] = Dictionary(
+            uniqueKeysWithValues: bm25Results.enumerated().map { index, result in
+                (result.id, (score: result.score, rank: index + 1))
+            }
+        )
+        let semanticScores: [String: (score: Float, rank: Int)] = Dictionary(
+            uniqueKeysWithValues: semanticResults.enumerated().map { index, result in
+                (result.id, (score: result.score, rank: index + 1))
+            }
+        )
+
+        for fusedItem in fusedResults {
+            guard let chunk = try await chunkStore.get(id: fusedItem.id) else {
+                continue
+            }
+
+            // Apply filters
+            if let pathFilter = options.pathFilter {
+                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                    continue
+                }
+            }
+
+            if let extensionFilter = options.extensionFilter, !extensionFilter.isEmpty {
+                let ext = (chunk.path as NSString).pathExtension.lowercased()
+                guard extensionFilter.contains(ext) else {
+                    continue
+                }
+            }
+
+            let bm25Info = bm25Scores[fusedItem.id]
+            let semanticInfo = semanticScores[fusedItem.id]
+
+            let result = SearchResult(
+                chunk: chunk,
+                score: fusedItem.score,
+                bm25Score: bm25Info?.score,
+                semanticScore: semanticInfo?.score,
+                bm25Rank: bm25Info?.rank,
+                semanticRank: semanticInfo?.rank,
+                isMultiHop: false,
+                hopDepth: 0
+            )
+            results.append(result)
+
+            if results.count >= options.limit {
+                break
+            }
+        }
+
+        return EnhancedSearchResult(
+            results: Array(results.sorted().prefix(options.limit)),
+            expandedQuery: expandedQuery
+        )
+    }
+}

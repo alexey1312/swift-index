@@ -19,6 +19,10 @@ public actor MCPContext {
     private var indexManagers: [String: IndexManager] = [:]
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
+    private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
+    private var queryExpander: QueryExpander?
+    private var resultSynthesizer: ResultSynthesizer?
+    private var followUpGenerator: FollowUpGenerator?
     private let logger = Logger(label: "MCPContext")
 
     // MARK: - Initialization
@@ -212,6 +216,115 @@ public actor MCPContext {
             embeddingProvider: provider,
             rrfK: config.rrfK
         )
+    }
+
+    // MARK: - LLM Providers
+
+    /// Get or create LLM provider chains for search enhancement.
+    public func getLLMProviders(
+        config: Config
+    ) async throws -> (utility: LLMProviderChain?, synthesis: LLMProviderChain?) {
+        // Check if LLM enhancement is enabled
+        guard config.searchEnhancement.enabled else {
+            return (nil, nil)
+        }
+
+        // Return cached providers if available
+        if let existing = llmProviders {
+            return existing
+        }
+
+        // Create utility tier provider
+        let utilityProvider: LLMProviderChain?
+        do {
+            let provider = try LLMProviderFactory.createProvider(
+                from: config.searchEnhancement.utility,
+                openAIKey: config.openAIAPIKey
+            )
+            utilityProvider = LLMProviderChain.single(provider)
+            logger.debug("Created utility LLM provider: \(config.searchEnhancement.utility.provider)")
+        } catch {
+            logger.warning("Failed to create utility LLM provider: \(error)")
+            utilityProvider = nil
+        }
+
+        // Create synthesis tier provider
+        let synthesisProvider: LLMProviderChain?
+        do {
+            let provider = try LLMProviderFactory.createProvider(
+                from: config.searchEnhancement.synthesis,
+                openAIKey: config.openAIAPIKey
+            )
+            synthesisProvider = LLMProviderChain.single(provider)
+            logger.debug("Created synthesis LLM provider: \(config.searchEnhancement.synthesis.provider)")
+        } catch {
+            logger.warning("Failed to create synthesis LLM provider: \(error)")
+            synthesisProvider = nil
+        }
+
+        let providers = (utilityProvider, synthesisProvider)
+        llmProviders = providers
+        return providers
+    }
+
+    /// Get or create query expander for search enhancement.
+    public func getQueryExpander(config: Config) async throws -> QueryExpander? {
+        guard config.searchEnhancement.enabled else {
+            return nil
+        }
+
+        if let existing = queryExpander {
+            return existing
+        }
+
+        let providers = try await getLLMProviders(config: config)
+        guard let utility = providers.utility else {
+            return nil
+        }
+
+        let expander = QueryExpander(provider: utility)
+        queryExpander = expander
+        return expander
+    }
+
+    /// Get or create result synthesizer for search enhancement.
+    public func getResultSynthesizer(config: Config) async throws -> ResultSynthesizer? {
+        guard config.searchEnhancement.enabled else {
+            return nil
+        }
+
+        if let existing = resultSynthesizer {
+            return existing
+        }
+
+        let providers = try await getLLMProviders(config: config)
+        guard let synthesis = providers.synthesis else {
+            return nil
+        }
+
+        let synthesizer = ResultSynthesizer(provider: synthesis)
+        resultSynthesizer = synthesizer
+        return synthesizer
+    }
+
+    /// Get or create follow-up generator for search enhancement.
+    public func getFollowUpGenerator(config: Config) async throws -> FollowUpGenerator? {
+        guard config.searchEnhancement.enabled else {
+            return nil
+        }
+
+        if let existing = followUpGenerator {
+            return existing
+        }
+
+        let providers = try await getLLMProviders(config: config)
+        guard let utility = providers.utility else {
+            return nil
+        }
+
+        let generator = FollowUpGenerator(provider: utility)
+        followUpGenerator = generator
+        return generator
     }
 
     // MARK: - Utilities
