@@ -21,7 +21,7 @@ public final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable
             throw ProviderError.invalidInput("Text cannot be empty")
         }
 
-        var generator = SeededRNG(seed: UInt64(bitPattern: Int64(text.hashValue)))
+        var generator = SeededRNG(seed: stableHash64(text))
         var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
@@ -49,6 +49,15 @@ public final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable
 
         return results
     }
+}
+
+private func stableHash64(_ text: String) -> UInt64 {
+    var hash: UInt64 = 14_695_981_039_346_656_037
+    for byte in text.utf8 {
+        hash ^= UInt64(byte)
+        hash &*= 1_099_511_628_211
+    }
+    return hash
 }
 
 /// Seeded random number generator for deterministic embeddings.

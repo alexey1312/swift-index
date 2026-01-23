@@ -104,6 +104,86 @@
 
 ---
 
+## Phase 4: LLM Code Research (PENDING)
+
+### 4.1 LLM Provider Protocol & Models
+
+- [ ] 4.1.1 Create `LLMProvider` protocol in `Protocols/LLMProvider.swift`
+- [ ] 4.1.2 Create `LLMMessage` model (role + content) in `LLM/LLMMessage.swift`
+- [ ] 4.1.3 Create `LLMProviderChain` for fallback handling in `LLM/LLMProviderChain.swift`
+- [ ] 4.1.4 Add `SearchEnhancementConfig` struct to `Config.swift` (nested under `SearchConfig`)
+- [ ] 4.1.5 Update `TOMLConfigLoader` to parse `[search.enhancement]` section
+- [ ] 4.1.6 Write protocol tests
+
+### 4.2 CLI Providers (Claude Code & Codex)
+
+- [ ] 4.2.1 Implement `ClaudeCodeCLIProvider` with subprocess invocation
+- [ ] 4.2.2 Implement `CodexCLIProvider` with reasoning effort support
+- [ ] 4.2.3 Add CLI availability detection
+- [ ] 4.2.4 Handle timeouts and errors gracefully
+- [ ] 4.2.5 Write integration tests (mocked subprocess)
+
+### 4.3 API Providers (Ollama & OpenAI)
+
+- [ ] 4.3.1 Implement `OllamaLLMProvider` (HTTP API)
+- [ ] 4.3.2 Implement `OpenAILLMProvider` (HTTP API)
+- [ ] 4.3.3 Add model configuration support
+- [ ] 4.3.4 Write provider tests
+
+### 4.4 Query Enhancement Features
+
+- [ ] 4.4.1 Create `QueryExpander` with prompt templates
+- [ ] 4.4.2 Integrate query expansion into `HybridSearchEngine`
+- [ ] 4.4.3 Add caching for common expansions
+- [ ] 4.4.4 Add `--expand-query` flag to `SearchCommand`
+- [ ] 4.4.5 Write expansion tests
+
+### 4.5 Result Synthesis Features
+
+- [ ] 4.5.1 Create `ResultSynthesizer` for multi-result summaries
+- [ ] 4.5.2 Create `FollowUpGenerator` for suggested queries
+- [ ] 4.5.3 Integrate into MCP `SearchCodeTool` response
+- [ ] 4.5.4 Add synthesis to CLI output (optional flag)
+- [ ] 4.5.5 Write synthesis tests
+
+### 4.6 Integration & Documentation
+
+- [ ] 4.6.1 Update `IndexManager` to initialize LLM providers
+- [ ] 4.6.2 Add `[search.enhancement]` section to `generateConfigContent()` in `InitCommand.swift`
+- [ ] 4.6.3 Add commented examples for all LLM providers (claude-code-cli, codex-cli, ollama, openai)
+- [ ] 4.6.4 Add dual-tier (utility/synthesis) config examples with timeouts
+- [ ] 4.6.5 Write end-to-end integration tests
+- [ ] 4.6.6 Benchmark query latency with/without LLM
+
+**Gate**: Build + all tests pass
+
+---
+
+## Phase 5: Documentation Update (PENDING)
+
+### 5.1 User Documentation
+
+- [ ] 5.1.1 Update `README.md` with all new features (metadata, info snippets, LLM)
+- [ ] 5.1.2 Create `docs/search-enhancement.md` — LLM provider configuration guide
+- [ ] 5.1.3 Create `docs/search-features.md` — query expansion & synthesis docs
+- [ ] 5.1.4 Add usage examples for each new CLI flag
+
+### 5.2 Developer Documentation
+
+- [ ] 5.2.1 Update `CLAUDE.md` project guide with new commands/architecture
+- [ ] 5.2.2 Document new protocols (`LLMProvider`, `InfoSnippetStore`)
+- [ ] 5.2.3 Add inline documentation to config template in `init` command
+
+### 5.3 Release Preparation
+
+- [ ] 5.3.1 Update CHANGELOG with all phases
+- [ ] 5.3.2 Review and update Homebrew formula description
+- [ ] 5.3.3 Final review of all doc links and references
+
+**Gate**: Documentation complete and reviewed
+
+---
+
 ## Summary
 
 | Phase | Status    | Tasks | Tests Added |
@@ -111,3 +191,5 @@
 | 1     | COMPLETED | 20/20 | ~15         |
 | 2     | PENDING   | 0/16  | 0           |
 | 3     | PENDING   | 0/11  | 0           |
+| 4     | PENDING   | 0/27  | 0           |
+| 5     | PENDING   | 0/10  | 0           |

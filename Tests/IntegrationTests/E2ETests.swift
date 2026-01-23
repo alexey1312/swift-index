@@ -470,7 +470,7 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
 
     func embed(_ text: String) async throws -> [Float] {
         // Generate deterministic embedding based on text hash
-        var generator = SeededRNG(seed: UInt64(bitPattern: Int64(text.hashValue)))
+        var generator = SeededRNG(seed: stableHash64(text))
         var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         // Normalize
@@ -488,6 +488,15 @@ private final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendabl
             try await results.append(embed(text))
         }
         return results
+    }
+
+    private func stableHash64(_ text: String) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
     }
 }
 

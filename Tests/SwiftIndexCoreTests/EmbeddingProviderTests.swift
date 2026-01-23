@@ -61,10 +61,8 @@ final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
     }
 
     private func generateEmbedding(for text: String) -> [Float] {
-        // Generate normalized vector from text hash
-        var embedding = (0 ..< dimension).map { i in
-            Float(sin(Double(text.hashValue &+ i)))
-        }
+        var generator = SeededRNG(seed: stableHash64(text))
+        var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
 
         // L2 normalize
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
@@ -73,6 +71,30 @@ final class MockEmbeddingProvider: EmbeddingProvider, @unchecked Sendable {
         }
 
         return embedding
+    }
+
+    private func stableHash64(_ text: String) -> UInt64 {
+        var hash: UInt64 = 14_695_981_039_346_656_037
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 1_099_511_628_211
+        }
+        return hash
+    }
+}
+
+private struct SeededRNG: RandomNumberGenerator {
+    private var state: UInt64
+
+    init(seed: UInt64) {
+        state = seed == 0 ? 1 : seed
+    }
+
+    mutating func next() -> UInt64 {
+        state ^= state << 13
+        state ^= state >> 7
+        state ^= state << 17
+        return state
     }
 }
 
