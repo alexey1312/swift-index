@@ -1,5 +1,6 @@
 // MARK: - CodeChunk Model
 
+import Crypto
 import Foundation
 
 /// A chunk of code extracted from a source file.
@@ -55,6 +56,10 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     /// Programming language based on file extension.
     public let language: String
 
+    /// SHA-256 hash of chunk content for change detection.
+    /// Used to skip re-embedding unchanged chunks during re-indexing.
+    public let contentHash: String
+
     public init(
         id: String = UUID().uuidString,
         path: String,
@@ -70,7 +75,8 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         signature: String? = nil,
         breadcrumb: String? = nil,
         tokenCount: Int? = nil,
-        language: String? = nil
+        language: String? = nil,
+        contentHash: String? = nil
     ) {
         self.id = id
         self.path = path
@@ -87,6 +93,14 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         self.breadcrumb = breadcrumb
         self.tokenCount = tokenCount ?? (content.count / 4)
         self.language = language ?? CodeChunk.detectLanguage(from: path)
+        self.contentHash = contentHash ?? CodeChunk.computeContentHash(content)
+    }
+
+    /// Compute SHA-256 hash of content for change detection.
+    public static func computeContentHash(_ content: String) -> String {
+        let data = Data(content.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     /// Detect programming language from file extension.

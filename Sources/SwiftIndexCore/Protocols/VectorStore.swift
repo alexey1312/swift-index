@@ -45,6 +45,12 @@ public protocol VectorStore: Sendable {
     /// - Returns: True if the vector exists.
     func contains(id: String) async throws -> Bool
 
+    /// Get a vector by its chunk ID.
+    ///
+    /// - Parameter id: The chunk ID.
+    /// - Returns: The vector if found, nil otherwise.
+    func get(id: String) async throws -> [Float]?
+
     /// Get the total count of vectors.
     ///
     /// - Returns: Number of vectors in the store.

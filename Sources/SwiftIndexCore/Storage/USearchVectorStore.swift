@@ -168,6 +168,10 @@ public actor USearchVectorStore: VectorStore {
         idToKey[id] != nil
     }
 
+    public func get(id: String) async throws -> [Float]? {
+        try await getVector(id: id)
+    }
+
     public func count() async throws -> Int {
         idToKey.count
     }

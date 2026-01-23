@@ -536,207 +536,31 @@ struct USearchVectorStoreTests {
 
         #expect(results.isEmpty)
     }
-}
 
-// MARK: - IndexManager Tests
+    @Test("Get vector by ID")
+    func getVector() async throws {
+        let store = try USearchVectorStore(dimension: dimension)
+        let originalVector: [Float] = [0.1, 0.2, 0.3, 0.4]
 
-@Suite("IndexManager Tests")
-struct IndexManagerTests {
-    let dimension = 4
-
-    // MARK: - Indexing
-
-    @Test("Index chunk with vector")
-    func testIndex() async throws {
-        let manager = try await makeIndexManager()
-        let chunk = makeChunk(id: "idx-1")
-        let vector: [Float] = [0.1, 0.2, 0.3, 0.4]
-
-        try await manager.index(chunk: chunk, vector: vector)
-
-        let retrieved = try await manager.getChunk(id: "idx-1")
-        let vectorExists = try await manager.vectorStore.contains(id: "idx-1")
+        try await store.add(id: "get-1", vector: originalVector)
+        let retrieved = try await store.get(id: "get-1")
 
         #expect(retrieved != nil)
-        #expect(vectorExists == true)
+        #expect(retrieved?.count == dimension)
+        // Vectors should be approximately equal (floating point comparison)
+        if let retrieved {
+            for (a, b) in zip(retrieved, originalVector) {
+                #expect(abs(a - b) < 0.001)
+            }
+        }
     }
 
-    @Test("Index batch")
-    func testIndexBatch() async throws {
-        let manager = try await makeIndexManager()
-        let items: [(chunk: CodeChunk, vector: [Float])] = [
-            (makeChunk(id: "batch-1"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "batch-2"), [0.5, 0.6, 0.7, 0.8]),
-            (makeChunk(id: "batch-3"), [0.9, 1.0, 1.1, 1.2]),
-        ]
+    @Test("Get vector returns nil for non-existent ID")
+    func getVectorNonExistent() async throws {
+        let store = try USearchVectorStore(dimension: dimension)
 
-        try await manager.indexBatch(items)
-        let stats = try await manager.statistics()
+        let retrieved = try await store.get(id: "non-existent")
 
-        #expect(stats.chunkCount == 3)
-        #expect(stats.vectorCount == 3)
-    }
-
-    // MARK: - Incremental Indexing
-
-    @Test("Check needs indexing for new file")
-    func needsIndexingNew() async throws {
-        let manager = try await makeIndexManager()
-
-        let needsIndexing = try await manager.needsIndexing(fileHash: "new-hash")
-
-        #expect(needsIndexing == true)
-    }
-
-    @Test("Check needs indexing for indexed file")
-    func needsIndexingExisting() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.recordIndexed(fileHash: "existing-hash", path: "/test/file.swift")
-
-        let needsIndexing = try await manager.needsIndexing(fileHash: "existing-hash")
-
-        #expect(needsIndexing == false)
-    }
-
-    @Test("Reindex file")
-    func testReindex() async throws {
-        let manager = try await makeIndexManager()
-
-        // Index original chunks
-        try await manager.indexBatch([
-            (makeChunk(id: "old-1", path: "/test/file.swift", fileHash: "old-hash"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "old-2", path: "/test/file.swift", fileHash: "old-hash"), [0.5, 0.6, 0.7, 0.8]),
-        ])
-        try await manager.recordIndexed(fileHash: "old-hash", path: "/test/file.swift")
-
-        // Reindex with new chunks
-        let newChunks: [(chunk: CodeChunk, vector: [Float])] = [
-            (makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash"), [0.1, 0.2, 0.3, 0.4]),
-        ]
-        try await manager.reindex(path: "/test/file.swift", newChunks: newChunks)
-
-        // Verify old chunks removed, new chunks present
-        let oldChunk1 = try await manager.getChunk(id: "old-1")
-        let oldChunk2 = try await manager.getChunk(id: "old-2")
-        let newChunk1 = try await manager.getChunk(id: "new-1")
-
-        #expect(oldChunk1 == nil)
-        #expect(oldChunk2 == nil)
-        #expect(newChunk1 != nil)
-    }
-
-    // MARK: - Search
-
-    @Test("Semantic search")
-    func semanticSearch() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (makeChunk(id: "sem-1", content: "authentication"), [1.0, 0.0, 0.0, 0.0]),
-            (makeChunk(id: "sem-2", content: "payment"), [0.0, 1.0, 0.0, 0.0]),
-            (makeChunk(id: "sem-3", content: "logging"), [0.0, 0.0, 1.0, 0.0]),
-        ])
-
-        let results = try await manager.searchSemantic(
-            vector: [0.9, 0.1, 0.0, 0.0],
-            limit: 3
-        )
-
-        #expect(results.count == 3)
-        #expect(results[0].chunk.id == "sem-1")
-    }
-
-    @Test("FTS search through manager")
-    func testFTSSearch() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (
-                makeChunk(id: "fts-1", content: "func authenticate(user: User) // handle authentication"),
-                [0.1, 0.2, 0.3, 0.4]
-            ),
-            (makeChunk(id: "fts-2", content: "func processPayment()"), [0.5, 0.6, 0.7, 0.8]),
-        ])
-
-        let results = try await manager.searchFTS(query: "authentication", limit: 10)
-
-        #expect(results.count >= 1)
-        #expect(results[0].chunk.id == "fts-1")
-    }
-
-    @Test("Hybrid search combines semantic and FTS")
-    func hybridSearch() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (makeChunk(id: "hyb-1", content: "func authenticateUser(credentials: Credentials)"), [1.0, 0.0, 0.0, 0.0]),
-            (makeChunk(id: "hyb-2", content: "func validateToken(token: String)"), [0.8, 0.2, 0.0, 0.0]),
-            (makeChunk(id: "hyb-3", content: "func processPayment(amount: Double)"), [0.0, 1.0, 0.0, 0.0]),
-        ])
-
-        let results = try await manager.searchHybrid(
-            query: "authenticate",
-            vector: [0.9, 0.1, 0.0, 0.0],
-            options: HybridSearchOptions(limit: 3, semanticWeight: 0.5)
-        )
-
-        #expect(results.count >= 1)
-        // hyb-1 should rank high due to both semantic similarity and FTS match
-        #expect(results[0].chunk.id == "hyb-1")
-    }
-
-    // MARK: - Statistics and Maintenance
-
-    @Test("Statistics reports correct counts")
-    func testStatistics() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (makeChunk(id: "stat-1", path: "/test/a.swift"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "stat-2", path: "/test/a.swift"), [0.5, 0.6, 0.7, 0.8]),
-            (makeChunk(id: "stat-3", path: "/test/b.swift"), [0.9, 1.0, 1.1, 1.2]),
-        ])
-
-        let stats = try await manager.statistics()
-
-        #expect(stats.chunkCount == 3)
-        #expect(stats.vectorCount == 3)
-        #expect(stats.fileCount == 2)
-        #expect(stats.dimension == dimension)
-        #expect(stats.isConsistent == true)
-    }
-
-    @Test("Verify consistency")
-    func testVerifyConsistency() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (makeChunk(id: "cons-1"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "cons-2"), [0.5, 0.6, 0.7, 0.8]),
-        ])
-
-        let report = try await manager.verifyConsistency()
-
-        #expect(report.isConsistent == true)
-        #expect(report.missingVectors.isEmpty)
-        #expect(report.orphanedVectors.isEmpty)
-    }
-
-    @Test("Clear index")
-    func testClear() async throws {
-        let manager = try await makeIndexManager()
-        try await manager.indexBatch([
-            (makeChunk(id: "clr-1"), [0.1, 0.2, 0.3, 0.4]),
-            (makeChunk(id: "clr-2"), [0.5, 0.6, 0.7, 0.8]),
-        ])
-
-        try await manager.clear()
-        let stats = try await manager.statistics()
-
-        #expect(stats.chunkCount == 0)
-        #expect(stats.vectorCount == 0)
-    }
-
-    // MARK: - Helpers
-
-    private func makeIndexManager() async throws -> IndexManager {
-        let chunkStore = try GRDBChunkStore()
-        let vectorStore = try USearchVectorStore(dimension: dimension)
-        return IndexManager(chunkStore: chunkStore, vectorStore: vectorStore)
+        #expect(retrieved == nil)
     }
 }

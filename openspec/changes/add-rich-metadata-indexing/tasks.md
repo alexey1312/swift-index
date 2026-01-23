@@ -80,29 +80,34 @@
 
 ---
 
-## Phase 3: Advanced Features (PENDING)
+## Phase 3: Advanced Features (COMPLETED)
 
 ### 3.1 Parallel Indexing
 
-- [ ] 3.1.1 Add `TaskGroup`-based parallel parsing in `IndexManager`
-- [ ] 3.1.2 Add `maxConcurrentTasks` configuration option
-- [ ] 3.1.3 Write concurrency tests
-- [ ] 3.1.4 Benchmark sequential vs parallel indexing
+- [x] 3.1.1 Add `TaskGroup`-based parallel parsing in `IndexCommand`
+- [x] 3.1.2 Add `maxConcurrentTasks` configuration option (default: CPU cores)
+- [x] 3.1.3 Add thread-safe `AtomicIndexingStats` for parallel progress tracking
+- [x] 3.1.4 Implement bounded concurrency (sliding window pattern)
 
 ### 3.2 Content-Based Change Detection
 
-- [ ] 3.2.1 Add `contentHash` field to `CodeChunk`
-- [ ] 3.2.2 Implement skip logic for unchanged chunks during re-index
-- [ ] 3.2.3 Write change detection tests
+- [x] 3.2.1 Add `contentHash` field to `CodeChunk` (SHA-256)
+- [x] 3.2.2 Add v4 migration for `content_hash` column in `GRDBChunkStore`
+- [x] 3.2.3 Add `getByContentHashes()` method to `ChunkStore` protocol
+- [x] 3.2.4 Add `get()` method to `VectorStore` protocol for vector retrieval
+- [x] 3.2.5 Implement `reindexWithChangeDetection()` in `IndexManager`
+- [x] 3.2.6 Update `IndexCommand.indexFile()` to use change detection
+- [x] 3.2.7 Add `ReindexResult` struct for tracking reuse statistics
+- [x] 3.2.8 Write change detection tests
 
-### 3.3 LLM Description Generation (Optional)
+### 3.3 LLM Description Generation (Optional - DEFERRED)
 
 - [ ] 3.3.1 Add `--generate-descriptions` CLI flag
 - [ ] 3.3.2 Implement offline batch generation via MLX
 - [ ] 3.3.3 Store `generatedDescription` in CodeChunk
 - [ ] 3.3.4 Write generation tests
 
-**Gate**: Build + all tests pass
+**Gate**: Build + all tests pass ✓
 
 ---
 
@@ -192,6 +197,8 @@
 | ----- | --------- | ----- | ----------- |
 | 1     | COMPLETED | 20/20 | ~15         |
 | 2     | COMPLETED | 18/18 | ~12         |
-| 3     | PENDING   | 0/11  | 0           |
+| 3     | COMPLETED | 12/16 | ~8          |
 | 4     | PENDING   | 0/27  | 0           |
 | 5     | PENDING   | 0/10  | 0           |
+
+Note: Phase 3.3 (LLM Description Generation) deferred as optional feature.

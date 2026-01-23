@@ -92,6 +92,16 @@ actor MockChunkStore: ChunkStore {
         fileHashes.insert(hash)
     }
 
+    func getByContentHashes(_ hashes: Set<String>) async throws -> [String: CodeChunk] {
+        var result: [String: CodeChunk] = [:]
+        for chunk in chunks.values {
+            if hashes.contains(chunk.contentHash) {
+                result[chunk.contentHash] = chunk
+            }
+        }
+        return result
+    }
+
     func clear() async throws {
         chunks.removeAll()
         fileHashes.removeAll()
@@ -144,6 +154,10 @@ actor MockVectorStore: VectorStore {
 
     func contains(id: String) async throws -> Bool {
         vectors[id] != nil
+    }
+
+    func get(id: String) async throws -> [Float]? {
+        vectors[id]
     }
 
     func count() async throws -> Int {

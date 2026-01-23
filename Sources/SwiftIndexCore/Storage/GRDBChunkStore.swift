@@ -70,6 +70,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerInitialMigration(&migrator)
         registerRichMetadataMigration(&migrator)
         registerInfoSnippetsMigration(&migrator)
+        registerContentHashMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -268,6 +269,22 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
     }
 
+    private nonisolated func registerContentHashMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 4: Content hash for chunk-level change detection
+        migrator.registerMigration("v4_content_hash") { db in
+            // Add content_hash column to chunks table
+            // Nullable initially, will be populated on next index
+            try db.alter(table: "chunks") { table in
+                table.add(column: "content_hash", .text)
+            }
+
+            // Create index for content hash lookups
+            try db.create(index: "chunks_content_hash_idx", on: "chunks", columns: ["content_hash"])
+        }
+    }
+
     // MARK: - ChunkStore Protocol
 
     public func insert(_ chunk: CodeChunk) async throws {
@@ -378,6 +395,32 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     public func recordFileHash(_ hash: String, path: String) async throws {
         try await dbWriter.write { db in
             try FileHashRecord(hash: hash, path: path, indexedAt: Date()).insert(db)
+        }
+    }
+
+    public func getByContentHashes(_ hashes: Set<String>) async throws -> [String: CodeChunk] {
+        guard !hashes.isEmpty else { return [:] }
+
+        return try await dbWriter.read { db in
+            var result: [String: CodeChunk] = [:]
+
+            // Query in batches to avoid SQLite variable limit
+            let hashArray = Array(hashes)
+            for batch in stride(from: 0, to: hashArray.count, by: 500) {
+                let batchHashes = Array(hashArray[batch ..< min(batch + 500, hashArray.count)])
+                let placeholders = batchHashes.map { _ in "?" }.joined(separator: ", ")
+                let sql = "SELECT * FROM chunks WHERE content_hash IN (\(placeholders))"
+
+                let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(batchHashes))
+                for row in rows {
+                    let record = ChunkRecord(row: row)
+                    if let contentHash = record.contentHash {
+                        result[contentHash] = try record.toCodeChunk()
+                    }
+                }
+            }
+
+            return result
         }
     }
 
@@ -576,6 +619,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     let breadcrumb: String?
     let tokenCount: Int
     let language: String
+    let contentHash: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -593,6 +637,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case breadcrumb
         case tokenCount = "token_count"
         case language
+        case contentHash = "content_hash"
     }
 
     init(chunk: CodeChunk) {
@@ -613,6 +658,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         breadcrumb = chunk.breadcrumb
         tokenCount = chunk.tokenCount
         language = chunk.language
+        contentHash = chunk.contentHash
     }
 
     init(row: Row) {
@@ -631,6 +677,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         breadcrumb = row["breadcrumb"]
         tokenCount = row["token_count"] ?? 0
         language = row["language"] ?? "unknown"
+        contentHash = row["content_hash"]
     }
 
     func toCodeChunk() throws -> CodeChunk {
@@ -663,7 +710,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             signature: signature,
             breadcrumb: breadcrumb,
             tokenCount: tokenCount,
-            language: language
+            language: language,
+            contentHash: contentHash
         )
     }
 }

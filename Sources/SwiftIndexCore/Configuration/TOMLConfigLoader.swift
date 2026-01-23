@@ -29,6 +29,7 @@ import TOML
 /// max_file_size = 1000000
 /// chunk_size = 1500
 /// chunk_overlap = 200
+/// max_concurrent_tasks = 8  # defaults to CPU count
 ///
 /// [storage]
 /// index_path = ".swiftindex"
@@ -164,6 +165,7 @@ private struct TOMLConfig: Codable {
         var max_file_size: Int?
         var chunk_size: Int?
         var chunk_overlap: Int?
+        var max_concurrent_tasks: Int?
     }
 
     struct StorageSection: Codable {
@@ -206,6 +208,7 @@ private struct TOMLConfig: Codable {
             config.maxFileSize = indexing.max_file_size
             config.chunkSize = indexing.chunk_size
             config.chunkOverlap = indexing.chunk_overlap
+            config.maxConcurrentTasks = indexing.max_concurrent_tasks
         }
 
         // Storage section

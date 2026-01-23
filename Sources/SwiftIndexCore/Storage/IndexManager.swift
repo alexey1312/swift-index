@@ -159,6 +159,93 @@ public actor IndexManager {
         ])
     }
 
+    /// Reindex a file with content-based change detection.
+    ///
+    /// This optimized method compares content hashes of new chunks against existing
+    /// chunks to avoid re-embedding unchanged content. Only chunks with new or
+    /// modified content will have their embeddings generated.
+    ///
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - newChunks: New chunks parsed from the file.
+    ///   - embedder: Closure to generate embeddings for chunks that need them.
+    /// - Returns: Statistics about the reindex operation.
+    /// - Throws: If reindexing fails.
+    @discardableResult
+    public func reindexWithChangeDetection(
+        path: String,
+        newChunks: [CodeChunk],
+        embedder: ([CodeChunk]) async throws -> [[Float]]
+    ) async throws -> ReindexResult {
+        // Get existing chunks and their vectors for this file
+        let oldChunks = try await chunkStore.getByPath(path)
+
+        // Build lookup: contentHash → (chunk, vector)
+        var existingByHash: [String: (chunk: CodeChunk, vector: [Float]?)] = [:]
+        for chunk in oldChunks {
+            let vector = try await vectorStore.get(id: chunk.id)
+            existingByHash[chunk.contentHash] = (chunk: chunk, vector: vector)
+        }
+
+        // Categorize new chunks
+        var chunksToEmbed: [CodeChunk] = []
+        var reusableChunks: [(chunk: CodeChunk, vector: [Float])] = []
+
+        for newChunk in newChunks {
+            if let existing = existingByHash[newChunk.contentHash],
+               let vector = existing.vector
+            {
+                // Content unchanged - reuse existing vector
+                reusableChunks.append((chunk: newChunk, vector: vector))
+            } else {
+                // New or changed content - needs embedding
+                chunksToEmbed.append(newChunk)
+            }
+        }
+
+        // Generate embeddings only for changed chunks
+        var newlyEmbedded: [(chunk: CodeChunk, vector: [Float])] = []
+        if !chunksToEmbed.isEmpty {
+            let embeddings = try await embedder(chunksToEmbed)
+            for (chunk, embedding) in zip(chunksToEmbed, embeddings) {
+                newlyEmbedded.append((chunk: chunk, vector: embedding))
+            }
+        }
+
+        // Combine all chunks
+        let allChunks = reusableChunks + newlyEmbedded
+
+        // Delete old chunks from stores
+        for chunk in oldChunks {
+            try await vectorStore.delete(id: chunk.id)
+        }
+        try await chunkStore.deleteByPath(path)
+        try await chunkStore.deleteFileHash(path: path)
+
+        // Index all chunks (reused + newly embedded)
+        try await indexBatch(allChunks)
+
+        // Record file hash
+        if let firstChunk = newChunks.first {
+            try await recordIndexed(fileHash: firstChunk.fileHash, path: path)
+        }
+
+        let result = ReindexResult(
+            totalChunks: newChunks.count,
+            reusedChunks: reusableChunks.count,
+            embeddedChunks: chunksToEmbed.count
+        )
+
+        logger.info("Reindexed file with change detection", metadata: [
+            "path": "\(path)",
+            "total": "\(result.totalChunks)",
+            "reused": "\(result.reusedChunks)",
+            "embedded": "\(result.embeddedChunks)",
+        ])
+
+        return result
+    }
+
     // MARK: - Search
 
     /// Perform semantic similarity search.
@@ -534,4 +621,24 @@ public struct ConsistencyReport: Sendable {
 
     /// Whether the index is fully consistent.
     public let isConsistent: Bool
+}
+
+// MARK: - ReindexResult
+
+/// Result of a reindex operation with change detection.
+public struct ReindexResult: Sendable {
+    /// Total number of chunks processed.
+    public let totalChunks: Int
+
+    /// Number of chunks that reused existing embeddings.
+    public let reusedChunks: Int
+
+    /// Number of chunks that required new embeddings.
+    public let embeddedChunks: Int
+
+    /// Percentage of embeddings saved through reuse.
+    public var reusePercentage: Double {
+        guard totalChunks > 0 else { return 0 }
+        return Double(reusedChunks) / Double(totalChunks) * 100
+    }
 }

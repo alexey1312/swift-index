@@ -68,6 +68,11 @@ public struct Config: Sendable, Equatable {
     /// OpenAI API key (optional).
     public var openAIAPIKey: String?
 
+    // MARK: - Performance
+
+    /// Maximum concurrent tasks for parallel indexing.
+    public var maxConcurrentTasks: Int
+
     // MARK: - Watch Mode
 
     /// Debounce interval for file changes (milliseconds).
@@ -98,6 +103,7 @@ public struct Config: Sendable, Equatable {
         cachePath: String = "~/.cache/swiftindex",
         voyageAPIKey: String? = nil,
         openAIAPIKey: String? = nil,
+        maxConcurrentTasks: Int = ProcessInfo.processInfo.activeProcessorCount,
         watchDebounceMs: Int = 500,
         logLevel: String = "info"
     ) {
@@ -118,6 +124,7 @@ public struct Config: Sendable, Equatable {
         self.cachePath = cachePath
         self.voyageAPIKey = voyageAPIKey
         self.openAIAPIKey = openAIAPIKey
+        self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
     }
@@ -152,27 +159,41 @@ public extension Config {
 
         // Apply partials in reverse order (lowest priority first)
         for partial in partials.reversed() {
-            if let v = partial.embeddingProvider { config.embeddingProvider = v }
-            if let v = partial.embeddingModel { config.embeddingModel = v }
-            if let v = partial.embeddingDimension { config.embeddingDimension = v }
-            if let v = partial.semanticWeight { config.semanticWeight = v }
-            if let v = partial.rrfK { config.rrfK = v }
-            if let v = partial.multiHopEnabled { config.multiHopEnabled = v }
-            if let v = partial.multiHopDepth { config.multiHopDepth = v }
-            if let v = partial.outputFormat { config.outputFormat = v }
-            if let v = partial.excludePatterns { config.excludePatterns = v }
-            if let v = partial.includeExtensions { config.includeExtensions = v }
-            if let v = partial.maxFileSize { config.maxFileSize = v }
-            if let v = partial.chunkSize { config.chunkSize = v }
-            if let v = partial.chunkOverlap { config.chunkOverlap = v }
-            if let v = partial.indexPath { config.indexPath = v }
-            if let v = partial.cachePath { config.cachePath = v }
-            if let v = partial.voyageAPIKey { config.voyageAPIKey = v }
-            if let v = partial.openAIAPIKey { config.openAIAPIKey = v }
-            if let v = partial.watchDebounceMs { config.watchDebounceMs = v }
-            if let v = partial.logLevel { config.logLevel = v }
+            config.apply(partial)
         }
 
         return config
+    }
+
+    private mutating func apply(_ partial: PartialConfig) {
+        applyIfPresent(partial.embeddingProvider, to: \.embeddingProvider)
+        applyIfPresent(partial.embeddingModel, to: \.embeddingModel)
+        applyIfPresent(partial.embeddingDimension, to: \.embeddingDimension)
+        applyIfPresent(partial.semanticWeight, to: \.semanticWeight)
+        applyIfPresent(partial.rrfK, to: \.rrfK)
+        applyIfPresent(partial.multiHopEnabled, to: \.multiHopEnabled)
+        applyIfPresent(partial.multiHopDepth, to: \.multiHopDepth)
+        applyIfPresent(partial.outputFormat, to: \.outputFormat)
+        applyIfPresent(partial.excludePatterns, to: \.excludePatterns)
+        applyIfPresent(partial.includeExtensions, to: \.includeExtensions)
+        applyIfPresent(partial.maxFileSize, to: \.maxFileSize)
+        applyIfPresent(partial.chunkSize, to: \.chunkSize)
+        applyIfPresent(partial.chunkOverlap, to: \.chunkOverlap)
+        applyIfPresent(partial.indexPath, to: \.indexPath)
+        applyIfPresent(partial.cachePath, to: \.cachePath)
+        applyIfPresent(partial.voyageAPIKey, to: \.voyageAPIKey)
+        applyIfPresent(partial.openAIAPIKey, to: \.openAIAPIKey)
+        applyIfPresent(partial.maxConcurrentTasks, to: \.maxConcurrentTasks)
+        applyIfPresent(partial.watchDebounceMs, to: \.watchDebounceMs)
+        applyIfPresent(partial.logLevel, to: \.logLevel)
+    }
+
+    private mutating func applyIfPresent<T>(
+        _ value: T?,
+        to keyPath: WritableKeyPath<Config, T>
+    ) {
+        if let value {
+            self[keyPath: keyPath] = value
+        }
     }
 }

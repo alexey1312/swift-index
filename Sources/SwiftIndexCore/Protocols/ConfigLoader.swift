@@ -52,6 +52,10 @@ public struct PartialConfig: Sendable, Equatable {
     public var voyageAPIKey: String?
     public var openAIAPIKey: String?
 
+    // MARK: - Performance
+
+    public var maxConcurrentTasks: Int?
+
     // MARK: - Watch Mode
 
     public var watchDebounceMs: Int?
@@ -78,6 +82,7 @@ public struct PartialConfig: Sendable, Equatable {
         cachePath: String? = nil,
         voyageAPIKey: String? = nil,
         openAIAPIKey: String? = nil,
+        maxConcurrentTasks: Int? = nil,
         watchDebounceMs: Int? = nil,
         logLevel: String? = nil
     ) {
@@ -98,6 +103,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.cachePath = cachePath
         self.voyageAPIKey = voyageAPIKey
         self.openAIAPIKey = openAIAPIKey
+        self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
     }

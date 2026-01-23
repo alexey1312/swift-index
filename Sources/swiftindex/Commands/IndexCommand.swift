@@ -60,67 +60,31 @@ struct IndexCommand: AsyncParsableCommand {
 
         let startTime = Date()
 
-        // Resolve path
-        let resolvedPath = CLIUtils.resolvePath(path)
-        logger.debug("Resolved path: \(resolvedPath)")
-
-        // Validate path exists
-        guard FileManager.default.fileExists(atPath: resolvedPath) else {
-            throw ValidationError("Path does not exist: \(resolvedPath)")
-        }
-
-        // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
-        logger.debug("Configuration loaded", metadata: [
-            "provider": "\(configuration.embeddingProvider)",
-            "model": "\(configuration.embeddingModel)",
-        ])
-
-        // Create index directory
-        let indexPath = (resolvedPath as NSString).appendingPathComponent(configuration.indexPath)
-        try FileManager.default.createDirectory(
-            atPath: indexPath,
-            withIntermediateDirectories: true
+        let resolvedPath = try resolvePath(logger: logger)
+        let configuration = try loadConfiguration(projectDirectory: resolvedPath, logger: logger)
+        let indexPath = try createIndexDirectory(
+            projectPath: resolvedPath,
+            configuration: configuration
         )
 
-        print("Indexing: \(resolvedPath)")
-        print("Index path: \(indexPath)")
-        print("Provider: \(configuration.embeddingProvider)")
-
-        if force {
-            logger.info("Force re-indexing enabled, clearing existing index")
-            print("Mode: Force re-index")
-            print("Force: true")
-        } else {
-            print("Mode: Incremental")
-        }
+        printStartupInfo(
+            resolvedPath: resolvedPath,
+            indexPath: indexPath,
+            configuration: configuration,
+            logger: logger
+        )
 
         // Create embedding provider chain
         let embeddingProvider = createEmbeddingProvider(config: configuration, logger: logger)
 
         // Check provider availability
-        guard await embeddingProvider.isAvailable() else {
-            throw ValidationError("No embedding provider available. Check your configuration.")
-        }
-
-        if let activeProvider = await embeddingProvider.activeProvider() {
-            print("Embedding provider: \(activeProvider.name) (dimension: \(activeProvider.dimension))")
-        } else if let firstAvailable = await embeddingProvider.firstAvailableProvider() {
-            print("Embedding provider: \(firstAvailable.name) (dimension: \(firstAvailable.dimension))")
-        }
+        try await ensureEmbeddingProviderAvailable(embeddingProvider)
 
         // Create index manager
-        let indexManager = try IndexManager(
-            directory: indexPath,
-            dimension: embeddingProvider.dimension
+        let indexManager = try await createIndexManager(
+            indexPath: indexPath,
+            embeddingProvider: embeddingProvider
         )
-
-        // Load existing index if not forcing
-        if !force {
-            try await indexManager.load()
-        } else {
-            try await indexManager.clear()
-        }
 
         // Create parser
         let parser = HybridParser()
@@ -136,8 +100,8 @@ struct IndexCommand: AsyncParsableCommand {
 
         print("Found \(files.count) files to process")
 
-        // Index files
-        var stats = IndexingStats()
+        // Index files in parallel
+        let stats = AtomicIndexingStats()
         let indexingContext = IndexingContext(
             indexManager: indexManager,
             parser: parser,
@@ -145,42 +109,28 @@ struct IndexCommand: AsyncParsableCommand {
             logger: logger
         )
 
-        for (index, filePath) in files.enumerated() {
-            do {
-                let result = try await indexFile(
-                    at: filePath,
-                    context: indexingContext,
-                    force: force
-                )
+        let maxConcurrentTasks = configuration.maxConcurrentTasks
+        print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks")
 
-                stats.filesProcessed += 1
-                stats.chunksIndexed += result.chunksIndexed
-                stats.filesSkipped += result.skipped ? 1 : 0
+        // Use TaskGroup for parallel processing with bounded concurrency
+        // Capture force as local constant to avoid capturing self
+        let forceReindex = force
+        let fatalError = try await runIndexingTasks(
+            files: files,
+            config: IndexingTaskConfig(
+                context: indexingContext,
+                stats: stats,
+                maxConcurrentTasks: maxConcurrentTasks,
+                forceReindex: forceReindex,
+                logger: logger
+            )
+        )
 
-                // Progress indicator
-                let progress = (index + 1) * 100 / files.count
-                let progressMsg = "\r[\(progress)%] Processing: \(stats.filesProcessed)/\(files.count)"
-                print("\(progressMsg) files, \(stats.chunksIndexed) chunks", terminator: "")
-                fflush(stdout)
-            } catch let error as VectorStoreError {
-                // Handle dimension mismatch as fatal error with clear instructions
-                if case .indexDimensionMismatch = error {
-                    print("\n")
-                    print("Error: \(error.localizedDescription)")
-                    throw ExitCode.failure
-                }
-                stats.errors += 1
-                logger.warning("Failed to index file", metadata: [
-                    "path": "\(filePath)",
-                    "error": "\(error.localizedDescription)",
-                ])
-            } catch {
-                stats.errors += 1
-                logger.warning("Failed to index file", metadata: [
-                    "path": "\(filePath)",
-                    "error": "\(error.localizedDescription)",
-                ])
-            }
+        // Handle fatal errors after task group completes
+        if let fatalError {
+            print("\n")
+            print("Error: \(fatalError.localizedDescription)")
+            throw ExitCode.failure
         }
 
         // Save index
@@ -189,23 +139,219 @@ struct IndexCommand: AsyncParsableCommand {
         // Final statistics
         let elapsed = Date().timeIntervalSince(startTime)
         let statistics = try await indexManager.statistics()
+        let finalStats = stats.snapshot()
 
         print("\n")
         print("Indexing completed in \(String(format: "%.2f", elapsed)) seconds")
-        print("Files processed: \(stats.filesProcessed)")
-        print("Files skipped (unchanged): \(stats.filesSkipped)")
-        print("Chunks indexed: \(stats.chunksIndexed)")
+        print("Files processed: \(finalStats.filesProcessed)")
+        print("Files skipped (unchanged): \(finalStats.filesSkipped)")
+        print("Chunks indexed: \(finalStats.chunksIndexed)")
+        if finalStats.chunksReused > 0 {
+            print("Chunks reused (no re-embedding): \(finalStats.chunksReused)")
+        }
         print("Total chunks in index: \(statistics.chunkCount)")
         print("Total files in index: \(statistics.fileCount)")
 
-        if stats.errors > 0 {
-            print("Errors: \(stats.errors)")
+        if finalStats.errors > 0 {
+            print("Errors: \(finalStats.errors)")
         }
 
         logger.info("Index operation completed")
     }
 
     // MARK: - Private Helpers
+
+    private func resolvePath(logger: Logger) throws -> String {
+        let resolvedPath = CLIUtils.resolvePath(path)
+        logger.debug("Resolved path: \(resolvedPath)")
+
+        guard FileManager.default.fileExists(atPath: resolvedPath) else {
+            throw ValidationError("Path does not exist: \(resolvedPath)")
+        }
+
+        return resolvedPath
+    }
+
+    private func loadConfiguration(
+        projectDirectory: String,
+        logger: Logger
+    ) throws -> Config {
+        let configuration = try CLIUtils.loadConfig(
+            from: config,
+            projectDirectory: projectDirectory,
+            logger: logger
+        )
+        logger.debug("Configuration loaded", metadata: [
+            "provider": "\(configuration.embeddingProvider)",
+            "model": "\(configuration.embeddingModel)",
+        ])
+        return configuration
+    }
+
+    private func createIndexDirectory(
+        projectPath: String,
+        configuration: Config
+    ) throws -> String {
+        let indexPath = (projectPath as NSString).appendingPathComponent(configuration.indexPath)
+        try FileManager.default.createDirectory(
+            atPath: indexPath,
+            withIntermediateDirectories: true
+        )
+        return indexPath
+    }
+
+    private func printStartupInfo(
+        resolvedPath: String,
+        indexPath: String,
+        configuration: Config,
+        logger: Logger
+    ) {
+        print("Indexing: \(resolvedPath)")
+        print("Index path: \(indexPath)")
+        print("Provider: \(configuration.embeddingProvider)")
+
+        if force {
+            logger.info("Force re-indexing enabled, clearing existing index")
+            print("Mode: Force re-index")
+            print("Force: true")
+        } else {
+            print("Mode: Incremental")
+        }
+    }
+
+    private func ensureEmbeddingProviderAvailable(
+        _ embeddingProvider: EmbeddingProviderChain
+    ) async throws {
+        guard await embeddingProvider.isAvailable() else {
+            throw ValidationError("No embedding provider available. Check your configuration.")
+        }
+
+        if let activeProvider = await embeddingProvider.activeProvider() {
+            print("Embedding provider: \(activeProvider.name) (dimension: \(activeProvider.dimension))")
+        } else if let firstAvailable = await embeddingProvider.firstAvailableProvider() {
+            print("Embedding provider: \(firstAvailable.name) (dimension: \(firstAvailable.dimension))")
+        }
+    }
+
+    private func createIndexManager(
+        indexPath: String,
+        embeddingProvider: EmbeddingProviderChain
+    ) async throws -> IndexManager {
+        let indexManager = try IndexManager(
+            directory: indexPath,
+            dimension: embeddingProvider.dimension
+        )
+
+        if !force {
+            try await indexManager.load()
+        } else {
+            try await indexManager.clear()
+        }
+
+        return indexManager
+    }
+
+    private struct IndexingTaskConfig {
+        let context: IndexingContext
+        let stats: AtomicIndexingStats
+        let maxConcurrentTasks: Int
+        let forceReindex: Bool
+        let logger: Logger
+    }
+
+    private func runIndexingTasks(
+        files: [String],
+        config: IndexingTaskConfig
+    ) async throws -> Error? {
+        var fatalError: Error?
+
+        try await withThrowingTaskGroup(of: (Int, FileIndexResult?, Error?).self) { group in
+            var currentIndex = 0
+            var inFlight = 0
+
+            while currentIndex < files.count, inFlight < config.maxConcurrentTasks {
+                enqueueIndexingTask(
+                    group: &group,
+                    index: currentIndex,
+                    filePath: files[currentIndex],
+                    context: config.context,
+                    forceReindex: config.forceReindex
+                )
+                currentIndex += 1
+                inFlight += 1
+            }
+
+            for try await (_, result, error) in group {
+                inFlight -= 1
+
+                if let error = error as? VectorStoreError {
+                    if case .indexDimensionMismatch = error {
+                        fatalError = error
+                        group.cancelAll()
+                        break
+                    }
+                    config.stats.incrementErrors()
+                    config.logger.warning("Failed to index file", metadata: [
+                        "error": "\(error.localizedDescription)",
+                    ])
+                } else if let error {
+                    config.stats.incrementErrors()
+                    config.logger.warning("Failed to index file", metadata: [
+                        "error": "\(error.localizedDescription)",
+                    ])
+                } else if let result {
+                    config.stats.incrementFilesProcessed()
+                    config.stats.addChunksIndexed(result.chunksIndexed)
+                    config.stats.addChunksReused(result.chunksReused)
+                    if result.skipped {
+                        config.stats.incrementFilesSkipped()
+                    }
+                }
+
+                let processed = config.stats.filesProcessed
+                let chunks = config.stats.chunksIndexed
+                let progress = processed * 100 / files.count
+                let progressMsg = "\r[\(progress)%] Processing: \(processed)/\(files.count)"
+                print("\(progressMsg) files, \(chunks) chunks", terminator: "")
+                fflush(stdout)
+
+                if currentIndex < files.count {
+                    enqueueIndexingTask(
+                        group: &group,
+                        index: currentIndex,
+                        filePath: files[currentIndex],
+                        context: config.context,
+                        forceReindex: config.forceReindex
+                    )
+                    currentIndex += 1
+                    inFlight += 1
+                }
+            }
+        }
+
+        return fatalError
+    }
+
+    private func enqueueIndexingTask(
+        group: inout ThrowingTaskGroup<(Int, FileIndexResult?, Error?), Error>,
+        index: Int,
+        filePath: String,
+        context: IndexingContext,
+        forceReindex: Bool
+    ) {
+        group.addTask {
+            do {
+                let result = try await IndexCommand.indexFile(
+                    at: filePath,
+                    context: context,
+                    force: forceReindex
+                )
+                return (index, result, nil)
+            } catch {
+                return (index, nil, error)
+            }
+        }
+    }
 
     private func createEmbeddingProvider(
         config: Config,
@@ -368,7 +514,7 @@ struct IndexCommand: AsyncParsableCommand {
         return files.sorted()
     }
 
-    private func indexFile(
+    private static func indexFile(
         at path: String,
         context: IndexingContext,
         force: Bool
@@ -384,7 +530,7 @@ struct IndexCommand: AsyncParsableCommand {
             let needsIndexing = try await context.indexManager.needsIndexing(fileHash: fileHash)
             if !needsIndexing {
                 context.logger.debug("Skipping unchanged file: \(path)")
-                return FileIndexResult(chunksIndexed: 0, skipped: true)
+                return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: true)
             }
         }
 
@@ -393,38 +539,42 @@ struct IndexCommand: AsyncParsableCommand {
 
         if case let .failure(error) = parseResult {
             context.logger.debug("Parse failed for \(path): \(error)")
-            return FileIndexResult(chunksIndexed: 0, skipped: false)
+            return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: false)
         }
 
         let chunks = parseResult.chunks
         guard !chunks.isEmpty else {
             // Record file as indexed even if no chunks (to avoid re-processing)
             try await context.indexManager.recordIndexed(fileHash: fileHash, path: path)
-            return FileIndexResult(chunksIndexed: 0, skipped: false)
+            return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: false)
         }
 
-        // Generate embeddings for all chunks
-        let contents = chunks.map(\.content)
-        let embeddings = try await context.embeddingProvider.embed(contents)
-
-        // Create chunk-vector pairs
-        var items: [(chunk: CodeChunk, vector: [Float])] = []
-        for (chunk, embedding) in zip(chunks, embeddings) {
-            items.append((chunk: chunk, vector: embedding))
+        // Re-index the file with content-hash-based change detection
+        // This avoids re-embedding unchanged chunks
+        let reindexResult = try await context.indexManager.reindexWithChangeDetection(
+            path: path,
+            newChunks: chunks
+        ) { chunksToEmbed in
+            // Embedding closure - only called for chunks that need new embeddings
+            let contents = chunksToEmbed.map(\.content)
+            return try await context.embeddingProvider.embed(contents)
         }
-
-        // Re-index the file (removes old chunks, adds new ones)
-        try await context.indexManager.reindex(path: path, newChunks: items)
 
         context.logger.debug("Indexed file", metadata: [
             "path": "\(path)",
-            "chunks": "\(chunks.count)",
+            "total": "\(reindexResult.totalChunks)",
+            "embedded": "\(reindexResult.embeddedChunks)",
+            "reused": "\(reindexResult.reusedChunks)",
         ])
 
-        return FileIndexResult(chunksIndexed: chunks.count, skipped: false)
+        return FileIndexResult(
+            chunksIndexed: reindexResult.totalChunks,
+            chunksReused: reindexResult.reusedChunks,
+            skipped: false
+        )
     }
 
-    private func computeFileHash(_ content: String) -> String {
+    private static func computeFileHash(_ content: String) -> String {
         // Use simple hash for quick comparison
         var hasher = Hasher()
         hasher.combine(content)
@@ -435,21 +585,105 @@ struct IndexCommand: AsyncParsableCommand {
 
 // MARK: - Helper Types
 
-private struct IndexingContext {
+private struct IndexingContext: Sendable {
     let indexManager: IndexManager
     let parser: HybridParser
     let embeddingProvider: EmbeddingProviderChain
     let logger: Logger
 }
 
-private struct IndexingStats {
+private struct IndexingStats: Sendable {
     var filesProcessed: Int = 0
     var filesSkipped: Int = 0
     var chunksIndexed: Int = 0
+    var chunksReused: Int = 0
     var errors: Int = 0
 }
 
-private struct FileIndexResult {
+/// Thread-safe wrapper for indexing statistics during parallel processing.
+private final class AtomicIndexingStats: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _filesProcessed: Int = 0
+    private var _filesSkipped: Int = 0
+    private var _chunksIndexed: Int = 0
+    private var _chunksReused: Int = 0
+    private var _errors: Int = 0
+
+    var filesProcessed: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _filesProcessed
+    }
+
+    var filesSkipped: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _filesSkipped
+    }
+
+    var chunksIndexed: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _chunksIndexed
+    }
+
+    var chunksReused: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _chunksReused
+    }
+
+    var errors: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _errors
+    }
+
+    func incrementFilesProcessed() {
+        lock.lock()
+        _filesProcessed += 1
+        lock.unlock()
+    }
+
+    func incrementFilesSkipped() {
+        lock.lock()
+        _filesSkipped += 1
+        lock.unlock()
+    }
+
+    func addChunksIndexed(_ count: Int) {
+        lock.lock()
+        _chunksIndexed += count
+        lock.unlock()
+    }
+
+    func addChunksReused(_ count: Int) {
+        lock.lock()
+        _chunksReused += count
+        lock.unlock()
+    }
+
+    func incrementErrors() {
+        lock.lock()
+        _errors += 1
+        lock.unlock()
+    }
+
+    func snapshot() -> IndexingStats {
+        lock.lock()
+        defer { lock.unlock() }
+        return IndexingStats(
+            filesProcessed: _filesProcessed,
+            filesSkipped: _filesSkipped,
+            chunksIndexed: _chunksIndexed,
+            chunksReused: _chunksReused,
+            errors: _errors
+        )
+    }
+}
+
+private struct FileIndexResult: Sendable {
     let chunksIndexed: Int
+    let chunksReused: Int
     let skipped: Bool
 }

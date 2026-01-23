@@ -81,6 +81,14 @@ public protocol ChunkStore: Sendable {
     ///   - path: The file path.
     func recordFileHash(_ hash: String, path: String) async throws
 
+    /// Get chunks with the specified content hashes.
+    ///
+    /// Used for content-based change detection to find unchanged chunks.
+    ///
+    /// - Parameter hashes: Set of content hashes to look up.
+    /// - Returns: Dictionary mapping content hash to existing chunk.
+    func getByContentHashes(_ hashes: Set<String>) async throws -> [String: CodeChunk]
+
     /// Clear all data from the store.
     func clear() async throws
 }
