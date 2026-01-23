@@ -19,7 +19,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 ## System Requirements
 
 - **macOS 14 (Sonoma)** or later
-- **Swift 6.2+** (included with Xcode 16.2+)
+- **Swift 6.1+** (Xcode 16+). Swift 6.2.3 recommended.
 - **Apple Silicon** (recommended for MLX embeddings) or Intel x86_64
 
 ## Installation
@@ -125,7 +125,7 @@ swiftindex index .
 swiftindex index --force .
 
 # Watch for changes and re-index automatically
-swiftindex index --watch .
+swiftindex watch .
 
 # Use custom config
 swiftindex index --config custom.toml .
@@ -205,6 +205,18 @@ Flags for format:
 - `-a/--all` format all `.swiftindex.toml` under current directory
 - `-c/--check` check formatting without writing
 - `-s/--stdin` read from stdin and write formatted output to stdout
+
+### `swiftindex watch`
+
+Watch a directory and update the index incrementally.
+
+```bash
+# Watch current directory
+swiftindex watch
+
+# Watch a specific path
+swiftindex watch /path/to/project
+```
 
 ### `swiftindex install-claude-code`
 
@@ -375,7 +387,8 @@ swiftindex search --synthesize "authentication flow"
 swiftindex search --expand-query --synthesize "error handling"
 ```
 
-The MCP server automatically uses search enhancement when configured.
+MCP tools accept `expand_query` and `synthesize` flags. These require
+`[search.enhancement]` to be enabled in config.
 
 **Further Reading:**
 
@@ -386,7 +399,7 @@ The MCP server automatically uses search enhancement when configured.
 
 When running as an MCP server, SwiftIndex exposes the following tools:
 
-### `swiftindex_search`
+### `search_code`
 
 Search for code in the indexed codebase.
 
@@ -408,7 +421,7 @@ Search for code in the indexed codebase.
 }
 ```
 
-### `swiftindex_index`
+### `index_codebase`
 
 Trigger indexing of the codebase.
 
@@ -417,7 +430,7 @@ Trigger indexing of the codebase.
 - `path` (optional): Path to index (default: current directory)
 - `force` (optional): Force re-index all files (default: false)
 
-### `swiftindex_search_docs`
+### `search_docs`
 
 Search indexed documentation (Markdown files, README sections, etc.).
 
@@ -438,16 +451,13 @@ Search indexed documentation (Markdown files, README sections, etc.).
 }
 ```
 
-### `swiftindex_status`
+### `code_research`
 
-Get the current index status.
+Perform multi-step research over the indexed codebase.
 
-**Returns:**
+### `watch_codebase`
 
-- Indexed file count
-- Total chunks
-- Last index time
-- Provider status
+Start, stop, or check status of watch mode for a codebase.
 
 ## Embedding Providers
 
@@ -542,7 +552,9 @@ SwiftIndexMCP/
 └── Tools/           # MCP tool handlers
     ├── SearchCodeTool
     ├── SearchDocsTool
-    └── IndexTool
+    ├── IndexCodebaseTool
+    ├── CodeResearchTool
+    └── WatchCodebaseTool
 
 swiftindex/
 └── Commands/        # CLI commands
