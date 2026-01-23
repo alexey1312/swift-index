@@ -162,6 +162,18 @@ struct IndexCommand: AsyncParsableCommand {
                 let progressMsg = "\r[\(progress)%] Processing: \(stats.filesProcessed)/\(files.count)"
                 print("\(progressMsg) files, \(stats.chunksIndexed) chunks", terminator: "")
                 fflush(stdout)
+            } catch let error as VectorStoreError {
+                // Handle dimension mismatch as fatal error with clear instructions
+                if case .indexDimensionMismatch = error {
+                    print("\n")
+                    print("Error: \(error.localizedDescription)")
+                    throw ExitCode.failure
+                }
+                stats.errors += 1
+                logger.warning("Failed to index file", metadata: [
+                    "path": "\(filePath)",
+                    "error": "\(error.localizedDescription)",
+                ])
             } catch {
                 stats.errors += 1
                 logger.warning("Failed to index file", metadata: [

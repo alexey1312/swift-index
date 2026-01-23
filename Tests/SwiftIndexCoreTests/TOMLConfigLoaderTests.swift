@@ -208,26 +208,6 @@ struct TOMLConfigLoaderTests {
         #expect(config.cachePath == "/tmp/swiftindex-cache")
     }
 
-    // MARK: - API Keys Section Tests
-
-    @Test("Parses api_keys section")
-    func aPIKeysSection() throws {
-        let contents = """
-        [api_keys]
-        voyage = "voyage-api-key-123"
-        openai = "sk-openai-key-456"
-        """
-
-        let filePath = try createTempTOMLFile(contents: contents)
-        defer { removeTempFile(at: filePath) }
-
-        let loader = TOMLConfigLoader(filePath: filePath)
-        let config = try loader.load()
-
-        #expect(config.voyageAPIKey == "voyage-api-key-123")
-        #expect(config.openAIAPIKey == "sk-openai-key-456")
-    }
-
     // MARK: - Watch Section Tests
 
     @Test("Parses watch section")
@@ -264,6 +244,43 @@ struct TOMLConfigLoaderTests {
         #expect(config.logLevel == "debug")
     }
 
+    // MARK: - API Keys Rejection Tests
+
+    @Test("Rejects api_keys section in config")
+    func apiKeysSectionRejected() throws {
+        let contents = """
+        [api_keys]
+        voyage = "voyage-api-key-123"
+        openai = "sk-openai-key-456"
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
+    }
+
+    @Test("Rejects api_key in voyage section")
+    func voyageAPIKeyRejected() throws {
+        let contents = """
+        [voyage]
+        api_key = "voyage-api-key-123"
+        """
+
+        let filePath = try createTempTOMLFile(contents: contents)
+        defer { removeTempFile(at: filePath) }
+
+        let loader = TOMLConfigLoader(filePath: filePath)
+
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
+    }
+
     // MARK: - Complete Configuration Tests
 
     @Test("Parses complete configuration")
@@ -290,10 +307,6 @@ struct TOMLConfigLoaderTests {
         [storage]
         index_path = ".swiftindex"
         cache_path = "~/.cache/swiftindex"
-
-        [api_keys]
-        voyage = "test-voyage-key"
-        openai = "test-openai-key"
 
         [watch]
         debounce_ms = 500
@@ -323,8 +336,6 @@ struct TOMLConfigLoaderTests {
         #expect(config.chunkOverlap == 200)
         #expect(config.indexPath == ".swiftindex")
         #expect(config.cachePath == "~/.cache/swiftindex")
-        #expect(config.voyageAPIKey == "test-voyage-key")
-        #expect(config.openAIAPIKey == "test-openai-key")
         #expect(config.watchDebounceMs == 500)
         #expect(config.logLevel == "info")
     }
@@ -447,7 +458,7 @@ struct TOMLConfigLoaderTests {
         // CLI config should override project config
         let cliConfig = PartialConfig(semanticWeight: 0.9)
 
-        let merged = TOMLConfigLoader.loadLayered(
+        let merged = try TOMLConfigLoader.loadLayered(
             cli: cliConfig,
             projectDirectory: projectDir.path
         )
@@ -461,10 +472,10 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("loadLayered handles missing project config")
-    func loadLayeredMissingProjectConfig() {
+    func loadLayeredMissingProjectConfig() throws {
         let cliConfig = PartialConfig(embeddingProvider: "voyage")
 
-        let merged = TOMLConfigLoader.loadLayered(
+        let merged = try TOMLConfigLoader.loadLayered(
             cli: cliConfig,
             projectDirectory: "/nonexistent/path"
         )
@@ -475,8 +486,8 @@ struct TOMLConfigLoaderTests {
     }
 
     @Test("loadLayered uses defaults for empty configs")
-    func loadLayeredDefaults() {
-        let merged = TOMLConfigLoader.loadLayered(projectDirectory: "/nonexistent/path")
+    func loadLayeredDefaults() throws {
+        let merged = try TOMLConfigLoader.loadLayered(projectDirectory: "/nonexistent/path")
 
         // Should match Config.default
         let defaults = Config.default
@@ -526,8 +537,8 @@ struct TOMLConfigLoaderTests {
         #expect(config.cachePath == "/Users/test/Library/Caches/swift index")
     }
 
-    @Test("Handles unknown sections gracefully")
-    func unknownSectionsIgnored() throws {
+    @Test("Unknown sections are rejected")
+    func unknownSectionsRejected() throws {
         let contents = """
         [embedding]
         provider = "mlx"
@@ -543,14 +554,13 @@ struct TOMLConfigLoaderTests {
         defer { removeTempFile(at: filePath) }
 
         let loader = TOMLConfigLoader(filePath: filePath)
-        let config = try loader.load()
-
-        // Should parse known section and ignore unknown ones
-        #expect(config.embeddingProvider == "mlx")
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
     }
 
-    @Test("Handles unknown keys within known sections")
-    func unknownKeysIgnored() throws {
+    @Test("Unknown keys within sections are rejected")
+    func unknownKeysRejected() throws {
         let contents = """
         [embedding]
         provider = "mlx"
@@ -562,9 +572,8 @@ struct TOMLConfigLoaderTests {
         defer { removeTempFile(at: filePath) }
 
         let loader = TOMLConfigLoader(filePath: filePath)
-        let config = try loader.load()
-
-        // Should parse known keys and ignore unknown ones
-        #expect(config.embeddingProvider == "mlx")
+        #expect(throws: ConfigError.self) {
+            try loader.load()
+        }
     }
 }

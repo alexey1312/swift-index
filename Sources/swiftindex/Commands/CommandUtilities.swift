@@ -81,7 +81,7 @@ enum CLIUtils {
 
         // Auto-discovery: project .swiftindex.toml + global ~/.swiftindex.toml
         logger.debug("Auto-discovering config from: \(projectDirectory)")
-        return TOMLConfigLoader.loadLayered(
+        return try TOMLConfigLoader.loadLayered(
             env: envPartial,
             projectDirectory: projectDirectory
         )

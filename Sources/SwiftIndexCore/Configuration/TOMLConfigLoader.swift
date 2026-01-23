@@ -21,6 +21,7 @@ import TOML
 /// rrf_k = 60
 /// multi_hop_enabled = false
 /// multi_hop_depth = 2
+/// output_format = "human"  # human, json, or toon
 ///
 /// [indexing]
 /// exclude = [".git", ".build", "DerivedData"]
@@ -32,10 +33,6 @@ import TOML
 /// [storage]
 /// index_path = ".swiftindex"
 /// cache_path = "~/.cache/swiftindex"
-///
-/// [api_keys]
-/// voyage = "voyage-api-key"
-/// openai = "openai-api-key"
 ///
 /// [watch]
 /// debounce_ms = 500
@@ -109,6 +106,20 @@ public struct TOMLConfigLoader: ConfigLoader, Sendable {
             throw ConfigError.invalidSyntax("Failed to read file: \(error.localizedDescription)")
         }
 
+        let diagnostics = try TOMLConfigValidator.lint(contents: contents, filePath: filePath)
+        let errors = diagnostics.filter { $0.severity == .error }
+        if !errors.isEmpty {
+            let message = errors
+                .map { diagnostic in
+                    if let keyPath = diagnostic.keyPath {
+                        return "\(keyPath): \(diagnostic.message)"
+                    }
+                    return diagnostic.message
+                }
+                .joined(separator: "\n")
+            throw ConfigError.invalidValue(key: "config", message: message)
+        }
+
         // Parse TOML using Codable
         let decoder = TOMLDecoder()
         let tomlConfig: TOMLConfig
@@ -130,7 +141,6 @@ private struct TOMLConfig: Codable {
     var search: SearchSection?
     var indexing: IndexingSection?
     var storage: StorageSection?
-    var api_keys: APIKeysSection?
     var watch: WatchSection?
     var logging: LoggingSection?
 
@@ -145,6 +155,7 @@ private struct TOMLConfig: Codable {
         var rrf_k: Int?
         var multi_hop_enabled: Bool?
         var multi_hop_depth: Int?
+        var output_format: String?
     }
 
     struct IndexingSection: Codable {
@@ -158,11 +169,6 @@ private struct TOMLConfig: Codable {
     struct StorageSection: Codable {
         var index_path: String?
         var cache_path: String?
-    }
-
-    struct APIKeysSection: Codable {
-        var voyage: String?
-        var openai: String?
     }
 
     struct WatchSection: Codable {
@@ -190,6 +196,7 @@ private struct TOMLConfig: Codable {
             config.rrfK = search.rrf_k
             config.multiHopEnabled = search.multi_hop_enabled
             config.multiHopDepth = search.multi_hop_depth
+            config.outputFormat = search.output_format
         }
 
         // Indexing section
@@ -205,12 +212,6 @@ private struct TOMLConfig: Codable {
         if let storage {
             config.indexPath = storage.index_path
             config.cachePath = storage.cache_path
-        }
-
-        // API keys section
-        if let api_keys {
-            config.voyageAPIKey = api_keys.voyage
-            config.openAIAPIKey = api_keys.openai
         }
 
         // Watch section
@@ -250,18 +251,20 @@ public extension TOMLConfigLoader {
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
         globalConfigDirectory: String? = nil
-    ) -> Config {
+    ) throws -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
 
         // Try loading project config
         let projectLoader = TOMLConfigLoader.forProject(at: projectDirectory)
-        if let projectConfig = try? projectLoader.load() {
+        if FileManager.default.fileExists(atPath: projectLoader.filePath) {
+            let projectConfig = try projectLoader.load()
             partials.append(projectConfig)
         }
 
         // Try loading global config
         let globalLoader = TOMLConfigLoader.forGlobal(configDirectory: globalConfigDirectory)
-        if let globalConfig = try? globalLoader.load() {
+        if FileManager.default.fileExists(atPath: globalLoader.filePath) {
+            let globalConfig = try globalLoader.load()
             partials.append(globalConfig)
         }
 

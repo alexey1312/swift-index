@@ -32,6 +32,9 @@ public struct Config: Sendable, Equatable {
     /// Maximum depth for multi-hop search.
     public var multiHopDepth: Int
 
+    /// Default output format for search results (human, json, toon).
+    public var outputFormat: String
+
     // MARK: - Indexing Configuration
 
     /// Glob patterns for files/directories to exclude.
@@ -85,6 +88,7 @@ public struct Config: Sendable, Equatable {
         rrfK: Int = 60,
         multiHopEnabled: Bool = false,
         multiHopDepth: Int = 2,
+        outputFormat: String = "human",
         excludePatterns: [String] = Config.defaultExcludePatterns,
         includeExtensions: [String] = [],
         maxFileSize: Int = 1_000_000,
@@ -104,6 +108,7 @@ public struct Config: Sendable, Equatable {
         self.rrfK = rrfK
         self.multiHopEnabled = multiHopEnabled
         self.multiHopDepth = multiHopDepth
+        self.outputFormat = outputFormat
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
@@ -154,6 +159,7 @@ public extension Config {
             if let v = partial.rrfK { config.rrfK = v }
             if let v = partial.multiHopEnabled { config.multiHopEnabled = v }
             if let v = partial.multiHopDepth { config.multiHopDepth = v }
+            if let v = partial.outputFormat { config.outputFormat = v }
             if let v = partial.excludePatterns { config.excludePatterns = v }
             if let v = partial.includeExtensions { config.includeExtensions = v }
             if let v = partial.maxFileSize { config.maxFileSize = v }

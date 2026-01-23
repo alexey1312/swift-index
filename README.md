@@ -137,12 +137,25 @@ swiftindex search "authentication"
 # Limit results
 swiftindex search --limit 5 "user login"
 
-# JSON output
+# Output formats
+swiftindex search --format human "error handling"  # Default, with relevance %
+swiftindex search --format json "error handling"   # Verbose JSON
+swiftindex search --format toon "error handling"   # Token-optimized (40-60% smaller)
+
+# Legacy JSON flag (deprecated, use --format json)
 swiftindex search --json "error handling"
 
 # Adjust semantic weight (0.0 = BM25 only, 1.0 = semantic only)
 swiftindex search --semantic-weight 0.7 "networking code"
 ```
+
+**Output Formats:**
+
+| Format  | Description                         | Use Case                       |
+| ------- | ----------------------------------- | ------------------------------ |
+| `human` | Readable with relevance percentages | Terminal/interactive use       |
+| `json`  | Verbose JSON with all metadata      | Scripting/automation           |
+| `toon`  | Token-optimized (TOON format)       | AI assistants (40-60% smaller) |
 
 ### `swiftindex init`
 
@@ -155,6 +168,22 @@ swiftindex init
 By default this writes MLX settings and commented examples for other providers.
 If MetalToolchain is missing and MLX is selected, the CLI prompts to install it
 and can fall back to Swift Embeddings defaults.
+
+### `swiftindex config lint` / `swiftindex config format`
+
+Validate or format `.swiftindex.toml`.
+
+```bash
+swiftindex config lint
+swiftindex config format
+swiftindex fmt  # alias for config format
+```
+
+Flags for format:
+
+- `-a/--all` format all `.swiftindex.toml` under current directory
+- `-c/--check` check formatting without writing
+- `-s/--stdin` read from stdin and write formatted output to stdout
 
 ### `swiftindex install-claude-code`
 
@@ -175,6 +204,31 @@ Similar commands exist for other AI assistants:
 
 - `swiftindex install-cursor` — Cursor IDE (local: `.mcp.json`, global: `~/.cursor/mcp.json`)
 - `swiftindex install-codex` — Codex CLI (local: `.mcp.json`, global: `~/.codex/config.toml`)
+
+## Assistant Guidance Files
+
+If you use AI assistants (Claude Code, Cursor, Codex), add `AGENTS.md` and
+`CLAUDE.md` in your repo to describe project rules and expectations.
+
+Example `AGENTS.md`:
+
+```md
+# Project Guidance
+
+- Build: ./bin/mise run build
+- Tests: ./bin/mise run test
+- Config: .swiftindex.toml is linted on load
+```
+
+Example `CLAUDE.md`:
+
+```md
+# Assistant Notes
+
+- Use swiftindex for search
+- Prefer local embedding providers
+- Keep changes small and well tested
+```
 
 ## Configuration
 
@@ -218,10 +272,16 @@ semantic_weight = 0.7
 # RRF fusion constant
 rrf_k = 60
 
+# Output format: human, json, or toon (token-optimized)
+output_format = "human"
+
 [storage]
 # Index storage location
 directory = ".swiftindex"
 ```
+
+API keys for cloud providers are read from environment variables:
+`VOYAGE_API_KEY` and `OPENAI_API_KEY`.
 
 ### Configuration Priority
 
@@ -257,6 +317,7 @@ Search for code in the indexed codebase.
 - `query` (required): Search query string
 - `limit` (optional): Maximum results (default: 20)
 - `semantic_weight` (optional): Weight for semantic search (0.0-1.0, default: 0.7)
+- `format` (optional): Output format - `toon`, `json`, or `human` (default from config)
 
 **Example:**
 
@@ -264,7 +325,8 @@ Search for code in the indexed codebase.
 {
   "query": "user authentication flow",
   "limit": 10,
-  "semantic_weight": 0.8
+  "semantic_weight": 0.8,
+  "format": "toon"
 }
 ```
 

@@ -124,6 +124,7 @@ struct InitCommand: AsyncParsableCommand {
         print("  1. Review and customize .swiftindex.toml")
         print("  2. Run 'swiftindex index' to build the index")
         print("  3. Run 'swiftindex search <query>' to search your code")
+        print("  4. Add AGENTS.md and CLAUDE.md with project guidance (see README.md)")
 
         logger.info("Initialization completed")
     }
@@ -180,14 +181,14 @@ struct InitCommand: AsyncParsableCommand {
         } else {
             lines.append("# model = \"\(suggestedModel(for: provider))\"")
         }
-        if let dimension = defaultDimension(for: provider, model: model) {
-            if self.model == nil {
+        // Only write dimension for providers that require explicit dimension (MLX, Voyage, OpenAI)
+        // Swift Embeddings and auto providers detect dimension automatically
+        if requiresExplicitDimension(provider: provider) {
+            if let dimension = defaultDimension(for: provider, model: model) {
                 lines.append("dimension = \(dimension)")
-            } else {
-                lines.append("# dimension = \(dimension)")
             }
         } else {
-            lines.append("# dimension = 384")
+            lines.append("# dimension is auto-detected from provider")
         }
         lines.append("")
         lines.append("# Provider examples and defaults:")
@@ -207,9 +208,9 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("# provider = \"openai\"")
         lines.append("# model = \"text-embedding-3-large\"")
         lines.append("")
-        lines.append("# Code-optimized models (recommended for Swift code search):")
-        lines.append("# model = \"jinaai/jina-embeddings-v2-base-code\"  # 768 dim, Apache 2.0")
-        lines.append("# model = \"Salesforce/SFR-Embedding-Code-400M_R\" # High quality, larger")
+        lines.append("# API keys are read from environment variables:")
+        lines.append("#   VOYAGE_API_KEY for Voyage")
+        lines.append("#   OPENAI_API_KEY for OpenAI")
         lines.append("")
 
         // Search section
@@ -218,6 +219,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("rrf_k = 60")
         lines.append("multi_hop_enabled = false")
         lines.append("multi_hop_depth = 2")
+        lines.append("output_format = \"human\"  # human, json, or toon (token-optimized)")
         lines.append("")
 
         // Indexing section
@@ -249,13 +251,6 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("# cache_path = \"~/.cache/swiftindex\"")
         lines.append("")
 
-        // API keys section (commented out for security)
-        lines.append("[api_keys]")
-        lines.append("# Uncomment and fill in if using cloud providers")
-        lines.append("# voyage = \"your-voyage-api-key\"")
-        lines.append("# openai = \"your-openai-api-key\"")
-        lines.append("")
-
         // Watch section
         lines.append("[watch]")
         lines.append("debounce_ms = 500")
@@ -277,6 +272,17 @@ struct InitCommand: AsyncParsableCommand {
 
     private func usesMLX(provider: String) -> Bool {
         provider.lowercased() == "mlx"
+    }
+
+    private func requiresExplicitDimension(provider: String) -> Bool {
+        // MLX, Voyage, and OpenAI require explicit dimension in config
+        // Swift Embeddings auto-detects from model
+        switch provider.lowercased() {
+        case "mlx", "voyage", "openai":
+            true
+        default:
+            false
+        }
     }
 
     private func defaultModel(for provider: String) -> String? {

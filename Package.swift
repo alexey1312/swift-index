@@ -41,6 +41,9 @@ let package = Package(
         // Configuration
         .package(url: "https://github.com/alexey1312/swift-toml.git", from: "1.0.0"),
 
+        // Output format
+        .package(url: "https://github.com/toon-format/toon-swift.git", from: "0.3.0"),
+
         // CLI
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.9.0"),
@@ -96,6 +99,7 @@ let package = Package(
             dependencies: [
                 "SwiftIndexCore",
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "ToonFormat", package: "toon-swift"),
             ],
             path: "Sources/SwiftIndexMCP"
         ),
@@ -109,6 +113,7 @@ let package = Package(
                 "SwiftIndexMCP",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Logging", package: "swift-log"),
+                .product(name: "ToonFormat", package: "toon-swift"),
             ],
             path: "Sources/swiftindex"
         ),

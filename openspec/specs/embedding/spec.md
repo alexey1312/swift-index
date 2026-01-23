@@ -273,21 +273,21 @@ The system SHALL support efficient batch embedding.
 
 ### Requirement: Code-Optimized Embedding Models
 
-The system SHALL support code-optimized embedding models for better Swift code search.
+The system SHALL support code-optimized embedding models when explicitly configured.
 
-Recommended models for code:
+Example models for code:
 
-- `jinaai/jina-embeddings-v2-base-code` (768 dim, Apache 2.0, code-optimized)
-- `Salesforce/SFR-Embedding-Code-400M_R` (high quality, larger)
+- `jinaai/jina-embeddings-v2-base-code` (768 dim)
+- `Salesforce/SFR-Embedding-Code-400M_R` (larger, higher quality)
 
-#### Scenario: Code model recommendation
+#### Scenario: Init does not recommend code models
 
-- **WHEN** user runs `swiftindex init` for Swift project
-- **THEN** config comments recommend code-optimized models
+- **WHEN** user runs `swiftindex init`
+- **THEN** config comments do not recommend code-optimized models by default
 - **AND** default remains `bge-small-en-v1.5-4bit` for memory safety
 
 #### Scenario: Jina code model usage
 
 - **WHEN** config specifies `embedding_model = "jinaai/jina-embeddings-v2-base-code"`
-- **THEN** system uses Jina model for code-aware embeddings
+- **THEN** system uses the configured model
 - **AND** search results are optimized for code semantics

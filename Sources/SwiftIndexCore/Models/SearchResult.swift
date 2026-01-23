@@ -51,6 +51,20 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
     // MARK: - Identifiable
 
     public var id: String { chunk.id }
+
+    // MARK: - Relevance Percentage
+
+    /// Relevance percentage (0-100) based on semantic similarity.
+    ///
+    /// Uses the semantic score if available, otherwise converts the RRF
+    /// fusion score to an approximate percentage.
+    public var relevancePercent: Int {
+        if let semantic = semanticScore {
+            return Int(semantic * 100)
+        }
+        // RRF max score is ~0.0164 (when k=60), normalize to percentage
+        return Int(min(score / 0.0164, 1.0) * 100)
+    }
 }
 
 // MARK: - Comparable

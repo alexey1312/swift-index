@@ -27,6 +27,8 @@ struct SwiftIndex: AsyncParsableCommand {
         version: "VERSION_PLACEHOLDER",
         subcommands: [
             InitCommand.self,
+            ConfigCommand.self,
+            FmtCommand.self,
             IndexCommand.self,
             SearchCommand.self,
             WatchCommand.self,

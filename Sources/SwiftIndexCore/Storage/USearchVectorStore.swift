@@ -99,7 +99,26 @@ public actor USearchVectorStore: VectorStore {
         let key = nextKey
         nextKey += 1
 
-        try index.add(key: key, vector: vector)
+        do {
+            try index.add(key: key, vector: vector)
+        } catch {
+            // USearch error 15 typically indicates dimension mismatch with existing index
+            let errorString = String(describing: error)
+            if errorString.contains("error 15") {
+                throw VectorStoreError.indexDimensionMismatch(
+                    indexDimension: dimension,
+                    message: """
+                    The existing index was created with a different vector dimension.
+                    This usually happens when you change the embedding provider or model.
+
+                    To fix this, delete the index and reindex:
+                      rm -rf .swiftindex
+                      swiftindex index .
+                    """
+                )
+            }
+            throw error
+        }
         idToKey[id] = key
         keyToId[key] = id
     }
@@ -268,6 +287,7 @@ private struct VectorStoreMapping: Codable {
 /// Errors specific to vector store operations.
 public enum VectorStoreError: Error, Sendable {
     case dimensionMismatch(expected: Int, actual: Int)
+    case indexDimensionMismatch(indexDimension: Int, message: String)
     case indexNotFound(String)
     case noPersistencePath
     case saveFailed(String)
@@ -279,6 +299,8 @@ extension VectorStoreError: LocalizedError {
         switch self {
         case let .dimensionMismatch(expected, actual):
             "Vector dimension mismatch: expected \(expected), got \(actual)"
+        case let .indexDimensionMismatch(_, message):
+            message
         case let .indexNotFound(path):
             "Vector index not found at: \(path)"
         case .noPersistencePath:

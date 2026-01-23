@@ -2,6 +2,7 @@
 
 import Foundation
 import SwiftIndexCore
+import ToonFormat
 
 /// MCP tool for searching indexed Swift codebases.
 ///
@@ -48,6 +49,11 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                         "type": "string",
                         "description": "Filter by path pattern (glob syntax)",
                     ]),
+                    "format": .object([
+                        "type": "string",
+                        "description": "Output format: toon (compact), json, or human",
+                        "enum": .array([.string("toon"), .string("json"), .string("human")]),
+                    ]),
                 ]),
                 "required": .array([.string("query")]),
             ])
@@ -69,6 +75,7 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         let semanticWeight = arguments["semantic_weight"]?.doubleValue.map { Float($0) } ?? 0.7
         let extensionsArg = arguments["extensions"]?.stringValue
         let pathFilter = arguments["path_filter"]?.stringValue
+        let formatArg = arguments["format"]?.stringValue
 
         // Validate arguments
         guard limit > 0 else {
@@ -115,8 +122,20 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             // Execute search
             let results = try await searchEngine.search(query: query, options: searchOptions)
 
-            // Format results
-            return .text(formatResults(results: results, query: query))
+            // Determine format: argument > config default
+            let format = formatArg ?? config.outputFormat
+
+            // Format results based on requested format
+            let output: String = switch format {
+            case "json":
+                formatResultsJSON(results: results, query: query)
+            case "human":
+                formatResultsHuman(results: results, query: query)
+            default:
+                formatResultsTOON(results: results, query: query)
+            }
+
+            return .text(output)
         } catch {
             return .error("Search failed: \(error.localizedDescription)")
         }
@@ -124,7 +143,100 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
 
     // MARK: - Private
 
-    private func formatResults(results: [SearchResult], query: String) -> String {
+    /// Formats results as TOON (Token-Optimized Object Notation).
+    ///
+    /// TOON is a compact format that reduces token usage by 40-60% compared to JSON,
+    /// making it ideal for LLM consumption.
+    private func formatResultsTOON(results: [SearchResult], query: String) -> String {
+        var output = "search{q,n}:\n"
+        output += "  \"\(escapeString(query))\",\(results.count)\n\n"
+
+        if results.isEmpty {
+            return output
+        }
+
+        // Tabular results: rank, relevance%, path, lines, kind, symbols
+        output += "results[\(results.count)]{r,rel,p,l,k,s}:\n"
+
+        for (index, result) in results.enumerated() {
+            let rank = index + 1
+            let relevance = result.relevancePercent
+            let path = result.chunk.path
+            let lines = "[\(result.chunk.startLine),\(result.chunk.endLine)]"
+            let kind = result.chunk.kind.rawValue
+            let symbols = result.chunk.symbols.isEmpty
+                ? "[]"
+                : "[\"\(result.chunk.symbols.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+
+            output += "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),\"\(kind)\",\(symbols)\n"
+        }
+
+        output += "\ncode[\(results.count)]:\n"
+
+        for result in results {
+            // Truncate content for TOON output (first 15 lines max for MCP)
+            let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
+            let preview = lines.prefix(15).joined(separator: "\n")
+            let truncated = lines.count > 15
+
+            output += "  ---\n"
+            for line in preview.split(separator: "\n", omittingEmptySubsequences: false) {
+                output += "  \(line)\n"
+            }
+            if truncated {
+                output += "  ...\(lines.count - 15) more lines\n"
+            }
+        }
+
+        return output
+    }
+
+    private func escapeString(_ str: String) -> String {
+        str.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
+    }
+
+    private func formatResultsHuman(results: [SearchResult], query: String) -> String {
+        var output = "Search: \"\(query)\"\n"
+        output += "Found \(results.count) results\n"
+        output += String(repeating: "─", count: 60) + "\n"
+
+        if results.isEmpty {
+            output += "\nNo results found.\n"
+            return output
+        }
+
+        for (index, result) in results.enumerated() {
+            output += "\n[\(index + 1)] \(result.chunk.path):\(result.chunk.startLine)-\(result.chunk.endLine)\n"
+            output += "    Kind: \(result.chunk.kind.rawValue)\n"
+
+            if !result.chunk.symbols.isEmpty {
+                output += "    Symbols: \(result.chunk.symbols.joined(separator: ", "))\n"
+            }
+
+            output += "    Relevance: \(result.relevancePercent)%"
+            if let bm25Rank = result.bm25Rank {
+                output += " (keyword rank #\(bm25Rank))"
+            }
+            output += "\n"
+
+            // Show code preview (first 5 lines)
+            let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
+            let preview = lines.prefix(5)
+            output += "    ────\n"
+            for line in preview {
+                output += "    \(line)\n"
+            }
+            if lines.count > 5 {
+                output += "    ... (\(lines.count - 5) more lines)\n"
+            }
+        }
+
+        return output
+    }
+
+    private func formatResultsJSON(results: [SearchResult], query: String) -> String {
         var jsonResults: [[String: Any]] = []
 
         for result in results {
@@ -135,7 +247,7 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                 "end_line": result.chunk.endLine,
                 "kind": result.chunk.kind.rawValue,
                 "symbols": result.chunk.symbols,
-                "score": Double(result.score),
+                "relevance_percent": result.relevancePercent,
                 "content": result.chunk.content,
             ]
 

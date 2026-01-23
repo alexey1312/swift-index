@@ -56,6 +56,16 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 | `swiftindex install-cursor`      | Configure Cursor         |
 | `swiftindex install-codex`       | Configure Codex          |
 
+### Search Output Formats
+
+| Format | Flag             | Description                                |
+| ------ | ---------------- | ------------------------------------------ |
+| human  | `--format human` | Default, with relevance percentages        |
+| json   | `--format json`  | Verbose JSON with all metadata             |
+| toon   | `--format toon`  | Token-optimized (40-60% smaller than JSON) |
+
+MCP server uses TOON format by default for optimal token efficiency.
+
 ## Architecture
 
 ### Targets
@@ -91,6 +101,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 | GRDB.swift             | 7.9.0   | SQLite + FTS5                 |
 | usearch                | 2.23.0  | Vector index (HNSW)           |
 | swift-toml             | 1.0.0   | Configuration                 |
+| toon-swift             | 0.3.0   | Token-optimized output format |
 | swift-argument-parser  | 1.7.0   | CLI argument parsing          |
 | swift-log              | 1.9.0   | Structured logging            |
 | swift-async-algorithms | 1.1.0   | Async sequence utilities      |
@@ -149,6 +160,9 @@ Keep this managed block so 'openspec update' can refresh the instructions.
   fall back to Swift Embeddings defaults.
 - Tests can override MetalToolchain detection with
   `SWIFTINDEX_METALTOOLCHAIN_OVERRIDE=present|missing`.
+- **Dimension auto-detection**: Swift Embeddings provider auto-detects dimension from
+  the model. Only MLX, Voyage, and OpenAI require explicit `dimension` in config.
+  Don't specify dimension for `swift` provider — it will cause index corruption.
 
 ## Distribution
 
@@ -180,6 +194,14 @@ git push --tags
 ## Configuration
 
 Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~/.config/swiftindex/config.toml` > Defaults
+
+### Search Configuration Options
+
+| Option          | Type   | Default | Description                           |
+| --------------- | ------ | ------- | ------------------------------------- |
+| semantic_weight | float  | 0.7     | Weight for semantic vs BM25 (0.0-1.0) |
+| rrf_k           | int    | 60      | RRF fusion constant                   |
+| output_format   | string | "human" | Default format: human, json, or toon  |
 
 ### Environment Variables
 

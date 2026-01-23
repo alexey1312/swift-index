@@ -37,7 +37,7 @@ public actor MCPContext {
 
         // Load config using TOMLConfigLoader (handles layered config)
         let envConfig = (try? EnvironmentConfigLoader().load()) ?? .empty
-        let config = TOMLConfigLoader.loadLayered(env: envConfig, projectDirectory: resolvedPath)
+        let config = try TOMLConfigLoader.loadLayered(env: envConfig, projectDirectory: resolvedPath)
         logger.debug("Loaded config for: \(resolvedPath)")
 
         loadedConfigs[resolvedPath] = config

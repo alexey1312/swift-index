@@ -4,13 +4,23 @@ import ArgumentParser
 import Foundation
 import Logging
 import SwiftIndexCore
+import ToonFormat
+
+/// Output format for search results.
+enum OutputFormat: String, ExpressibleByArgument, CaseIterable, Sendable {
+    case human
+    case json
+    case toon
+
+    static var defaultValueDescription: String { "human" }
+}
 
 /// Command to search the indexed codebase.
 ///
 /// Usage:
 ///   swiftindex search "authentication flow"
 ///   swiftindex search "error handling" --limit 10
-///   swiftindex search "async patterns" --json
+///   swiftindex search "async patterns" --format toon
 struct SearchCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "search",
@@ -39,9 +49,15 @@ struct SearchCommand: AsyncParsableCommand {
     )
     var limit: Int = 20
 
+    @Option(
+        name: .long,
+        help: "Output format: human, json, or toon (token-optimized). Default from config."
+    )
+    var format: OutputFormat?
+
     @Flag(
         name: .long,
-        help: "Output results as JSON"
+        help: "Output results as JSON (deprecated, use --format json)"
     )
     var json: Bool = false
 
@@ -197,11 +213,26 @@ struct SearchCommand: AsyncParsableCommand {
             "elapsed": "\(String(format: "%.3f", elapsed))s",
         ])
 
-        // Output results
-        if json {
-            try outputJSON(results: results, query: query, elapsed: elapsed)
+        // Determine effective format:
+        // 1. --json flag takes precedence (backwards compatibility)
+        // 2. --format option if explicitly provided
+        // 3. Config file default
+        let effectiveFormat: OutputFormat = if json {
+            .json
+        } else if let explicitFormat = format {
+            explicitFormat
         } else {
+            OutputFormat(rawValue: configuration.outputFormat) ?? .human
+        }
+
+        // Output results
+        switch effectiveFormat {
+        case .human:
             outputHumanReadable(results: results, elapsed: elapsed)
+        case .json:
+            try outputJSON(results: results, query: query, elapsed: elapsed)
+        case .toon:
+            try outputTOON(results: results, query: query, elapsed: elapsed)
         }
     }
 
@@ -362,7 +393,6 @@ struct SearchCommand: AsyncParsableCommand {
         print(String(repeating: "─", count: 60))
 
         for (index, result) in results.enumerated() {
-            let scoreStr = String(format: "%.3f", result.score)
             let hopIndicator = result.isMultiHop ? " [hop \(result.hopDepth)]" : ""
 
             print("\n[\(index + 1)] \(result.chunk.path):\(result.chunk.startLine)-\(result.chunk.endLine)")
@@ -372,14 +402,12 @@ struct SearchCommand: AsyncParsableCommand {
                 print("    Symbols: \(result.chunk.symbols.joined(separator: ", "))")
             }
 
-            print("    Score: \(scoreStr)", terminator: "")
+            // Show relevance percentage as primary metric
+            print("    Relevance: \(result.relevancePercent)%", terminator: "")
 
-            if let bm25 = result.bm25Score, let semantic = result.semanticScore {
-                print(" (BM25: \(String(format: "%.3f", bm25)), Semantic: \(String(format: "%.3f", semantic)))")
-            } else if let bm25 = result.bm25Score {
-                print(" (BM25: \(String(format: "%.3f", bm25)))")
-            } else if let semantic = result.semanticScore {
-                print(" (Semantic: \(String(format: "%.3f", semantic)))")
+            // Add keyword rank info if available
+            if let bm25Rank = result.bm25Rank {
+                print(" (keyword rank #\(bm25Rank))")
             } else {
                 print("")
             }
@@ -397,5 +425,62 @@ struct SearchCommand: AsyncParsableCommand {
         }
 
         print("")
+    }
+
+    // MARK: - TOON Output
+
+    private func outputTOON(results: [SearchResult], query: String, elapsed: TimeInterval) throws {
+        // TOON format is a compact, token-efficient representation
+        // Format: search{q,n,ms}: followed by tabular results
+        let elapsedMs = Int(elapsed * 1000)
+
+        var output = "search{q,n,ms}:\n"
+        output += "  \"\(escapeString(query))\",\(results.count),\(elapsedMs)\n\n"
+
+        if results.isEmpty {
+            print(output)
+            return
+        }
+
+        // Tabular results: rank, relevance%, path, lines, kind, symbols
+        output += "results[\(results.count)]{r,rel,p,l,k,s}:\n"
+
+        for (index, result) in results.enumerated() {
+            let rank = index + 1
+            let relevance = result.relevancePercent
+            let path = result.chunk.path
+            let lines = "[\(result.chunk.startLine),\(result.chunk.endLine)]"
+            let kind = result.chunk.kind.rawValue
+            let symbols = result.chunk.symbols.isEmpty
+                ? "[]"
+                : "[\"\(result.chunk.symbols.map { escapeString($0) }.joined(separator: "\",\""))\"]"
+
+            output += "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),\"\(kind)\",\(symbols)\n"
+        }
+
+        output += "\ncode[\(results.count)]:\n"
+
+        for result in results {
+            // Truncate content for TOON output (first 10 lines max)
+            let lines = result.chunk.content.split(separator: "\n", omittingEmptySubsequences: false)
+            let preview = lines.prefix(10).joined(separator: "\n")
+            let truncated = lines.count > 10
+
+            output += "  ---\n"
+            for line in preview.split(separator: "\n", omittingEmptySubsequences: false) {
+                output += "  \(line)\n"
+            }
+            if truncated {
+                output += "  ...\(lines.count - 10) more lines\n"
+            }
+        }
+
+        print(output)
+    }
+
+    private func escapeString(_ str: String) -> String {
+        str.replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+            .replacingOccurrences(of: "\n", with: "\\n")
     }
 }

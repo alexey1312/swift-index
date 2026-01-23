@@ -32,6 +32,7 @@ public struct PartialConfig: Sendable, Equatable {
     public var rrfK: Int?
     public var multiHopEnabled: Bool?
     public var multiHopDepth: Int?
+    public var outputFormat: String?
 
     // MARK: - Indexing
 
@@ -67,6 +68,7 @@ public struct PartialConfig: Sendable, Equatable {
         rrfK: Int? = nil,
         multiHopEnabled: Bool? = nil,
         multiHopDepth: Int? = nil,
+        outputFormat: String? = nil,
         excludePatterns: [String]? = nil,
         includeExtensions: [String]? = nil,
         maxFileSize: Int? = nil,
@@ -86,6 +88,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.rrfK = rrfK
         self.multiHopEnabled = multiHopEnabled
         self.multiHopDepth = multiHopDepth
+        self.outputFormat = outputFormat
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
