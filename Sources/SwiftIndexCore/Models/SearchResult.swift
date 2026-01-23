@@ -71,8 +71,9 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
 
 extension SearchResult: Comparable {
     public static func < (lhs: SearchResult, rhs: SearchResult) -> Bool {
-        // Higher scores come first
-        lhs.score > rhs.score
+        // Sort by displayed relevance percentage for consistency with UI
+        // (relevancePercent prefers semanticScore when available)
+        lhs.relevancePercent > rhs.relevancePercent
     }
 }
 
