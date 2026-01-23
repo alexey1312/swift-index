@@ -158,6 +158,31 @@ MCP server uses TOON format by default for optimal token efficiency.
 - SwiftLint for linting
 - Conventional Commits for git messages
 
+### JSON Handling
+
+**ALWAYS use `JSONCodec` instead of Foundation's `JSONEncoder`/`JSONDecoder`/`JSONSerialization`.**
+
+The project uses swift-yyjson with strict RFC 8259 mode for:
+
+- ~16x faster JSON parsing than Foundation
+- Strict JSON compliance (rejects comments, trailing commas)
+- Significantly fewer allocations (3 vs 6600+ for typical operations)
+
+```swift
+// Encoding
+let data = try JSONCodec.encode(object)           // Standard encoding
+let data = try JSONCodec.encodePretty(object)     // Pretty-printed
+let data = try JSONCodec.encodeSorted(object)     // Sorted keys
+let data = try JSONCodec.encodePrettySorted(object) // Both
+
+// Decoding
+let object = try JSONCodec.decode(Type.self, from: data)
+
+// Serialization (for [String: Any] and dynamic JSON)
+let data = try JSONCodec.serialize(dict, options: [.prettyPrinted, .sortedKeys])
+let object = try JSONCodec.deserialize(data)
+```
+
 ## Testing
 
 ### Test Targets

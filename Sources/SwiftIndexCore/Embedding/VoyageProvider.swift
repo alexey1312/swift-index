@@ -115,7 +115,7 @@ public struct VoyageProvider: EmbeddingProvider, Sendable {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         let payload = VoyageRequest(model: modelName, input: texts, inputType: "document")
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try JSONCodec.makeEncoder().encode(payload)
 
         // Make request
         let (data, response) = try await session.data(for: request)
@@ -131,7 +131,7 @@ public struct VoyageProvider: EmbeddingProvider, Sendable {
         }
 
         // Parse response
-        let embeddingResponse = try JSONDecoder().decode(VoyageResponse.self, from: data)
+        let embeddingResponse = try JSONCodec.makeDecoder().decode(VoyageResponse.self, from: data)
         return embeddingResponse.data.map { $0.embedding.map { Float($0) } }
     }
 
@@ -143,7 +143,7 @@ public struct VoyageProvider: EmbeddingProvider, Sendable {
             }
         }
 
-        if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+        if let errorResponse = try? JSONCodec.makeDecoder().decode(ErrorResponse.self, from: data) {
             return errorResponse.error?.message
         }
         return String(data: data, encoding: .utf8)

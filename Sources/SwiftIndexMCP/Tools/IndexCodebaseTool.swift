@@ -264,11 +264,8 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             "errors": result.errors,
         ]
 
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: output,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let string = String(data: data, encoding: .utf8)
+        guard let data = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
         else {
             return "{}"
         }

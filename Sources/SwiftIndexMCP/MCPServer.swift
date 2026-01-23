@@ -3,6 +3,7 @@
 import Foundation
 import Logging
 import SwiftIndexCore
+import YYJSON
 
 /// MCP Server for SwiftIndex.
 ///
@@ -12,8 +13,8 @@ public actor MCPServer {
     // MARK: - Properties
 
     private let logger: Logger
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
+    private let encoder: YYJSONEncoder
+    private let decoder: YYJSONDecoder
     private var isInitialized: Bool = false
     private var clientInfo: MCPClientInfo?
 
@@ -34,10 +35,9 @@ public actor MCPServer {
     public init(logger: Logger = Logger(label: "SwiftIndexMCP")) {
         self.logger = logger
 
-        encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-
-        decoder = JSONDecoder()
+        // Use YYJSON for faster JSON processing with RFC 8259 strict mode
+        encoder = YYJSONEncoder()
+        decoder = YYJSONDecoder()
 
         // Register default tools
         initializeDefaultTools()

@@ -168,7 +168,7 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
 
         let payload = OpenAIRequest(model: modelName, input: texts, dimensions: dimension)
-        request.httpBody = try JSONEncoder().encode(payload)
+        request.httpBody = try JSONCodec.makeEncoder().encode(payload)
 
         // Make request
         let (data, response) = try await session.data(for: request)
@@ -184,7 +184,7 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
         }
 
         // Parse response
-        let embeddingResponse = try JSONDecoder().decode(OpenAIResponse.self, from: data)
+        let embeddingResponse = try JSONCodec.makeDecoder().decode(OpenAIResponse.self, from: data)
 
         // Sort by index to maintain input order
         let sorted = embeddingResponse.data.sorted { $0.index < $1.index }
@@ -199,7 +199,7 @@ public struct OpenAIProvider: EmbeddingProvider, Sendable {
             }
         }
 
-        if let errorResponse = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+        if let errorResponse = try? JSONCodec.makeDecoder().decode(ErrorResponse.self, from: data) {
             return errorResponse.error?.message
         }
         return String(data: data, encoding: .utf8)

@@ -180,11 +180,8 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             ],
         ]
 
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: output,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let string = String(data: data, encoding: .utf8)
+        guard let data = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
         else {
             return .text("{}")
         }
@@ -204,11 +201,8 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             "message": message,
         ]
 
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: output,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let string = String(data: data, encoding: .utf8)
+        guard let data = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
         else {
             return "{}"
         }
@@ -231,11 +225,8 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
             ],
         ]
 
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: output,
-            options: [.prettyPrinted, .sortedKeys]
-        ),
-            let string = String(data: data, encoding: .utf8)
+        guard let data = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
         else {
             return "{}"
         }
