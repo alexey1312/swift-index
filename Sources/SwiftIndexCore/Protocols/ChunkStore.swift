@@ -68,18 +68,18 @@ public protocol ChunkStore: Sendable {
     /// - Returns: Number of chunks in the store.
     func count() async throws -> Int
 
-    /// Check if a file has been indexed by its hash.
+    /// Get the stored file hash for a path.
     ///
-    /// - Parameter hash: The file content hash.
-    /// - Returns: True if already indexed.
-    func hasFileHash(_ hash: String) async throws -> Bool
+    /// - Parameter path: The file path.
+    /// - Returns: The stored hash if the file has been indexed, nil otherwise.
+    func getFileHash(forPath path: String) async throws -> String?
 
-    /// Record a file hash after indexing.
+    /// Set the file hash for a path after indexing.
     ///
     /// - Parameters:
     ///   - hash: The file content hash.
     ///   - path: The file path.
-    func recordFileHash(_ hash: String, path: String) async throws
+    func setFileHash(_ hash: String, forPath path: String) async throws
 
     /// Get chunks with the specified content hashes.
     ///

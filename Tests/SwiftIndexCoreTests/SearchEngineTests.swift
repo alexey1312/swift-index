@@ -7,7 +7,7 @@ import Testing
 /// Mock chunk store for testing search engines.
 actor MockChunkStore: ChunkStore {
     private var chunks: [String: CodeChunk] = [:]
-    private var fileHashes: Set<String> = []
+    private var fileHashesByPath: [String: String] = [:]
 
     init(chunks: [CodeChunk] = []) {
         for chunk in chunks {
@@ -84,12 +84,12 @@ actor MockChunkStore: ChunkStore {
         chunks.count
     }
 
-    func hasFileHash(_ hash: String) async throws -> Bool {
-        fileHashes.contains(hash)
+    func getFileHash(forPath path: String) async throws -> String? {
+        fileHashesByPath[path]
     }
 
-    func recordFileHash(_ hash: String, path: String) async throws {
-        fileHashes.insert(hash)
+    func setFileHash(_ hash: String, forPath path: String) async throws {
+        fileHashesByPath[path] = hash
     }
 
     func getByContentHashes(_ hashes: Set<String>) async throws -> [String: CodeChunk] {
@@ -104,7 +104,7 @@ actor MockChunkStore: ChunkStore {
 
     func clear() async throws {
         chunks.removeAll()
-        fileHashes.removeAll()
+        fileHashesByPath.removeAll()
     }
 }
 

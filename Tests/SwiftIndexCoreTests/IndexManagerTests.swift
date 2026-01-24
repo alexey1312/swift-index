@@ -47,19 +47,48 @@ struct IndexManagerTests {
     func needsIndexingNew() async throws {
         let manager = try await makeIndexManager()
 
-        let needsIndexing = try await manager.needsIndexing(fileHash: "new-hash")
+        let needsIndexing = try await manager.needsIndexing(path: "/test/file.swift", fileHash: "new-hash")
 
         #expect(needsIndexing == true)
     }
 
-    @Test("Check needs indexing for indexed file")
+    @Test("Check needs indexing for indexed file with same hash")
     func needsIndexingExisting() async throws {
         let manager = try await makeIndexManager()
         try await manager.recordIndexed(fileHash: "existing-hash", path: "/test/file.swift")
 
-        let needsIndexing = try await manager.needsIndexing(fileHash: "existing-hash")
+        let needsIndexing = try await manager.needsIndexing(path: "/test/file.swift", fileHash: "existing-hash")
 
         #expect(needsIndexing == false)
+    }
+
+    @Test("Check needs indexing for indexed file with changed hash")
+    func needsIndexingChanged() async throws {
+        let manager = try await makeIndexManager()
+        try await manager.recordIndexed(fileHash: "old-hash", path: "/test/file.swift")
+
+        let needsIndexing = try await manager.needsIndexing(path: "/test/file.swift", fileHash: "new-hash")
+
+        #expect(needsIndexing == true)
+    }
+
+    @Test("Same content in different paths tracked separately")
+    func sameContentDifferentPaths() async throws {
+        let manager = try await makeIndexManager()
+        let sameHash = "identical-content-hash"
+
+        // Record same hash for two different paths
+        try await manager.recordIndexed(fileHash: sameHash, path: "/test/file1.swift")
+        try await manager.recordIndexed(fileHash: sameHash, path: "/test/file2.swift")
+
+        // Both should be tracked independently
+        let needsIndexing1 = try await manager.needsIndexing(path: "/test/file1.swift", fileHash: sameHash)
+        let needsIndexing2 = try await manager.needsIndexing(path: "/test/file2.swift", fileHash: sameHash)
+        let needsIndexing3 = try await manager.needsIndexing(path: "/test/file3.swift", fileHash: sameHash)
+
+        #expect(needsIndexing1 == false)
+        #expect(needsIndexing2 == false)
+        #expect(needsIndexing3 == true) // New path, not yet indexed
     }
 
     @Test("Reindex file")

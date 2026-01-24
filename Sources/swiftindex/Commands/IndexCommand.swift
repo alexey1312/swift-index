@@ -1,6 +1,7 @@
 // MARK: - Index Command
 
 import ArgumentParser
+import Crypto
 import Foundation
 import Logging
 import Noora
@@ -604,7 +605,7 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Check if file needs indexing (unless force is set)
         if !force {
-            let needsIndexing = try await context.indexManager.needsIndexing(fileHash: fileHash)
+            let needsIndexing = try await context.indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
                 context.logger.debug("Skipping unchanged file: \(path)")
                 return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: true)
@@ -702,11 +703,10 @@ struct IndexCommand: AsyncParsableCommand {
     }
 
     private static func computeFileHash(_ content: String) -> String {
-        // Use simple hash for quick comparison
-        var hasher = Hasher()
-        hasher.combine(content)
-        let hash = hasher.finalize()
-        return String(format: "%016x", hash)
+        // Use SHA-256 for stable, deterministic hashing across process runs
+        let data = Data(content.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     private static func descriptionFailureHint(for reason: String) -> String? {

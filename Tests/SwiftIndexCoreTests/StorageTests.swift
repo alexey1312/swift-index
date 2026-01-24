@@ -343,28 +343,56 @@ struct GRDBChunkStoreTests {
 
     // MARK: - File Hash Tracking
 
-    @Test("Record and check file hash")
+    @Test("Set and get file hash by path")
     func fileHashTracking() async throws {
         let store = try GRDBChunkStore()
 
-        let hasHashBefore = try await store.hasFileHash("hash123")
-        #expect(hasHashBefore == false)
+        let hashBefore = try await store.getFileHash(forPath: "/test/file.swift")
+        #expect(hashBefore == nil)
 
-        try await store.recordFileHash("hash123", path: "/test/file.swift")
+        try await store.setFileHash("hash123", forPath: "/test/file.swift")
 
-        let hasHashAfter = try await store.hasFileHash("hash123")
-        #expect(hasHashAfter == true)
+        let hashAfter = try await store.getFileHash(forPath: "/test/file.swift")
+        #expect(hashAfter == "hash123")
+    }
+
+    @Test("Update file hash for existing path")
+    func updateFileHash() async throws {
+        let store = try GRDBChunkStore()
+
+        try await store.setFileHash("old-hash", forPath: "/test/file.swift")
+        try await store.setFileHash("new-hash", forPath: "/test/file.swift")
+
+        let storedHash = try await store.getFileHash(forPath: "/test/file.swift")
+        #expect(storedHash == "new-hash")
+    }
+
+    @Test("Same content hash in different paths tracked separately")
+    func sameHashDifferentPaths() async throws {
+        let store = try GRDBChunkStore()
+        let sameHash = "identical-content-hash"
+
+        try await store.setFileHash(sameHash, forPath: "/test/file1.swift")
+        try await store.setFileHash(sameHash, forPath: "/test/file2.swift")
+
+        let hash1 = try await store.getFileHash(forPath: "/test/file1.swift")
+        let hash2 = try await store.getFileHash(forPath: "/test/file2.swift")
+        let hash3 = try await store.getFileHash(forPath: "/test/file3.swift")
+
+        #expect(hash1 == sameHash)
+        #expect(hash2 == sameHash)
+        #expect(hash3 == nil)
     }
 
     @Test("Delete file hash")
     func testDeleteFileHash() async throws {
         let store = try GRDBChunkStore()
-        try await store.recordFileHash("hash-del", path: "/test/file.swift")
+        try await store.setFileHash("hash-del", forPath: "/test/file.swift")
 
         try await store.deleteFileHash(path: "/test/file.swift")
-        let hasHash = try await store.hasFileHash("hash-del")
+        let storedHash = try await store.getFileHash(forPath: "/test/file.swift")
 
-        #expect(hasHash == false)
+        #expect(storedHash == nil)
     }
 
     // MARK: - Utilities
@@ -404,14 +432,14 @@ struct GRDBChunkStoreTests {
             makeChunk(id: "clear-1"),
             makeChunk(id: "clear-2"),
         ])
-        try await store.recordFileHash("clear-hash", path: "/test/file.swift")
+        try await store.setFileHash("clear-hash", forPath: "/test/file.swift")
 
         try await store.clear()
         let count = try await store.count()
-        let hasHash = try await store.hasFileHash("clear-hash")
+        let storedHash = try await store.getFileHash(forPath: "/test/file.swift")
 
         #expect(count == 0)
-        #expect(hasHash == false)
+        #expect(storedHash == nil)
     }
 
     @Test("Get chunks by IDs")

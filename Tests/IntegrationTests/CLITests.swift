@@ -233,6 +233,112 @@ struct CLITests {
         #expect(contents.contains("model = \"all-MiniLM-L6-v2\""))
     }
 
+    @Test("init command uses defaults in non-TTY mode")
+    func initCommandNonTTYMode() throws {
+        let fixtureDir = try createTestFixtures(includeConfig: false)
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand(
+            ["init"],
+            workingDirectory: fixtureDir.path,
+            environment: [
+                "SWIFTINDEX_TTY_OVERRIDE": "noninteractive",
+                "SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "present",
+            ]
+        )
+
+        #expect(exitCode == 0, "Init should succeed in non-TTY mode")
+        #expect(stdout.contains("Created configuration file"), "Should confirm creation")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"mlx\""), "Should use MLX defaults")
+        #expect(contents.contains("enabled = false"), "LLM enhancement should be disabled by default")
+    }
+
+    @Test("init command respects --provider flag in non-TTY mode")
+    func initCommandProviderFlag() throws {
+        let fixtureDir = try createTestFixtures(includeConfig: false)
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (_, _, exitCode) = try runCommand(
+            ["init", "--provider", "swift"],
+            workingDirectory: fixtureDir.path,
+            environment: ["SWIFTINDEX_TTY_OVERRIDE": "noninteractive"]
+        )
+
+        #expect(exitCode == 0, "Init should succeed with --provider flag")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"swift\""), "Should use specified provider")
+        #expect(contents.contains("model = \"all-MiniLM-L6-v2\""), "Should use default model for Swift provider")
+    }
+
+    @Test("init command respects --provider and --model flags")
+    func initCommandProviderAndModelFlags() throws {
+        let fixtureDir = try createTestFixtures(includeConfig: false)
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (_, _, exitCode) = try runCommand(
+            ["init", "--provider", "ollama", "--model", "nomic-embed-text"],
+            workingDirectory: fixtureDir.path,
+            environment: ["SWIFTINDEX_TTY_OVERRIDE": "noninteractive"]
+        )
+
+        #expect(exitCode == 0, "Init should succeed with --provider and --model flags")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"ollama\""), "Should use specified provider")
+        #expect(contents.contains("model = \"nomic-embed-text\""), "Should use specified model")
+    }
+
+    @Test("init command MLX falls back to Swift in non-TTY when MetalToolchain missing")
+    func initCommandMLXFallbackNonTTY() throws {
+        let fixtureDir = try createTestFixtures(includeConfig: false)
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand(
+            ["init", "--provider", "mlx"],
+            workingDirectory: fixtureDir.path,
+            environment: [
+                "SWIFTINDEX_TTY_OVERRIDE": "noninteractive",
+                "SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "missing",
+            ]
+        )
+
+        #expect(exitCode == 0, "Init should succeed with automatic fallback")
+        #expect(stdout.contains("Falling back to Swift Embeddings"), "Should indicate fallback")
+
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"swift\""), "Should fall back to Swift provider")
+    }
+
+    @Test("init command --force skips overwrite prompt")
+    func initCommandForceOverwrite() throws {
+        let fixtureDir = try createTestFixtures(includeConfig: false)
+        defer { cleanupFixtures(fixtureDir) }
+
+        // Create initial config
+        let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
+        try "# existing config".write(to: configPath, atomically: true, encoding: .utf8)
+
+        let (stdout, _, exitCode) = try runCommand(
+            ["init", "--force", "--provider", "voyage"],
+            workingDirectory: fixtureDir.path,
+            environment: ["SWIFTINDEX_TTY_OVERRIDE": "noninteractive"]
+        )
+
+        #expect(exitCode == 0, "Init with --force should succeed")
+        #expect(stdout.contains("Created configuration file"), "Should confirm creation")
+
+        let contents = try String(contentsOf: configPath, encoding: .utf8)
+        #expect(contents.contains("provider = \"voyage\""), "Should overwrite with new provider")
+        #expect(!contents.contains("# existing config"), "Should not contain old content")
+    }
+
     @Test("index command shows help with --help")
     func indexCommandHelp() throws {
         let (stdout, _, exitCode) = try runCommand(["index", "--help"])

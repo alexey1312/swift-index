@@ -1,5 +1,6 @@
 // MARK: - IndexCodebaseTool
 
+import Crypto
 import Foundation
 import SwiftIndexCore
 
@@ -210,7 +211,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // Check if file needs indexing (unless force is set)
         if !force {
-            let needsIndexing = try await indexManager.needsIndexing(fileHash: fileHash)
+            let needsIndexing = try await indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
                 return FileIndexResult(chunksIndexed: 0, skipped: true)
             }
@@ -246,10 +247,10 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
     }
 
     private func computeFileHash(_ content: String) -> String {
-        var hasher = Hasher()
-        hasher.combine(content)
-        let hash = hasher.finalize()
-        return String(format: "%016x", hash)
+        // Use SHA-256 for stable, deterministic hashing across process runs
+        let data = Data(content.utf8)
+        let digest = SHA256.hash(data: data)
+        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     private func formatResult(_ result: IndexingResult) -> String {

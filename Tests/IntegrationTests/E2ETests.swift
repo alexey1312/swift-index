@@ -343,7 +343,7 @@ struct E2ETests {
             let fileHash = computeHash(content)
 
             // Check if already indexed with same hash
-            let needsIndexing = try await indexManager.needsIndexing(fileHash: fileHash)
+            let needsIndexing = try await indexManager.needsIndexing(path: file.path, fileHash: fileHash)
             if !needsIndexing {
                 continue
             }
@@ -368,7 +368,7 @@ struct E2ETests {
         for file in files {
             let content = try String(contentsOf: file, encoding: .utf8)
             let fileHash = computeHash(content)
-            let needsIndexing = try await indexManager.needsIndexing(fileHash: fileHash)
+            let needsIndexing = try await indexManager.needsIndexing(path: file.path, fileHash: fileHash)
 
             if !needsIndexing {
                 skippedCount += 1

@@ -108,13 +108,17 @@ public actor IndexManager {
         ])
     }
 
-    /// Check if a file needs reindexing based on its content hash.
+    /// Check if a file needs reindexing based on its path and content hash.
     ///
-    /// - Parameter hash: The file content hash.
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - hash: The file content hash.
     /// - Returns: True if the file has not been indexed or has changed.
-    public func needsIndexing(fileHash hash: String) async throws -> Bool {
-        let exists = try await chunkStore.hasFileHash(hash)
-        return !exists
+    public func needsIndexing(path: String, fileHash hash: String) async throws -> Bool {
+        guard let storedHash = try await chunkStore.getFileHash(forPath: path) else {
+            return true // File not previously indexed
+        }
+        return storedHash != hash // File changed if hash differs
     }
 
     /// Record that a file has been indexed.
@@ -123,7 +127,7 @@ public actor IndexManager {
     ///   - hash: The file content hash.
     ///   - path: The file path.
     public func recordIndexed(fileHash hash: String, path: String) async throws {
-        try await chunkStore.recordFileHash(hash, path: path)
+        try await chunkStore.setFileHash(hash, forPath: path)
     }
 
     /// Reindex a file by removing old chunks and indexing new ones.

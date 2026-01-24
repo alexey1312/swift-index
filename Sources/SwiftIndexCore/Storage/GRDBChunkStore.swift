@@ -133,10 +133,10 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
                 END
             """)
 
-            // File hashes table for incremental indexing
+            // File hashes table for incremental indexing (keyed by path)
             try db.create(table: "file_hashes") { table in
-                table.primaryKey("hash", .text)
-                table.column("path", .text).notNull()
+                table.primaryKey("path", .text)
+                table.column("hash", .text).notNull()
                 table.column("indexed_at", .datetime).notNull()
             }
         }
@@ -467,15 +467,19 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
     }
 
-    public func hasFileHash(_ hash: String) async throws -> Bool {
+    public func getFileHash(forPath path: String) async throws -> String? {
         try await dbWriter.read { db in
-            try FileHashRecord.exists(db, key: hash)
+            try FileHashRecord
+                .filter(Column("path") == path)
+                .fetchOne(db)?
+                .hash
         }
     }
 
-    public func recordFileHash(_ hash: String, path: String) async throws {
+    public func setFileHash(_ hash: String, forPath path: String) async throws {
         try await dbWriter.write { db in
-            try FileHashRecord(hash: hash, path: path, indexedAt: Date()).insert(db)
+            // Use save to insert or update (path is the primary key)
+            try FileHashRecord(path: path, hash: hash, indexedAt: Date()).save(db)
         }
     }
 
@@ -898,17 +902,17 @@ private struct InfoSnippetRecord: Codable, PersistableRecord, FetchableRecord {
 
 // MARK: - FileHashRecord
 
-/// GRDB record for file hash tracking.
+/// GRDB record for file hash tracking (keyed by path).
 private struct FileHashRecord: Codable, PersistableRecord, FetchableRecord {
     static let databaseTableName = "file_hashes"
 
-    let hash: String
     let path: String
+    let hash: String
     let indexedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case hash
         case path
+        case hash
         case indexedAt = "indexed_at"
     }
 }
