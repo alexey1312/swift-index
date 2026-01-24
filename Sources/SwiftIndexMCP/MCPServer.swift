@@ -130,8 +130,9 @@ public actor MCPServer {
         case "initialize":
             return try await handleInitialize(request)
 
-        case "initialized":
+        case "initialized", "notifications/initialized":
             // This is a notification, no response needed
+            // Note: Some clients send "initialized", others send "notifications/initialized"
             handleInitialized()
             return nil
 

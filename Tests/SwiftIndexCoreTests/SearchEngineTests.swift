@@ -430,6 +430,37 @@ struct BM25SearchTests {
             #expect(result.chunk.path.hasSuffix(".swift"))
         }
     }
+
+    @Test("Search handles FTS5 special characters")
+    func searchHandlesFTS5SpecialCharacters() async throws {
+        let chunks = makeTestChunks()
+        let store = MockChunkStore(chunks: chunks)
+        let search = BM25Search(chunkStore: store)
+
+        // Queries with FTS5 special characters should not throw
+        // Characters: ? * + - ^ ( ) { } [ ] | \ : ~
+        let queriesWithSpecialChars = [
+            "How does authentication work?",
+            "user*name",
+            "login+logout",
+            "auth-service",
+            "func^method",
+            "(group)",
+            "{braces}",
+            "[brackets]",
+            "pipe|char",
+            "back\\slash",
+            "key:value",
+            "tilde~char",
+            "???", // Only special chars
+            "a?b*c+d", // Mixed
+        ]
+
+        for query in queriesWithSpecialChars {
+            // Should not throw FTS5 syntax error
+            _ = try await search.search(query: query, options: .default)
+        }
+    }
 }
 
 // MARK: - Semantic Search Tests

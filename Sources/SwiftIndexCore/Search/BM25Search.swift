@@ -124,12 +124,21 @@ public actor BM25Search: SearchEngine {
         let terms = query
             .components(separatedBy: .whitespaces)
             .filter { !$0.isEmpty }
-            .map { term -> String in
-                // Escape special FTS5 characters
-                let escaped = term
-                    .replacingOccurrences(of: "\"", with: "\"\"")
-                // Use prefix matching for partial words
-                if term.count >= 3 {
+            .compactMap { term -> String? in
+                // Remove FTS5 special characters that cause syntax errors
+                // These include: ? * + - ^ ( ) { } [ ] | \ : ~
+                let sanitized = term.filter { char in
+                    !["?", "*", "+", "^", "(", ")", "{", "}", "[", "]", "|", "\\", ":", "~"].contains(String(char))
+                }
+
+                // Skip empty terms after sanitization
+                guard !sanitized.isEmpty else { return nil }
+
+                // Escape double quotes for FTS5
+                let escaped = sanitized.replacingOccurrences(of: "\"", with: "\"\"")
+
+                // Use prefix matching for partial words (3+ chars)
+                if escaped.count >= 3 {
                     return "\"\(escaped)\"*"
                 }
                 return "\"\(escaped)\""
