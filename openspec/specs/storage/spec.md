@@ -127,9 +127,10 @@ The system SHALL support incremental indexing based on file changes.
 
 Change detection:
 
-- File hash (SHA256 of content)
+- File hash (stable SHA-256 of content)
 - Modification timestamp
 - File existence
+- File path for hash lookup (per-path tracking)
 
 #### Scenario: New file detection
 
@@ -151,9 +152,15 @@ Change detection:
 
 #### Scenario: Unchanged file skipped
 
-- **WHEN** file hash matches stored hash
+- **WHEN** file hash for a path matches stored hash for that same path
 - **THEN** file is skipped
 - **AND** no parsing or embedding performed
+
+#### Scenario: Identical content across different paths
+
+- **WHEN** two different paths contain identical content
+- **THEN** each path is tracked independently
+- **AND** skipping applies per path without collisions
 
 ---
 

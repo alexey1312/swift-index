@@ -171,15 +171,41 @@ Both flags require `[search.enhancement]` configuration. See [Search Enhancement
 
 ### `swiftindex init`
 
-Initialize configuration for a project.
+Initialize configuration for a project with an interactive wizard.
 
 ```bash
 swiftindex init
 ```
 
-By default this writes MLX settings and commented examples for other providers.
-If MetalToolchain is missing and MLX is selected, the CLI prompts to install it
-and can fall back to Swift Embeddings defaults.
+In interactive mode, the wizard guides you through:
+
+1. **Configuration mode**: Choose interactive setup or use defaults
+2. **Embedding provider**: MLX (fastest), Swift Embeddings (CPU), Ollama, Voyage, or OpenAI
+3. **Embedding model**: Provider-specific options with "Custom..." fallback
+4. **LLM enhancement**: Optional query expansion and result synthesis
+
+**Flags:**
+
+- `--provider <name>`: Preselect embedding provider (skips wizard step)
+- `--model <name>`: Preselect embedding model (skips wizard step)
+- `--force`: Overwrite existing config without prompting
+
+**Non-interactive mode:**
+
+When stdin is not a TTY (CI/CD, piped input), the command automatically uses defaults without prompts:
+
+```bash
+# CI-friendly: uses MLX defaults
+echo "" | swiftindex init
+
+# With explicit provider
+swiftindex init --provider swift < /dev/null
+```
+
+Environment overrides for testing:
+
+- `SWIFTINDEX_TTY_OVERRIDE=noninteractive`: Force non-interactive mode
+- `SWIFTINDEX_METALTOOLCHAIN_OVERRIDE=present|missing`: Override Metal detection
 
 ### `swiftindex config lint` / `swiftindex config format`
 

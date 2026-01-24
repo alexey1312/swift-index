@@ -601,12 +601,12 @@ struct DescriptionGeneratorTests {
             ),
         ]
 
-        let descriptions = await generator.generateBatch(for: chunks)
+        let result = await generator.generateBatch(for: chunks)
 
-        #expect(descriptions.count == 3)
-        #expect(descriptions["chunk1"] != nil)
-        #expect(descriptions["chunk2"] != nil)
-        #expect(descriptions["chunk3"] != nil)
+        #expect(result.descriptions.count == 3)
+        #expect(result.descriptions["chunk1"] != nil)
+        #expect(result.descriptions["chunk2"] != nil)
+        #expect(result.descriptions["chunk3"] != nil)
     }
 
     @Test("Batch generation handles failures gracefully")
@@ -644,10 +644,10 @@ struct DescriptionGeneratorTests {
             ),
         ]
 
-        let descriptions = await generator.generateBatch(for: chunks)
+        let result = await generator.generateBatch(for: chunks)
 
         // Should have 2 descriptions (one failed)
-        #expect(descriptions.count == 2)
+        #expect(result.descriptions.count == 2)
     }
 
     @Test("Response parsing removes common prefixes")
