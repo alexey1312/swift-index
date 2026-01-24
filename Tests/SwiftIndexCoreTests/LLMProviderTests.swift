@@ -258,10 +258,11 @@ struct SearchEnhancementConfigTests {
         #expect(config.enabled == false)
     }
 
-    @Test("Default utility tier uses claude-code-cli")
+    @Test("Default utility tier uses claude-code-cli with haiku")
     func defaultUtilityProvider() {
         let config = SearchEnhancementConfig.default
         #expect(config.utility.provider == "claude-code-cli")
+        #expect(config.utility.model == "haiku")
         #expect(config.utility.timeout == 30)
     }
 

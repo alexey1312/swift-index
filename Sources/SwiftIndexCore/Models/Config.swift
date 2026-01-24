@@ -237,9 +237,10 @@ public struct LLMTierConfig: Sendable, Equatable {
     }
 
     /// Default utility tier (fast operations).
+    /// Uses Haiku for cost efficiency — sufficient for short descriptions.
     public static let defaultUtility = LLMTierConfig(
         provider: "claude-code-cli",
-        model: nil,
+        model: "haiku",
         timeout: 30
     )
 

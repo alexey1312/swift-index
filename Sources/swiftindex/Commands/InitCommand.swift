@@ -242,7 +242,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("[search.enhancement.utility]")
         let resolvedLLMProvider = llmProvider?.configValue ?? "claude-code-cli"
         lines.append("provider = \"\(resolvedLLMProvider)\"  # claude-code-cli | codex-cli | ollama | openai")
-        lines.append("# model = \"claude-haiku-4-5-20251001\"  # optional override")
+        lines.append("# model = \"haiku\"  # default: haiku (cost-efficient for descriptions)")
         lines.append("timeout = 30")
         lines.append("")
         lines.append("# Synthesis tier - deep analysis (result summarization)")
