@@ -233,7 +233,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("# default_path_filter = \"Sources/**\"     # default --path-filter (glob syntax)")
         lines.append("")
         lines.append("# LLM-powered search enhancements (query expansion, result synthesis)")
-        lines.append("# Requires LLM provider access (claude-code-cli, codex-cli, ollama, or openai)")
+        lines.append("# Requires LLM provider access (mlx, claude-code-cli, codex-cli, ollama, or openai)")
         lines.append("[search.enhancement]")
         let llmEnabled = llmProvider != nil
         lines.append("enabled = \(llmEnabled ? "true" : "false")  # opt-in - enable for LLM-powered features")
@@ -247,7 +247,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("")
         lines.append("# Synthesis tier - deep analysis (result summarization)")
         lines.append("[search.enhancement.synthesis]")
-        lines.append("provider = \"\(resolvedLLMProvider)\"")
+        lines.append("provider = \"\(resolvedLLMProvider)\"  # mlx | claude-code-cli | codex-cli | ollama | openai")
         lines.append("# model = \"claude-sonnet-4-20250514\"  # optional override")
         lines.append("timeout = 120")
         lines.append("")
