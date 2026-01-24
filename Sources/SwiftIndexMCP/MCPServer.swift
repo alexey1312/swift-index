@@ -39,9 +39,6 @@ public actor MCPServer {
         // Use YYJSON for faster JSON processing with RFC 8259 strict mode
         encoder = YYJSONEncoder()
         decoder = YYJSONDecoder()
-
-        // Register default tools
-        initializeDefaultTools()
     }
 
     // MARK: - Tool Registration
@@ -56,10 +53,6 @@ public actor MCPServer {
         tools.removeValue(forKey: name)
     }
 
-    private nonisolated func initializeDefaultTools() {
-        // Default tools are registered lazily via registerTool
-    }
-
     private func registerDefaultTools() {
         tools["index_codebase"] = IndexCodebaseTool()
         tools["search_code"] = SearchCodeTool()
@@ -72,6 +65,9 @@ public actor MCPServer {
 
     /// Run the MCP server, reading from stdin and writing to stdout.
     public func run() async {
+        // Register default tools (must be in async context for actor isolation)
+        registerDefaultTools()
+
         logger.info("SwiftIndex MCP server starting...")
 
         // Read lines from stdin
