@@ -47,6 +47,16 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             partial.geminiAPIKey = geminiKey
         }
 
+        if let anthropicKey = ProcessInfo.processInfo.environment["SWIFTINDEX_ANTHROPIC_API_KEY"] {
+            partial.anthropicAPIKey = anthropicKey
+        }
+
+        if partial.anthropicAPIKey == nil,
+           let anthropicKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
+        {
+            partial.anthropicAPIKey = anthropicKey
+        }
+
         if let logLevel = ProcessInfo.processInfo.environment["SWIFTINDEX_LOG_LEVEL"] {
             partial.logLevel = logLevel
         }

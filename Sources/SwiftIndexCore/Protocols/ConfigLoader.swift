@@ -60,6 +60,7 @@ public struct PartialConfig: Sendable, Equatable {
     public var voyageAPIKey: String?
     public var openAIAPIKey: String?
     public var geminiAPIKey: String?
+    public var anthropicAPIKey: String?
 
     // MARK: - Performance
 
@@ -104,6 +105,7 @@ public struct PartialConfig: Sendable, Equatable {
         voyageAPIKey: String? = nil,
         openAIAPIKey: String? = nil,
         geminiAPIKey: String? = nil,
+        anthropicAPIKey: String? = nil,
         maxConcurrentTasks: Int? = nil,
         watchDebounceMs: Int? = nil,
         logLevel: String? = nil,
@@ -135,6 +137,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.voyageAPIKey = voyageAPIKey
         self.openAIAPIKey = openAIAPIKey
         self.geminiAPIKey = geminiAPIKey
+        self.anthropicAPIKey = anthropicAPIKey
         self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
