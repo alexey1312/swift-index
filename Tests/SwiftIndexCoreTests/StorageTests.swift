@@ -638,4 +638,57 @@ struct USearchVectorStoreTests {
 
         #expect(retrieved == nil)
     }
+
+    // MARK: - Static Dimension Utilities
+
+    @Test("existingDimension returns nil for non-existent index")
+    func existingDimensionNonExistent() {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("vectors.usearch").path
+
+        let dimension = USearchVectorStore.existingDimension(at: path)
+
+        #expect(dimension == nil)
+    }
+
+    @Test("existingDimension returns correct dimension for saved index")
+    func existingDimensionSavedIndex() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let path = tempDir.appendingPathComponent("vectors.usearch").path
+        let store = try USearchVectorStore(dimension: 384, path: path)
+        try await store.add(id: "test", vector: [Float](repeating: 0.1, count: 384))
+        try await store.save()
+
+        let detectedDimension = USearchVectorStore.existingDimension(at: path)
+
+        #expect(detectedDimension == 384)
+    }
+
+    @Test("deleteIndex removes both files")
+    func deleteIndexRemovesBothFiles() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let path = tempDir.appendingPathComponent("vectors.usearch").path
+        let mappingPath = path + ".mapping"
+
+        let store = try USearchVectorStore(dimension: 128, path: path)
+        try await store.add(id: "test", vector: [Float](repeating: 0.1, count: 128))
+        try await store.save()
+
+        #expect(FileManager.default.fileExists(atPath: path))
+        #expect(FileManager.default.fileExists(atPath: mappingPath))
+
+        try USearchVectorStore.deleteIndex(at: path)
+
+        #expect(!FileManager.default.fileExists(atPath: path))
+        #expect(!FileManager.default.fileExists(atPath: mappingPath))
+    }
 }

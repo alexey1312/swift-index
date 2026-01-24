@@ -405,6 +405,51 @@ public actor USearchVectorStore: VectorStore {
     }
 }
 
+// MARK: - Static Dimension Utilities
+
+public extension USearchVectorStore {
+    /// Check the dimension of an existing index at the given path.
+    ///
+    /// Returns `nil` if no index exists or dimension is not stored.
+    ///
+    /// - Parameter path: Path to the `.usearch` index file (without `.mapping` extension).
+    /// - Returns: The stored dimension, or nil if unavailable.
+    static func existingDimension(at path: String) -> Int? {
+        let mappingPath = path + ".mapping"
+        guard FileManager.default.fileExists(atPath: mappingPath),
+              let data = try? Data(contentsOf: URL(fileURLWithPath: mappingPath)),
+              let info = try? JSONCodec.decode(VectorStoreDimensionInfo.self, from: data)
+        else {
+            return nil
+        }
+        return info.dimension
+    }
+
+    /// Delete existing index files at the given path.
+    ///
+    /// Removes both the `.usearch` index file and the `.mapping` file.
+    ///
+    /// - Parameter path: Path to the `.usearch` index file.
+    /// - Throws: If file deletion fails.
+    static func deleteIndex(at path: String) throws {
+        let mappingPath = path + ".mapping"
+        let fm = FileManager.default
+        if fm.fileExists(atPath: path) {
+            try fm.removeItem(atPath: path)
+        }
+        if fm.fileExists(atPath: mappingPath) {
+            try fm.removeItem(atPath: mappingPath)
+        }
+    }
+}
+
+// MARK: - VectorStoreDimensionInfo
+
+/// Minimal struct for reading dimension from mapping file.
+private struct VectorStoreDimensionInfo: Codable {
+    let dimension: Int?
+}
+
 // MARK: - VectorStoreMapping
 
 /// Serializable mapping for index persistence.

@@ -356,17 +356,16 @@ struct IndexCommand: AsyncParsableCommand {
         indexPath: String,
         embeddingProvider: EmbeddingProviderChain
     ) async throws -> IndexManager {
-        let indexManager = try IndexManager(
-            directory: indexPath,
-            dimension: embeddingProvider.dimension
-        )
-
-        if !force {
-            try await indexManager.load()
-        } else {
-            try await indexManager.clear()
+        // Check for dimension mismatch on --force to prevent segfault from incompatible USearch index
+        if force {
+            let vectorPath = (indexPath as NSString).appendingPathComponent("vectors.usearch")
+            if let old = USearchVectorStore.existingDimension(at: vectorPath), old != embeddingProvider.dimension {
+                print("Dimension changed (\(old) → \(embeddingProvider.dimension)), recreating index...")
+                try USearchVectorStore.deleteIndex(at: vectorPath)
+            }
         }
-
+        let indexManager = try IndexManager(directory: indexPath, dimension: embeddingProvider.dimension)
+        if !force { try await indexManager.load() } else { try await indexManager.clear() }
         return indexManager
     }
 
