@@ -39,7 +39,7 @@ timeout = 120
 
 ## LLM Providers
 
-SwiftIndex supports five LLM providers:
+SwiftIndex supports several LLM providers:
 
 ### MLX (`mlx`)
 
@@ -159,6 +159,43 @@ timeout = 30
 - `gpt-4o-mini` - Fast, cost-effective (recommended for utility tier)
 - `gpt-4o` - Most capable (recommended for synthesis tier)
 
+### Anthropic (`anthropic`)
+
+Uses the Anthropic Messages API directly for fast, low-latency operations. **Much faster than `claude-code-cli`** (5-10s vs 35-40s) because it bypasses CLI initialization overhead.
+
+**Requirements:**
+
+- `ANTHROPIC_API_KEY` environment variable set
+
+**Configuration:**
+
+```toml
+[search.enhancement.utility]
+provider = "anthropic"
+model = "claude-haiku-4-5-20251001"  # fast, efficient (default)
+timeout = 30
+
+[search.enhancement.synthesis]
+provider = "anthropic"
+model = "claude-sonnet-4-5-20250929"  # more capable
+timeout = 60
+```
+
+**Supported Models:**
+
+- `claude-haiku-4-5-20251001` - Fastest, efficient (recommended for utility tier)
+- `claude-sonnet-4-5-20250929` - Best balance (recommended for synthesis tier)
+- `claude-opus-4-5-20251101` - Most capable overall
+
+**Performance Comparison:**
+
+| Provider          | Typical Latency |
+| ----------------- | --------------- |
+| `claude-code-cli` | ~35-40s         |
+| `anthropic`       | ~5-10s          |
+
+The `anthropic` provider is recommended over `claude-code-cli` when direct API access is acceptable, as it significantly reduces search enhancement latency.
+
 ### Gemini (`gemini`) / Gemini CLI (`gemini-cli`)
 
 Uses Google's Gemini models via API or CLI.
@@ -183,16 +220,20 @@ timeout = 30
 
 ## Provider Selection Guide
 
-| Use Case              | Recommended Provider | Model           |
-| --------------------- | -------------------- | --------------- |
-| Privacy-first (local) | `mlx`                | `Qwen3-4B-4bit` |
-| Offline usage         | `mlx`                | `Qwen3-4B-4bit` |
-| Claude Code user      | `claude-code-cli`    | default         |
-| Local server (non-M1) | `ollama`             | `llama3.2`      |
-| High availability     | `openai`             | `gpt-4o-mini`   |
-| Codex user            | `codex-cli`          | default         |
+| Use Case               | Recommended Provider | Model                       |
+| ---------------------- | -------------------- | --------------------------- |
+| Privacy-first (local)  | `mlx`                | `Qwen3-4B-4bit`             |
+| Offline usage          | `mlx`                | `Qwen3-4B-4bit`             |
+| Claude models (fast)   | `anthropic`          | `claude-haiku-4-5-20251001` |
+| Claude models (legacy) | `claude-code-cli`    | default                     |
+| Local server (non-M1)  | `ollama`             | `llama3.2`                  |
+| High availability      | `openai`             | `gpt-4o-mini`               |
+| Codex user             | `codex-cli`          | default                     |
 
-**Note:** MLX is recommended for Apple Silicon users who want fully local, private LLM operations with no cloud dependency.
+**Notes:**
+
+- MLX is recommended for Apple Silicon users who want fully local, private LLM operations with no cloud dependency.
+- `anthropic` is recommended over `claude-code-cli` when direct API access is acceptable, as it significantly reduces latency (5-10s vs 35-40s).
 
 ## Timeout Configuration
 
@@ -314,12 +355,16 @@ The MCP response includes additional fields:
 
 ### API Key Missing
 
-**Error:** `API key required for openai`
+**Error:** `API key required for openai` or `API key required for Anthropic`
 
-**Solution:** Set the environment variable:
+**Solution:** Set the appropriate environment variable:
 
 ```bash
+# For OpenAI provider
 export OPENAI_API_KEY=sk-...
+
+# For Anthropic provider
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ## Disabling Enhancement

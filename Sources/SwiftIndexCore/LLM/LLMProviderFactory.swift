@@ -16,6 +16,7 @@ public enum LLMProviderFactory {
 
     /// Known provider identifiers.
     public enum ProviderID: String, CaseIterable {
+        case anthropic
         case claudeCodeCLI = "claude-code-cli"
         case codexCLI = "codex-cli"
         case ollama
@@ -32,11 +33,13 @@ public enum LLMProviderFactory {
     /// - Parameters:
     ///   - config: The tier configuration.
     ///   - openAIKey: OpenAI API key (for openai provider).
+    ///   - anthropicKey: Anthropic API key (for anthropic provider).
     /// - Returns: An LLM provider instance.
     /// - Throws: `LLMError.notAvailable` if provider is unknown.
     public static func createProvider(
         from config: LLMTierConfig,
-        openAIKey: String? = nil
+        openAIKey: String? = nil,
+        anthropicKey: String? = nil
     ) throws -> any LLMProvider {
         guard let providerID = ProviderID(rawValue: config.provider) else {
             throw LLMError.notAvailable(
@@ -48,7 +51,8 @@ public enum LLMProviderFactory {
         return createProvider(
             id: providerID,
             model: config.model,
-            openAIKey: openAIKey
+            openAIKey: openAIKey,
+            anthropicKey: anthropicKey
         )
     }
 
@@ -58,13 +62,22 @@ public enum LLMProviderFactory {
     ///   - id: The provider identifier.
     ///   - model: Optional model override.
     ///   - openAIKey: OpenAI API key (for openai provider).
+    ///   - anthropicKey: Anthropic API key (for anthropic provider).
     /// - Returns: An LLM provider instance.
     public static func createProvider(
         id: ProviderID,
         model: String? = nil,
-        openAIKey: String? = nil
+        openAIKey: String? = nil,
+        anthropicKey: String? = nil
     ) -> any LLMProvider {
         switch id {
+        case .anthropic:
+            let key = anthropicKey ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+            return AnthropicLLMProvider(
+                apiKey: key,
+                defaultModel: .haiku
+            )
+
         case .claudeCodeCLI:
             return ClaudeCodeCLIProvider(defaultModel: model)
 
@@ -103,18 +116,20 @@ public enum LLMProviderFactory {
     ///   - config: The search enhancement configuration.
     ///   - tier: Which tier to create the chain for.
     ///   - openAIKey: OpenAI API key.
+    ///   - anthropicKey: Anthropic API key.
     /// - Returns: An LLM provider chain with fallbacks.
     public static func createChain(
         from config: SearchEnhancementConfig,
         tier: Tier,
-        openAIKey: String? = nil
+        openAIKey: String? = nil,
+        anthropicKey: String? = nil
     ) -> LLMProviderChain {
         let tierConfig = tier == .utility ? config.utility : config.synthesis
 
         // Create primary provider
         let primary: any LLMProvider
         do {
-            primary = try createProvider(from: tierConfig, openAIKey: openAIKey)
+            primary = try createProvider(from: tierConfig, openAIKey: openAIKey, anthropicKey: anthropicKey)
         } catch {
             // Fall back to a default provider
             primary = ClaudeCodeCLIProvider()

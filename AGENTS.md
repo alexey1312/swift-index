@@ -121,6 +121,7 @@ TOON is the default format for both CLI and MCP server.
 - `/LLM` — LLM providers and search enhancement features
   - `LLMProvider` protocol, `LLMMessage`, `LLMProviderChain`
   - `MLXLLMProvider` — fully local LLM on Apple Silicon (no cloud required)
+  - `AnthropicLLMProvider` — direct Anthropic API access (fast, ~5-10s vs CLI's ~35-40s)
   - `ClaudeCodeCLIProvider`, `CodexCLIProvider`, `OllamaLLMProvider`, `OpenAILLMProvider`
   - `QueryExpander` — LLM-powered query expansion
   - `ResultSynthesizer` — multi-result summarization
@@ -306,7 +307,7 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 enabled = false  # opt-in
 
 [search.enhancement.utility]
-provider = "mlx"  # mlx | claude-code-cli | codex-cli | ollama | openai
+provider = "mlx"  # mlx | anthropic | claude-code-cli | codex-cli | ollama | openai
 model = "mlx-community/Qwen3-4B-4bit"  # optional (default: Qwen3-4B-4bit)
 timeout = 60
 
@@ -329,5 +330,6 @@ First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~
 | Variable                        | Description                 |
 | ------------------------------- | --------------------------- |
 | `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai |
+| `ANTHROPIC_API_KEY`             | Anthropic API key           |
 | `VOYAGE_API_KEY`                | Voyage AI key               |
 | `OPENAI_API_KEY`                | OpenAI key                  |
