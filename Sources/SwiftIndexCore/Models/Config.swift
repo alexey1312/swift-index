@@ -331,8 +331,23 @@ public extension Config {
         _ value: T?,
         to keyPath: WritableKeyPath<Config, T>
     ) {
-        if let value {
-            self[keyPath: keyPath] = value
+        guard let value else { return }
+        // For optional types (T = Optional<X>), check if the inner value is nil
+        // This handles the double-optional case where value is .some(nil)
+        if let optional = value as? (any OptionalProtocol), optional.isNil {
+            return
         }
+        self[keyPath: keyPath] = value
     }
+}
+
+// MARK: - OptionalProtocol
+
+/// Protocol to detect nil values in nested optionals.
+private protocol OptionalProtocol {
+    var isNil: Bool { get }
+}
+
+extension Optional: OptionalProtocol {
+    var isNil: Bool { self == nil }
 }
