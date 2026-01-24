@@ -414,7 +414,7 @@ private struct InitWizard {
         return InitSelections(
             embeddingProvider: validatedProvider,
             embeddingModel: finalModel,
-            llmProvider: nil
+            llmProvider: .mlx // Default to MLX for LLM enhancement
         )
     }
 
@@ -656,7 +656,7 @@ enum InitMode: CaseIterable, CustomStringConvertible {
         case .interactive:
             "Configure interactively"
         case .defaults:
-            "Use defaults (MLX + no LLM enhancement)"
+            "Use defaults (MLX + MLX LLM enhancement)"
         }
     }
 }

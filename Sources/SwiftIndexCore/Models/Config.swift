@@ -196,7 +196,7 @@ public struct SearchEnhancementConfig: Sendable, Equatable {
     public var synthesis: LLMTierConfig
 
     public init(
-        enabled: Bool = false,
+        enabled: Bool = true,
         utility: LLMTierConfig = .defaultUtility,
         synthesis: LLMTierConfig = .defaultSynthesis
     ) {

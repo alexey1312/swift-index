@@ -175,10 +175,10 @@ struct IndexCommand: AsyncParsableCommand {
                     maxConcurrentTasks: maxConcurrentTasks,
                     forceReindex: forceReindex,
                     logger: logger,
-                    reportProgress: { processed, inFlight, total in
+                    reportProgress: { processed, _, total in
                         let safeTotal = max(total, 1)
-                        let visible = min(processed + inFlight, safeTotal)
-                        updateProgress(Double(visible) / Double(safeTotal))
+                        // Use only processed count for smooth, accurate progress from 0% to 100%
+                        updateProgress(Double(processed) / Double(safeTotal))
                     }
                 )
             )
@@ -528,13 +528,7 @@ struct IndexCommand: AsyncParsableCommand {
     ) -> DescriptionGenerator? {
         // Use the utility tier provider for description generation (fast)
         guard config.searchEnhancement.enabled else {
-            // If enhancement is not enabled, try to use a default provider
-            let provider = ClaudeCodeCLIProvider()
-            return DescriptionGenerator(
-                provider: provider,
-                batchSize: 5,
-                timeout: 30
-            )
+            return nil
         }
 
         do {
