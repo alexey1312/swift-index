@@ -141,13 +141,15 @@ public actor HubModelManager {
 
         // Start new download task
         let task = Task<URL, Error> {
-            try await downloadModel(model, progress: progress)
+            progress?(0.0)
+            return try await downloadModel(model, progress: progress)
         }
 
         activeDownloads[model] = task
 
         do {
             let result = try await task.value
+            progress?(1.0)
             activeDownloads[model] = nil
             return result
         } catch {
@@ -252,7 +254,6 @@ public actor HubModelManager {
                 progress?(downloadProgress.fractionCompleted)
             }
 
-            progress?(1.0)
             return modelDir
         } catch {
             throw ProviderError.downloadFailed(

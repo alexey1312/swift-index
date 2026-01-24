@@ -47,6 +47,7 @@ let package = Package(
         // CLI
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.9.0"),
+        .package(url: "https://github.com/tuist/Noora.git", from: "0.54.0"),
 
         // Async utilities
         .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.0"),
@@ -128,6 +129,7 @@ let package = Package(
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ToonFormat", package: "toon-swift"),
+                .product(name: "Noora", package: "Noora"),
             ],
             path: "Sources/swiftindex"
         ),

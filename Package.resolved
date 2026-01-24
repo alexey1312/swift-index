@@ -1,5 +1,5 @@
 {
-  "originHash" : "9fca60d6c75549fc990d28ecd5b4aaa374fef7da41b5919bbb08fa0a1da34685",
+  "originHash" : "d2b1c5d159a3f4d23b0cac32d5879fb5c1d0d8d0449dae745e9576b05ce09a48",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -26,6 +26,33 @@
       "state" : {
         "branch" : "main",
         "revision" : "77ebb037ab0937e0337dbfc222024907cabfc93e"
+      }
+    },
+    {
+      "identity" : "noora",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tuist/Noora.git",
+      "state" : {
+        "revision" : "bf2222995703f2a2500a2bbb8153fdb5d3a851ed",
+        "version" : "0.54.0"
+      }
+    },
+    {
+      "identity" : "path",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tuist/path",
+      "state" : {
+        "revision" : "7c74ac435e03a927c3a73134c48b61e60221abcb",
+        "version" : "0.3.8"
+      }
+    },
+    {
+      "identity" : "rainbow",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/onevcat/Rainbow",
+      "state" : {
+        "revision" : "cdf146ae671b2624917648b61c908d1244b98ca1",
+        "version" : "4.2.1"
       }
     },
     {

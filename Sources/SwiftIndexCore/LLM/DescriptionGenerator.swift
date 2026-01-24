@@ -21,6 +21,12 @@ public actor DescriptionGenerator {
     /// The LLM provider for description generation.
     private let provider: any LLMProvider
 
+    /// Human-readable provider name (for diagnostics).
+    public nonisolated let providerName: String
+
+    /// Provider identifier (for diagnostics).
+    public nonisolated let providerId: String
+
     /// Batch size for parallel processing.
     private let batchSize: Int
 
@@ -41,6 +47,8 @@ public actor DescriptionGenerator {
         timeout: TimeInterval = 30
     ) {
         self.provider = provider
+        providerName = provider.name
+        providerId = provider.id
         self.batchSize = batchSize
         self.timeout = timeout
     }
@@ -70,14 +78,16 @@ public actor DescriptionGenerator {
     /// Generates descriptions for multiple chunks in batches.
     ///
     /// Processes chunks in parallel batches for efficiency.
-    /// Chunks that fail generation will have `nil` descriptions.
+    /// Chunks that fail generation will be counted as failures.
     ///
     /// - Parameter chunks: The code chunks to describe.
-    /// - Returns: Dictionary mapping chunk IDs to their descriptions.
+    /// - Returns: Result containing descriptions and failure details.
     public func generateBatch(
         for chunks: [CodeChunk]
-    ) async -> [String: String] {
+    ) async -> DescriptionBatchResult {
         var results: [String: String] = [:]
+        var failures = 0
+        var firstError: String?
 
         // Process in batches
         for batchStart in stride(from: 0, to: chunks.count, by: batchSize) {
@@ -86,22 +96,22 @@ public actor DescriptionGenerator {
 
             // Process batch in parallel
             let batchResults = await withTaskGroup(
-                of: (String, String?).self,
-                returning: [(String, String?)].self
+                of: (String, String?, String?).self,
+                returning: [(String, String?, String?)].self
             ) { group in
                 for chunk in batch {
                     group.addTask {
                         do {
                             let description = try await self.generate(for: chunk)
-                            return (chunk.id, description)
+                            return (chunk.id, description, nil)
                         } catch {
                             // Skip chunks that fail - don't halt the batch
-                            return (chunk.id, nil)
+                            return (chunk.id, nil, error.localizedDescription)
                         }
                     }
                 }
 
-                var collected: [(String, String?)] = []
+                var collected: [(String, String?, String?)] = []
                 for await result in group {
                     collected.append(result)
                 }
@@ -109,14 +119,23 @@ public actor DescriptionGenerator {
             }
 
             // Collect results from batch
-            for (chunkId, description) in batchResults {
+            for (chunkId, description, error) in batchResults {
                 if let description {
                     results[chunkId] = description
+                } else {
+                    failures += 1
+                    if firstError == nil, let error {
+                        firstError = error
+                    }
                 }
             }
         }
 
-        return results
+        return DescriptionBatchResult(
+            descriptions: results,
+            failures: failures,
+            firstError: firstError
+        )
     }
 
     /// Checks if description generation is available.
@@ -198,6 +217,14 @@ public actor DescriptionGenerator {
 
         return description
     }
+}
+
+// MARK: - DescriptionBatchResult
+
+public struct DescriptionBatchResult: Sendable {
+    public let descriptions: [String: String]
+    public let failures: Int
+    public let firstError: String?
 }
 
 // MARK: - System Prompts

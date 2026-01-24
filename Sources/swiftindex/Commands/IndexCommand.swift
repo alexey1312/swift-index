@@ -57,8 +57,15 @@ struct IndexCommand: AsyncParsableCommand {
 
     mutating func run() async throws {
         let verboseFlag = verbose
+        let terminal = Terminal()
+        let progressRenderer = StickyProgressRenderer(terminal: terminal)
+        let descriptionState = DescriptionGenerationState()
         LoggingSystem.bootstrap { label in
-            var handler = StreamLogHandler.standardError(label: label)
+            var handler = ProgressLogHandler(
+                label: label,
+                progressRenderer: progressRenderer,
+                terminal: terminal
+            )
             handler.logLevel = verboseFlag ? .debug : .info
             return handler
         }
@@ -127,6 +134,7 @@ struct IndexCommand: AsyncParsableCommand {
             parser: parser,
             embeddingProvider: embeddingProvider,
             descriptionGenerator: descriptionGenerator,
+            descriptionState: descriptionState,
             logger: logger
         )
 
@@ -141,7 +149,8 @@ struct IndexCommand: AsyncParsableCommand {
         try await ui.progressBarStep(
             message: "Indexing files",
             successMessage: "Indexing completed",
-            errorMessage: "Indexing failed"
+            errorMessage: "Indexing failed",
+            renderer: progressRenderer
         ) { updateProgress in
             fatalError = try await IndexCommand.runIndexingTasks(
                 files: files,
@@ -619,12 +628,26 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Generate descriptions if enabled
         var descriptionsGenerated = 0
-        if let generator = context.descriptionGenerator {
-            let descriptions = await generator.generateBatch(for: chunks)
-            if !descriptions.isEmpty {
+        if let generator = context.descriptionGenerator, await context.descriptionState.isActive() {
+            let batchResult = await generator.generateBatch(for: chunks)
+            if batchResult.failures > 0 {
+                let reason = batchResult.firstError ?? "Unknown error"
+                let didDisable = await context.descriptionState.disable(reason: reason)
+                if didDisable {
+                    var metadata: Logger.Metadata = [
+                        "provider": "\(generator.providerName)",
+                        "error": "\(reason)",
+                    ]
+                    if let hint = descriptionFailureHint(for: reason) {
+                        metadata["hint"] = "\(hint)"
+                    }
+                    context.logger.warning("Description generation disabled after failure", metadata: metadata)
+                }
+            }
+            if !batchResult.descriptions.isEmpty {
                 // Create new chunks with descriptions
                 chunks = chunks.map { chunk in
-                    if let description = descriptions[chunk.id] {
+                    if let description = batchResult.descriptions[chunk.id] {
                         return CodeChunk(
                             id: chunk.id,
                             path: chunk.path,
@@ -647,7 +670,7 @@ struct IndexCommand: AsyncParsableCommand {
                     }
                     return chunk
                 }
-                descriptionsGenerated = descriptions.count
+                descriptionsGenerated = batchResult.descriptions.count
             }
         }
 
@@ -685,6 +708,26 @@ struct IndexCommand: AsyncParsableCommand {
         let hash = hasher.finalize()
         return String(format: "%016x", hash)
     }
+
+    private static func descriptionFailureHint(for reason: String) -> String? {
+        let lower = reason.lowercased()
+        if lower.contains("rate limited") || lower.contains("rate limit") {
+            return "Provider rate-limited; check quota or retry later."
+        }
+        if lower.contains("api key") {
+            return "Missing or invalid API key."
+        }
+        if lower.contains("cli tool not found") || lower.contains("not found: claude") {
+            return "CLI tool not available in PATH."
+        }
+        if lower.contains("process failed") {
+            return "Provider process failed; check auth/credits or CLI status."
+        }
+        if lower.contains("not available") {
+            return "Provider unavailable; check configuration and connectivity."
+        }
+        return nil
+    }
 }
 
 // MARK: - Helper Types
@@ -694,7 +737,104 @@ private struct IndexingContext: Sendable {
     let parser: HybridParser
     let embeddingProvider: EmbeddingProviderChain
     let descriptionGenerator: DescriptionGenerator?
+    let descriptionState: DescriptionGenerationState
     let logger: Logger
+}
+
+private final class StickyProgressRenderer: Rendering, @unchecked Sendable {
+    private let renderer = Renderer()
+    private let terminal: Terminaling
+    private let lock = NSLock()
+    private var lastProgressLine: String?
+
+    init(terminal: Terminaling) {
+        self.terminal = terminal
+    }
+
+    func render(_ input: String, standardPipeline: StandardPipelining) {
+        lock.lock()
+        lastProgressLine = input
+        renderer.render(input, standardPipeline: standardPipeline)
+        lock.unlock()
+    }
+
+    func log(_ line: String, standardPipeline: StandardPipelining) {
+        lock.lock()
+        if terminal.isInteractive, lastProgressLine != nil {
+            renderer.render("", standardPipeline: standardPipeline)
+        }
+        standardPipeline.write(content: line + "\n")
+        if terminal.isInteractive, let lastProgressLine {
+            renderer.render(lastProgressLine, standardPipeline: standardPipeline)
+        }
+        lock.unlock()
+    }
+}
+
+private struct ProgressLogHandler: LogHandler, @unchecked Sendable {
+    private let label: String
+    private let progressRenderer: StickyProgressRenderer
+    private let terminal: Terminaling
+    private let dateFormatter: DateFormatter
+    private let dateLock = NSLock()
+
+    var logLevel: Logger.Level = .info
+    var metadata: Logger.Metadata = [:]
+
+    init(label: String, progressRenderer: StickyProgressRenderer, terminal: Terminaling) {
+        self.label = label
+        self.progressRenderer = progressRenderer
+        self.terminal = terminal
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ssZ"
+        dateFormatter = formatter
+    }
+
+    subscript(metadataKey key: String) -> Logger.Metadata.Value? {
+        get { metadata[key] }
+        set { metadata[key] = newValue }
+    }
+
+    // swiftlint:disable:next function_parameter_count
+    func log(
+        level: Logger.Level,
+        message: Logger.Message,
+        metadata: Logger.Metadata?,
+        source: String,
+        file: String,
+        function: String,
+        line: UInt
+    ) {
+        guard level >= logLevel else { return }
+
+        dateLock.lock()
+        let timestamp = dateFormatter.string(from: Date())
+        dateLock.unlock()
+        var rendered = "\(timestamp) \(level) \(label): \(message)"
+
+        let combinedMetadata = self.metadata.merging(metadata ?? [:]) { _, new in new }
+        if !combinedMetadata.isEmpty {
+            let meta = combinedMetadata
+                .map { "\($0.key)=\($0.value)" }
+                .sorted()
+                .joined(separator: " ")
+            rendered += " \(meta)"
+        }
+        let pipeline: StandardPipelining = terminal.isInteractive ? StandardOutputPipeline() : StandardErrorPipeline()
+        progressRenderer.log(rendered, standardPipeline: pipeline)
+    }
+}
+
+private actor DescriptionGenerationState {
+    private var isEnabled = true
+
+    func disable(reason _: String) -> Bool {
+        guard isEnabled else { return false }
+        isEnabled = false
+        return true
+    }
+
+    func isActive() -> Bool { isEnabled }
 }
 
 private struct IndexingStats: Sendable {
