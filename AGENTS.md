@@ -112,6 +112,7 @@ MCP server uses TOON format by default for optimal token efficiency.
 ### Module Structure (SwiftIndexCore)
 
 - `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
+  - `TOMLConfigValidator.allowedSections` must be updated when adding new config keys to `TOMLConfig` structs
 - `/Embedding` — Providers (MLX, Ollama, Voyage, OpenAI, SwiftEmbeddings), HubModelManager
 - `/Index` — IndexManager (orchestrates storage and embedding)
 - `/LLM` — LLM providers and search enhancement features

@@ -21,8 +21,19 @@ public struct TOMLConfigDiagnostic: Sendable, Equatable {
 public enum TOMLConfigValidator {
     private static let allowedSections: [String: Set<String>] = [
         "embedding": ["provider", "model", "dimension"],
-        "search": ["semantic_weight", "rrf_k", "multi_hop_enabled", "multi_hop_depth", "output_format", "enhancement"],
-        "indexing": ["exclude", "include_extensions", "max_file_size", "chunk_size", "chunk_overlap"],
+        "search": [
+            "semantic_weight", "rrf_k", "multi_hop_enabled", "multi_hop_depth", "output_format",
+            "limit", "expand_query_by_default", "synthesize_by_default",
+            "default_extensions", "default_path_filter", "enhancement",
+        ],
+        "indexing": [
+            "exclude",
+            "include_extensions",
+            "max_file_size",
+            "chunk_size",
+            "chunk_overlap",
+            "max_concurrent_tasks",
+        ],
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
         "logging": ["level"],
