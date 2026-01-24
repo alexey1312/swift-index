@@ -61,6 +61,8 @@ jobs:
     name: Create Release
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.sha.outputs.macos }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,6 +72,13 @@ jobs:
         with:
           name: swiftindex-macos
           path: artifacts
+
+      - name: Calculate SHA256 before upload
+        id: sha
+        run: |
+          MACOS_SHA=$(sha256sum artifacts/swiftindex-macos.zip | cut -d' ' -f1)
+          echo "macos=${MACOS_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Calculated SHA256: ${MACOS_SHA}"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -88,14 +97,6 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
 
-      - name: Download release asset and calculate SHA256
-        id: sha
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          curl -sL "https://github.com/alexey1312/swift-index/releases/download/v${VERSION}/swiftindex-macos.zip" -o swiftindex-macos.zip
-          MACOS_SHA=$(sha256sum swiftindex-macos.zip | cut -d' ' -f1)
-          echo "macos=${MACOS_SHA}" >> "$GITHUB_OUTPUT"
-
       - name: Checkout Homebrew tap
         uses: actions/checkout@v4
         with:
@@ -106,13 +107,14 @@ jobs:
       - name: Update formula
         run: |
           VERSION="${{ steps.version.outputs.version }}"
-          MACOS_SHA="${{ steps.sha.outputs.macos }}"
+          MACOS_SHA="${{ needs.release.outputs.sha256 }}"
 
           FORMULA="homebrew-swift-index/Formula/swiftindex.rb"
 
           sed -i "s/version \".*\"/version \"${VERSION}\"/" "$FORMULA"
           sed -i "s/sha256 \".*\"/sha256 \"${MACOS_SHA}\"/" "$FORMULA"
 
+          echo "Updated formula with SHA256: ${MACOS_SHA}"
           cat "$FORMULA"
 
       - name: Commit and push
