@@ -37,8 +37,21 @@ public actor MCPServer {
         version: "VERSION_PLACEHOLDER"
     )
 
-    /// Supported protocol version (2025-11-25 spec).
-    public static let protocolVersion = "2025-11-25"
+    /// Supported protocol versions (newest first).
+    /// We support both 2025-11-25 (latest) and 2024-11-05 (Claude Code).
+    public static let supportedProtocolVersions = ["2025-11-25", "2024-11-05"]
+
+    /// Negotiate protocol version with client.
+    /// Returns the highest version supported by both client and server.
+    private static func negotiateProtocolVersion(clientVersion: String) -> String {
+        // If client's version is in our supported list, use it
+        if supportedProtocolVersions.contains(clientVersion) {
+            return clientVersion
+        }
+        // Otherwise, return the latest version we support
+        // (client may support newer versions than us)
+        return supportedProtocolVersions.first ?? "2024-11-05"
+    }
 
     // MARK: - Initialization
 
@@ -184,6 +197,10 @@ public actor MCPServer {
             return JSONRPCResponse(id: request.id, error: .invalidParams("Missing params"))
         }
 
+        // Parse client's protocol version
+        let clientProtocolVersion = params["protocolVersion"]?.stringValue ?? "2024-11-05"
+        let negotiatedVersion = Self.negotiateProtocolVersion(clientVersion: clientProtocolVersion)
+
         // Parse client info if available
         if let clientInfoObj = params["clientInfo"]?.objectValue {
             let info = MCPClientInfo(
@@ -191,20 +208,28 @@ public actor MCPServer {
                 version: clientInfoObj["version"]?.stringValue ?? "unknown"
             )
             clientInfo = info
-            logger.info("Client connected: \(info.name) \(info.version)")
+            logger.info("Client connected: \(info.name) \(info.version), protocol: \(negotiatedVersion)")
         }
 
+        // Mark as initialized after successful initialize request
+        // Per MCP spec, server is ready after responding to initialize
+        // (notifications/initialized is optional confirmation from client)
+        isInitialized = true
+
+        // Only include tasks capability for 2025-11-25 or later
+        let tasksCapability: TasksCapability? = negotiatedVersion >= "2025-11-25" ? TasksCapability(
+            list: TasksListCapability(),
+            cancel: TasksCancelCapability(),
+            requests: TaskRequestsCapability(
+                tools: ToolsCallTaskCapability()
+            )
+        ) : nil
+
         let result = InitializeResult(
-            protocolVersion: Self.protocolVersion,
+            protocolVersion: negotiatedVersion,
             capabilities: MCPServerCapabilities(
                 tools: .init(listChanged: false),
-                tasks: TasksCapability(
-                    list: TasksListCapability(),
-                    cancel: TasksCancelCapability(),
-                    requests: TaskRequestsCapability(
-                        tools: ToolsCallTaskCapability(call: true)
-                    )
-                )
+                tasks: tasksCapability
             ),
             serverInfo: Self.serverInfo
         )

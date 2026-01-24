@@ -67,7 +67,7 @@ struct ServeCommand: AsyncParsableCommand {
             Data("SwiftIndex MCP Server v\(MCPServer.serverInfo.version)\n".utf8)
         )
         FileHandle.standardError.write(
-            Data("Protocol: \(MCPServer.protocolVersion)\n".utf8)
+            Data("Protocol: \(MCPServer.supportedProtocolVersions.first ?? "unknown")\n".utf8)
         )
         FileHandle.standardError.write(
             Data("Listening on stdin/stdout\n".utf8)

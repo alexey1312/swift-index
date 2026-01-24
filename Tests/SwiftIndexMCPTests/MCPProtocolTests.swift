@@ -726,7 +726,7 @@ struct MCPProtocolTests {
                 list: TasksListCapability(),
                 cancel: TasksCancelCapability(),
                 requests: TaskRequestsCapability(
-                    tools: ToolsCallTaskCapability(call: true)
+                    tools: ToolsCallTaskCapability()
                 )
             )
 
@@ -735,7 +735,7 @@ struct MCPProtocolTests {
 
             #expect(decoded.list != nil)
             #expect(decoded.cancel != nil)
-            #expect(decoded.requests?.tools?.call == true)
+            #expect(decoded.requests?.tools != nil)
         }
 
         @Test("TaskManager creates and tracks tasks")

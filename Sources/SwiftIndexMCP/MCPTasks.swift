@@ -150,11 +150,19 @@ public struct TaskRequestsCapability: Codable, Sendable {
 
 /// Capability for task-augmented tool calls.
 public struct ToolsCallTaskCapability: Codable, Sendable {
-    public let call: Bool
+    /// Indicates tools/call can be wrapped as tasks.
+    /// MCP spec requires this to be an empty object, not a boolean.
+    public let call: EmptyObject
 
-    public init(call: Bool = true) {
-        self.call = call
+    public init() {
+        call = EmptyObject()
     }
+}
+
+/// Empty object for MCP capability markers.
+/// Some capabilities are indicated by presence of an empty object `{}`.
+public struct EmptyObject: Codable, Sendable {
+    public init() {}
 }
 
 // MARK: - Task Manager
