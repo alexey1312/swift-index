@@ -91,25 +91,24 @@ public struct GeminiCLIProvider: LLMProvider, Sendable {
                 if process.isRunning { process.terminate() }
             }
 
+            process.terminationHandler = { _ in
+                timeoutTask.cancel()
+                let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+                let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+
+                continuation.resume(returning: ProcessResult(
+                    exitCode: process.terminationStatus,
+                    stdout: stdout,
+                    stderr: stderr
+                ))
+            }
+
             do {
                 try process.run()
             } catch {
                 timeoutTask.cancel()
                 continuation.resume(throwing: LLMError.cliNotFound(tool: executablePath))
-                return
             }
-
-            process.waitUntilExit()
-            timeoutTask.cancel()
-
-            let stdout = String(data: stdoutPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let stderr = String(data: stderrPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-
-            continuation.resume(returning: ProcessResult(
-                exitCode: process.terminationStatus,
-                stdout: stdout,
-                stderr: stderr
-            ))
         }
     }
 }

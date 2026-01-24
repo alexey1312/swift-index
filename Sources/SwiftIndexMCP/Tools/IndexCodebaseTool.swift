@@ -14,6 +14,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
     public init() {
         definition = MCPTool(
             name: "index_codebase",
+            title: "Code Indexer",
             description: """
             Index a Swift codebase for semantic search.
             Parses Swift files, extracts code chunks (functions, types, etc.),
@@ -33,7 +34,13 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                     ]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: ToolAnnotations(
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         )
     }
 

@@ -423,7 +423,7 @@ MCP tools accept `expand_query` and `synthesize` flags. These require
 
 ## MCP Server
 
-SwiftIndex implements [Model Context Protocol](https://modelcontextprotocol.io/) version `2024-11-05` for AI assistant integration.
+SwiftIndex implements [Model Context Protocol](https://modelcontextprotocol.io/) version `2025-11-25` for AI assistant integration.
 
 | Property  | Value                           |
 | --------- | ------------------------------- |
@@ -705,8 +705,11 @@ SwiftIndexCore/
 └── Storage/         # GRDB chunk store + USearch vector store
 
 SwiftIndexMCP/
-├── MCPServer.swift  # MCP server implementation
-└── Tools/           # MCP tool handlers
+├── MCPServer.swift       # MCP server (2025-11-25 spec)
+├── MCPProtocol.swift     # JSON-RPC types and MCP primitives
+├── MCPTasks.swift        # Tasks API for async operations
+├── CancellationToken.swift  # Cooperative cancellation
+└── Tools/                # MCP tool handlers
     ├── SearchCodeTool
     ├── SearchDocsTool
     ├── IndexCodebaseTool

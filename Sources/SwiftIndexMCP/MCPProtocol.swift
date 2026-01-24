@@ -81,6 +81,20 @@ public struct JSONRPCError: Codable, Sendable {
     public static func internalError(_ message: String) -> JSONRPCError {
         JSONRPCError(code: -32603, message: message)
     }
+
+    // MCP-specific error codes (2025-11-25 spec)
+
+    /// Content exceeds size limits.
+    public static let contentTooLarge = JSONRPCError(code: -32001, message: "Content too large")
+
+    /// Request exceeded timeout.
+    public static let requestTimeout = JSONRPCError(code: -32002, message: "Request timeout")
+
+    /// Server is not initialized (received request before initialize).
+    public static let serverNotInitialized = JSONRPCError(code: -32003, message: "Server not initialized")
+
+    /// Request was cancelled via notifications/cancelled.
+    public static let requestCancelled = JSONRPCError(code: -32004, message: "Request cancelled")
 }
 
 /// Request ID can be string, number, or null.
@@ -268,20 +282,23 @@ extension JSONValue: ExpressibleByDictionaryLiteral {
 
 // MARK: - MCP Protocol Types
 
-/// MCP server capabilities.
+/// MCP server capabilities (2025-11-25 spec).
 public struct MCPServerCapabilities: Codable, Sendable {
     public let tools: ToolsCapability?
     public let resources: ResourcesCapability?
     public let prompts: PromptsCapability?
+    public let tasks: TasksCapability?
 
     public init(
         tools: ToolsCapability? = nil,
         resources: ResourcesCapability? = nil,
-        prompts: PromptsCapability? = nil
+        prompts: PromptsCapability? = nil,
+        tasks: TasksCapability? = nil
     ) {
         self.tools = tools
         self.resources = resources
         self.prompts = prompts
+        self.tasks = tasks
     }
 
     public struct ToolsCapability: Codable, Sendable {
@@ -311,14 +328,43 @@ public struct MCPServerCapabilities: Codable, Sendable {
     }
 }
 
-/// MCP server information.
+/// MCP server information (2025-11-25 spec).
 public struct MCPServerInfo: Codable, Sendable {
     public let name: String
     public let version: String
+    public let icons: [MCPIcon]?
 
-    public init(name: String, version: String) {
+    public init(name: String, version: String, icons: [MCPIcon]? = nil) {
         self.name = name
         self.version = version
+        self.icons = icons
+    }
+}
+
+/// Icon for visual identification (2025-11-25 spec).
+public struct MCPIcon: Codable, Sendable {
+    /// Icon source - URL or data URI.
+    public let src: String
+
+    /// MIME type of the icon (e.g., "image/svg+xml", "image/png").
+    public let mimeType: String?
+
+    /// Size specifications (e.g., ["48x48", "any"]).
+    public let sizes: [String]?
+
+    /// Theme variant ("light" or "dark").
+    public let theme: String?
+
+    public init(
+        src: String,
+        mimeType: String? = nil,
+        sizes: [String]? = nil,
+        theme: String? = nil
+    ) {
+        self.src = src
+        self.mimeType = mimeType
+        self.sizes = sizes
+        self.theme = theme
     }
 }
 
@@ -395,16 +441,59 @@ public struct InitializeResult: Codable, Sendable {
 
 // MARK: - Tool Types
 
-/// MCP tool definition.
+/// MCP tool definition (2025-11-25 spec).
 public struct MCPTool: Codable, Sendable {
     public let name: String
+    public let title: String?
     public let description: String
     public let inputSchema: JSONValue
+    public let outputSchema: JSONValue?
+    public let annotations: ToolAnnotations?
 
-    public init(name: String, description: String, inputSchema: JSONValue) {
+    public init(
+        name: String,
+        title: String? = nil,
+        description: String,
+        inputSchema: JSONValue,
+        outputSchema: JSONValue? = nil,
+        annotations: ToolAnnotations? = nil
+    ) {
         self.name = name
+        self.title = title
         self.description = description
         self.inputSchema = inputSchema
+        self.outputSchema = outputSchema
+        self.annotations = annotations
+    }
+}
+
+/// Tool behavior annotations (2025-11-25 spec).
+///
+/// Hints that help clients understand tool behavior without executing them.
+/// All fields are optional and clients should handle missing values gracefully.
+public struct ToolAnnotations: Codable, Sendable {
+    /// If true, the tool does not modify any state and only reads/retrieves data.
+    public let readOnlyHint: Bool?
+
+    /// If true, the tool may perform destructive operations (data loss, irreversible changes).
+    public let destructiveHint: Bool?
+
+    /// If true, calling the tool multiple times with same arguments has same effect as once.
+    public let idempotentHint: Bool?
+
+    /// If true, the tool may interact with external systems beyond the local environment.
+    public let openWorldHint: Bool?
+
+    public init(
+        readOnlyHint: Bool? = nil,
+        destructiveHint: Bool? = nil,
+        idempotentHint: Bool? = nil,
+        openWorldHint: Bool? = nil
+    ) {
+        self.readOnlyHint = readOnlyHint
+        self.destructiveHint = destructiveHint
+        self.idempotentHint = idempotentHint
+        self.openWorldHint = openWorldHint
     }
 }
 
@@ -428,13 +517,19 @@ public struct ToolCallParams: Codable, Sendable {
     }
 }
 
-/// Tool call result.
+/// Tool call result (2025-11-25 spec).
 public struct ToolCallResult: Codable, Sendable {
     public let content: [ToolResultContent]
+    public let structuredContent: JSONValue?
     public let isError: Bool?
 
-    public init(content: [ToolResultContent], isError: Bool? = nil) {
+    public init(
+        content: [ToolResultContent],
+        structuredContent: JSONValue? = nil,
+        isError: Bool? = nil
+    ) {
         self.content = content
+        self.structuredContent = structuredContent
         self.isError = isError
     }
 
@@ -445,13 +540,23 @@ public struct ToolCallResult: Codable, Sendable {
     public static func error(_ message: String) -> ToolCallResult {
         ToolCallResult(content: [.text(TextContent(text: message))], isError: true)
     }
+
+    /// Creates a result with both human-readable text and structured JSON data.
+    public static func structured(_ text: String, data: JSONValue) -> ToolCallResult {
+        ToolCallResult(
+            content: [.text(TextContent(text: text))],
+            structuredContent: data
+        )
+    }
 }
 
-/// Tool result content types.
+/// Tool result content types (2025-11-25 spec).
 public enum ToolResultContent: Codable, Sendable {
     case text(TextContent)
     case image(ImageContent)
+    case audio(AudioContent)
     case resource(ResourceContent)
+    case resourceLink(ResourceLinkContent)
 
     private enum CodingKeys: String, CodingKey {
         case type
@@ -466,8 +571,12 @@ public enum ToolResultContent: Codable, Sendable {
             self = try .text(TextContent(from: decoder))
         case "image":
             self = try .image(ImageContent(from: decoder))
+        case "audio":
+            self = try .audio(AudioContent(from: decoder))
         case "resource":
             self = try .resource(ResourceContent(from: decoder))
+        case "resource_link":
+            self = try .resourceLink(ResourceLinkContent(from: decoder))
         default:
             throw DecodingError.dataCorruptedError(
                 forKey: .type,
@@ -483,9 +592,35 @@ public enum ToolResultContent: Codable, Sendable {
             try content.encode(to: encoder)
         case let .image(content):
             try content.encode(to: encoder)
+        case let .audio(content):
+            try content.encode(to: encoder)
         case let .resource(content):
             try content.encode(to: encoder)
+        case let .resourceLink(content):
+            try content.encode(to: encoder)
         }
+    }
+}
+
+/// Content annotations for targeting and prioritization (2025-11-25 spec).
+public struct ContentAnnotations: Codable, Sendable {
+    /// Target audience for this content (e.g., ["user", "assistant"]).
+    public let audience: [String]?
+
+    /// Priority hint (0.0 = lowest, 1.0 = highest).
+    public let priority: Double?
+
+    /// Last modified timestamp (ISO 8601 format).
+    public let lastModified: String?
+
+    public init(
+        audience: [String]? = nil,
+        priority: Double? = nil,
+        lastModified: String? = nil
+    ) {
+        self.audience = audience
+        self.priority = priority
+        self.lastModified = lastModified
     }
 }
 
@@ -493,10 +628,12 @@ public enum ToolResultContent: Codable, Sendable {
 public struct TextContent: Codable, Sendable {
     public let type: String
     public let text: String
+    public let annotations: ContentAnnotations?
 
-    public init(text: String) {
+    public init(text: String, annotations: ContentAnnotations? = nil) {
         type = "text"
         self.text = text
+        self.annotations = annotations
     }
 }
 
@@ -505,11 +642,13 @@ public struct ImageContent: Codable, Sendable {
     public let type: String
     public let data: String
     public let mimeType: String
+    public let annotations: ContentAnnotations?
 
-    public init(data: String, mimeType: String) {
+    public init(data: String, mimeType: String, annotations: ContentAnnotations? = nil) {
         type = "image"
         self.data = data
         self.mimeType = mimeType
+        self.annotations = annotations
     }
 }
 
@@ -517,10 +656,27 @@ public struct ImageContent: Codable, Sendable {
 public struct ResourceContent: Codable, Sendable {
     public let type: String
     public let resource: ResourceReference
+    public let annotations: ContentAnnotations?
 
-    public init(resource: ResourceReference) {
+    public init(resource: ResourceReference, annotations: ContentAnnotations? = nil) {
         type = "resource"
         self.resource = resource
+        self.annotations = annotations
+    }
+}
+
+/// Audio content for tool results (2025-11-25 spec).
+public struct AudioContent: Codable, Sendable {
+    public let type: String
+    public let data: String
+    public let mimeType: String
+    public let annotations: ContentAnnotations?
+
+    public init(data: String, mimeType: String, annotations: ContentAnnotations? = nil) {
+        type = "audio"
+        self.data = data
+        self.mimeType = mimeType
+        self.annotations = annotations
     }
 }
 
@@ -534,5 +690,30 @@ public struct ResourceReference: Codable, Sendable {
         self.uri = uri
         self.mimeType = mimeType
         self.text = text
+    }
+}
+
+/// Resource link content (2025-11-25 spec).
+public struct ResourceLinkContent: Codable, Sendable {
+    public let type: String
+    public let uri: String
+    public let name: String?
+    public let description: String?
+    public let mimeType: String?
+    public let annotations: ContentAnnotations?
+
+    public init(
+        uri: String,
+        name: String? = nil,
+        description: String? = nil,
+        mimeType: String? = nil,
+        annotations: ContentAnnotations? = nil
+    ) {
+        type = "resource_link"
+        self.uri = uri
+        self.name = name
+        self.description = description
+        self.mimeType = mimeType
+        self.annotations = annotations
     }
 }

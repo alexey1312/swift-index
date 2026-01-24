@@ -13,6 +13,7 @@ public struct SearchDocsTool: MCPToolHandler, Sendable {
     public init() {
         definition = MCPTool(
             name: "search_docs",
+            title: "Documentation Search",
             description: """
             Search indexed documentation using full-text search.
             Searches Markdown files, README sections, and other documentation
@@ -46,7 +47,13 @@ public struct SearchDocsTool: MCPToolHandler, Sendable {
                     ]),
                 ]),
                 "required": .array([.string("query")]),
-            ])
+            ]),
+            annotations: ToolAnnotations(
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         )
     }
 

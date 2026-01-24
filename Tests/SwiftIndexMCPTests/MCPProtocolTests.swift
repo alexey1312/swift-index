@@ -172,7 +172,7 @@ struct MCPProtocolTests {
                 "id": 1,
                 "method": "initialize",
                 "params": {
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": "2025-11-25",
                     "clientInfo": {
                         "name": "test-client",
                         "version": "1.0.0"
@@ -188,7 +188,7 @@ struct MCPProtocolTests {
             #expect(request.jsonrpc == "2.0")
             #expect(request.id == .number(1))
             #expect(request.method == "initialize")
-            #expect(request.params?["protocolVersion"]?.stringValue == "2024-11-05")
+            #expect(request.params?["protocolVersion"]?.stringValue == "2025-11-25")
         }
 
         @Test("Decode notification (no ID)")
@@ -288,6 +288,14 @@ struct MCPProtocolTests {
             #expect(JSONRPCError.internalError.code == -32603)
         }
 
+        @Test("MCP-specific error codes (2025-11-25)")
+        func mcpErrorCodes() {
+            #expect(JSONRPCError.contentTooLarge.code == -32001)
+            #expect(JSONRPCError.requestTimeout.code == -32002)
+            #expect(JSONRPCError.serverNotInitialized.code == -32003)
+            #expect(JSONRPCError.requestCancelled.code == -32004)
+        }
+
         @Test("Custom error messages")
         func customErrorMessages() {
             let methodError = JSONRPCError.methodNotFound("custom_method")
@@ -325,6 +333,51 @@ struct MCPProtocolTests {
             #expect(decoded.description == "A test tool")
         }
 
+        @Test("MCPTool with 2025-11-25 fields")
+        func mcpToolWithNewFields() throws {
+            let tool = MCPTool(
+                name: "search_tool",
+                title: "Search Tool",
+                description: "A search tool",
+                inputSchema: .object(["type": "object"]),
+                outputSchema: .object(["type": "array"]),
+                annotations: ToolAnnotations(
+                    readOnlyHint: true,
+                    destructiveHint: false,
+                    idempotentHint: true,
+                    openWorldHint: false
+                )
+            )
+
+            let data = try JSONCodec.encode(tool)
+            let decoded = try JSONCodec.decode(MCPTool.self, from: data)
+
+            #expect(decoded.name == "search_tool")
+            #expect(decoded.title == "Search Tool")
+            #expect(decoded.annotations?.readOnlyHint == true)
+            #expect(decoded.annotations?.destructiveHint == false)
+            #expect(decoded.annotations?.idempotentHint == true)
+            #expect(decoded.annotations?.openWorldHint == false)
+        }
+
+        @Test("ToolAnnotations encoding")
+        func toolAnnotationsEncoding() throws {
+            let annotations = ToolAnnotations(
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
+
+            let data = try JSONCodec.encode(annotations)
+            let decoded = try JSONCodec.decode(ToolAnnotations.self, from: data)
+
+            #expect(decoded.readOnlyHint == true)
+            #expect(decoded.destructiveHint == false)
+            #expect(decoded.idempotentHint == true)
+            #expect(decoded.openWorldHint == false)
+        }
+
         @Test("ToolCallResult text helper")
         func toolCallResultText() throws {
             let result = ToolCallResult.text("Hello, world!")
@@ -354,10 +407,22 @@ struct MCPProtocolTests {
             }
         }
 
+        @Test("ToolCallResult structured helper")
+        func toolCallResultStructured() throws {
+            let result = ToolCallResult.structured(
+                "Found 5 results",
+                data: .object(["count": .int(5), "items": .array([])])
+            )
+
+            #expect(result.content.count == 1)
+            #expect(result.structuredContent != nil)
+            #expect(result.structuredContent?["count"]?.intValue == 5)
+        }
+
         @Test("InitializeResult encoding")
         func initializeResultEncoding() throws {
             let result = InitializeResult(
-                protocolVersion: "2024-11-05",
+                protocolVersion: "2025-11-25",
                 capabilities: MCPServerCapabilities(
                     tools: .init(listChanged: false)
                 ),
@@ -367,9 +432,75 @@ struct MCPProtocolTests {
             let data = try JSONCodec.encode(result)
             let decoded = try JSONCodec.decode(InitializeResult.self, from: data)
 
-            #expect(decoded.protocolVersion == "2024-11-05")
+            #expect(decoded.protocolVersion == "2025-11-25")
             #expect(decoded.serverInfo.name == "test")
             #expect(decoded.serverInfo.version == "1.0.0")
+        }
+
+        @Test("MCPIcon encoding")
+        func mcpIconEncoding() throws {
+            let icon = MCPIcon(
+                src: "https://example.com/icon.png",
+                mimeType: "image/png",
+                sizes: ["48x48", "96x96"],
+                theme: "light"
+            )
+
+            let data = try JSONCodec.encode(icon)
+            let decoded = try JSONCodec.decode(MCPIcon.self, from: data)
+
+            #expect(decoded.src == "https://example.com/icon.png")
+            #expect(decoded.mimeType == "image/png")
+            #expect(decoded.sizes?.count == 2)
+            #expect(decoded.theme == "light")
+        }
+
+        @Test("ContentAnnotations encoding")
+        func contentAnnotationsEncoding() throws {
+            let annotations = ContentAnnotations(
+                audience: ["user", "assistant"],
+                priority: 0.8,
+                lastModified: "2025-01-24T12:00:00Z"
+            )
+
+            let data = try JSONCodec.encode(annotations)
+            let decoded = try JSONCodec.decode(ContentAnnotations.self, from: data)
+
+            #expect(decoded.audience?.count == 2)
+            #expect(decoded.priority == 0.8)
+            #expect(decoded.lastModified == "2025-01-24T12:00:00Z")
+        }
+
+        @Test("AudioContent encoding")
+        func audioContentEncoding() throws {
+            let audio = AudioContent(
+                data: "base64encodedaudio",
+                mimeType: "audio/wav"
+            )
+
+            let data = try JSONCodec.encode(audio)
+            let decoded = try JSONCodec.decode(AudioContent.self, from: data)
+
+            #expect(decoded.type == "audio")
+            #expect(decoded.data == "base64encodedaudio")
+            #expect(decoded.mimeType == "audio/wav")
+        }
+
+        @Test("ResourceLinkContent encoding")
+        func resourceLinkContentEncoding() throws {
+            let link = ResourceLinkContent(
+                uri: "file:///path/to/resource",
+                name: "Resource",
+                description: "A resource link",
+                mimeType: "text/plain"
+            )
+
+            let data = try JSONCodec.encode(link)
+            let decoded = try JSONCodec.decode(ResourceLinkContent.self, from: data)
+
+            #expect(decoded.type == "resource_link")
+            #expect(decoded.uri == "file:///path/to/resource")
+            #expect(decoded.name == "Resource")
         }
     }
 
@@ -510,6 +641,178 @@ struct MCPProtocolTests {
 
             #expect(dict?["key"] as? String == "value")
             #expect(dict?["number"] as? Int == 42)
+        }
+    }
+
+    // MARK: - Tasks API Tests (2025-11-25 spec)
+
+    @Suite("Tasks API")
+    struct TasksAPITests {
+        @Test("TaskStatus encoding")
+        func taskStatusEncoding() throws {
+            let working = TaskStatus.working
+            let completed = TaskStatus.completed
+            let failed = TaskStatus.failed
+            let cancelled = TaskStatus.cancelled
+            let inputRequired = TaskStatus.inputRequired
+
+            let workingData = try JSONCodec.encode(working)
+            let workingDecoded = try JSONCodec.decode(TaskStatus.self, from: workingData)
+            #expect(workingDecoded == .working)
+
+            let completedData = try JSONCodec.encode(completed)
+            #expect(String(data: completedData, encoding: .utf8)?.contains("completed") == true)
+
+            let failedData = try JSONCodec.encode(failed)
+            #expect(String(data: failedData, encoding: .utf8)?.contains("failed") == true)
+
+            let cancelledData = try JSONCodec.encode(cancelled)
+            #expect(String(data: cancelledData, encoding: .utf8)?.contains("cancelled") == true)
+
+            let inputRequiredData = try JSONCodec.encode(inputRequired)
+            #expect(String(data: inputRequiredData, encoding: .utf8)?.contains("input_required") == true)
+        }
+
+        @Test("MCPTask encoding")
+        func mcpTaskEncoding() throws {
+            let task = MCPTask(
+                taskId: "test-123",
+                status: .working,
+                statusMessage: "Processing...",
+                ttl: 60000,
+                pollInterval: 1000
+            )
+
+            let data = try JSONCodec.encode(task)
+            let decoded = try JSONCodec.decode(MCPTask.self, from: data)
+
+            #expect(decoded.taskId == "test-123")
+            #expect(decoded.status == .working)
+            #expect(decoded.statusMessage == "Processing...")
+            #expect(decoded.ttl == 60000)
+            #expect(decoded.pollInterval == 1000)
+        }
+
+        @Test("CreateTaskResult encoding")
+        func createTaskResultEncoding() throws {
+            let task = MCPTask(taskId: "task-1", status: .working)
+            let result = CreateTaskResult(task: task)
+
+            let data = try JSONCodec.encode(result)
+            let decoded = try JSONCodec.decode(CreateTaskResult.self, from: data)
+
+            #expect(decoded.task.taskId == "task-1")
+            #expect(decoded.task.status == .working)
+        }
+
+        @Test("TasksListResult encoding")
+        func tasksListResultEncoding() throws {
+            let tasks = [
+                MCPTask(taskId: "task-1", status: .working),
+                MCPTask(taskId: "task-2", status: .completed),
+            ]
+            let result = TasksListResult(tasks: tasks, nextCursor: "2")
+
+            let data = try JSONCodec.encode(result)
+            let decoded = try JSONCodec.decode(TasksListResult.self, from: data)
+
+            #expect(decoded.tasks.count == 2)
+            #expect(decoded.nextCursor == "2")
+        }
+
+        @Test("TasksCapability encoding")
+        func tasksCapabilityEncoding() throws {
+            let capability = TasksCapability(
+                list: TasksListCapability(),
+                cancel: TasksCancelCapability(),
+                requests: TaskRequestsCapability(
+                    tools: ToolsCallTaskCapability(call: true)
+                )
+            )
+
+            let data = try JSONCodec.encode(capability)
+            let decoded = try JSONCodec.decode(TasksCapability.self, from: data)
+
+            #expect(decoded.list != nil)
+            #expect(decoded.cancel != nil)
+            #expect(decoded.requests?.tools?.call == true)
+        }
+
+        @Test("TaskManager creates and tracks tasks")
+        func taskManagerBasics() async throws {
+            let manager = TaskManager()
+
+            let task = await manager.createTask(ttl: 60000, pollInterval: 1000)
+            #expect(task.status == .working)
+            #expect(task.ttl == 60000)
+            #expect(task.pollInterval == 1000)
+
+            let fetched = await manager.getTask(task.taskId)
+            #expect(fetched?.taskId == task.taskId)
+        }
+
+        @Test("TaskManager updates status")
+        func taskManagerUpdateStatus() async throws {
+            let manager = TaskManager()
+
+            let task = await manager.createTask()
+            await manager.updateStatus(task.taskId, status: .completed, message: "Done")
+
+            let updated = await manager.getTask(task.taskId)
+            #expect(updated?.status == .completed)
+            #expect(updated?.statusMessage == "Done")
+        }
+
+        @Test("TaskManager stores and retrieves results")
+        func taskManagerResults() async throws {
+            let manager = TaskManager()
+
+            let task = await manager.createTask()
+            let result = ToolCallResult.text("Success!")
+
+            await manager.storeResult(task.taskId, result: result)
+
+            let storedResult = await manager.getResult(task.taskId)
+            #expect(storedResult != nil)
+
+            if case let .text(content) = storedResult?.content.first {
+                #expect(content.text == "Success!")
+            } else {
+                Issue.record("Expected text content")
+            }
+        }
+
+        @Test("TaskManager cancels tasks")
+        func taskManagerCancel() async throws {
+            let manager = TaskManager()
+
+            let task = await manager.createTask()
+            let cancelled = await manager.cancelTask(task.taskId)
+
+            #expect(cancelled?.status == .cancelled)
+
+            let fetched = await manager.getTask(task.taskId)
+            #expect(fetched?.status == .cancelled)
+        }
+
+        @Test("TaskManager lists tasks with pagination")
+        func taskManagerList() async throws {
+            let manager = TaskManager()
+
+            // Create 3 tasks
+            _ = await manager.createTask()
+            _ = await manager.createTask()
+            _ = await manager.createTask()
+
+            // List with limit
+            let page1 = await manager.listTasks(cursor: nil, limit: 2)
+            #expect(page1.tasks.count == 2)
+            #expect(page1.nextCursor != nil)
+
+            // Get next page
+            let page2 = await manager.listTasks(cursor: page1.nextCursor, limit: 2)
+            #expect(page2.tasks.count == 1)
+            #expect(page2.nextCursor == nil)
         }
     }
 }

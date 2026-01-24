@@ -108,8 +108,31 @@ TOON is the default format for both CLI and MCP server.
 - `MCPServer` — Actor, JSON-RPC 2.0 over stdio
 - `MCPContext` — Shared actor for lazy resource initialization
 - `MCPToolHandler` — Protocol for tool implementations
-- Protocol version: `2024-11-05`
+- `MCPTasks` — Tasks API for async long-running operations
+- `CancellationToken` — Cooperative cancellation for tool execution
+- Protocol version: `2025-11-25`
 - 5 tools: `index_codebase`, `search_code`, `search_docs`, `code_research`, `watch_codebase`
+
+#### MCP 2025-11-25 Features
+
+| Feature           | Description                                                                   |
+| ----------------- | ----------------------------------------------------------------------------- |
+| Tool Annotations  | `readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`          |
+| Tasks API         | Async execution via `tasks/get`, `tasks/list`, `tasks/result`, `tasks/cancel` |
+| Cancellation      | `notifications/cancelled` + `CancellationToken` pattern                       |
+| Structured Output | `structuredContent` in `ToolCallResult` for typed JSON                        |
+| Content Types     | Text, Image, Audio, Resource, ResourceLink with annotations                   |
+| Icons             | `MCPIcon` for visual identification in tools and server info                  |
+
+#### Tool Annotations
+
+| Tool             | Title                | readOnly | idempotent |
+| ---------------- | -------------------- | -------- | ---------- |
+| `index_codebase` | Code Indexer         | false    | true       |
+| `search_code`    | Code Search          | true     | true       |
+| `search_docs`    | Documentation Search | true     | true       |
+| `code_research`  | Code Research        | true     | true       |
+| `watch_codebase` | File Watcher         | false    | false      |
 
 ### Module Structure (SwiftIndexCore)
 

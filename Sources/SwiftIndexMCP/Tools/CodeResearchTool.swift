@@ -14,6 +14,7 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
     public init() {
         definition = MCPTool(
             name: "code_research",
+            title: "Code Research",
             description: """
             Perform multi-hop code research and architectural analysis.
             Follows references across the codebase to understand
@@ -51,7 +52,13 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
                     ]),
                 ]),
                 "required": .array([.string("query")]),
-            ])
+            ]),
+            annotations: ToolAnnotations(
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         )
     }
 

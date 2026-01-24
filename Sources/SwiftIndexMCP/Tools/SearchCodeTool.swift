@@ -14,6 +14,7 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
     public init() {
         definition = MCPTool(
             name: "search_code",
+            title: "Code Search",
             description: """
             Search indexed Swift codebases using hybrid semantic search.
             Combines BM25 keyword matching with vector similarity search
@@ -66,7 +67,13 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                     ]),
                 ]),
                 "required": .array([.string("query")]),
-            ])
+            ]),
+            annotations: ToolAnnotations(
+                readOnlyHint: true,
+                destructiveHint: false,
+                idempotentHint: true,
+                openWorldHint: false
+            )
         )
     }
 

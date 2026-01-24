@@ -16,6 +16,7 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
     public init() {
         definition = MCPTool(
             name: "watch_codebase",
+            title: "File Watcher",
             description: """
             Watch a codebase directory for file changes.
             Automatically re-indexes modified, added, or deleted
@@ -40,7 +41,13 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
                     ]),
                 ]),
                 "required": .array([.string("path")]),
-            ])
+            ]),
+            annotations: ToolAnnotations(
+                readOnlyHint: false,
+                destructiveHint: false,
+                idempotentHint: false,
+                openWorldHint: false
+            )
         )
     }
 
