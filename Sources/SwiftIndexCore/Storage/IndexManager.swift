@@ -184,10 +184,14 @@ public actor IndexManager {
         // Get existing chunks and their vectors for this file
         let oldChunks = try await chunkStore.getByPath(path)
 
+        // Batch fetch all vectors in a single actor hop
+        let oldChunkIDs = oldChunks.map(\.id)
+        let vectorsById = try await vectorStore.getBatch(ids: oldChunkIDs)
+
         // Build lookup: contentHash → (chunk, vector)
         var existingByHash: [String: (chunk: CodeChunk, vector: [Float]?)] = [:]
         for chunk in oldChunks {
-            let vector = try await vectorStore.get(id: chunk.id)
+            let vector = vectorsById[chunk.id]
             existingByHash[chunk.contentHash] = (chunk: chunk, vector: vector)
         }
 

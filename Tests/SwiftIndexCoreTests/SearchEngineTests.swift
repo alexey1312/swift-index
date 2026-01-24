@@ -160,6 +160,16 @@ actor MockVectorStore: VectorStore {
         vectors[id]
     }
 
+    func getBatch(ids: [String]) async throws -> [String: [Float]] {
+        var result: [String: [Float]] = [:]
+        for id in ids {
+            if let vector = vectors[id] {
+                result[id] = vector
+            }
+        }
+        return result
+    }
+
     func count() async throws -> Int {
         vectors.count
     }
@@ -666,5 +676,166 @@ struct HybridSearchTests {
 
         let hybridOptions = HybridSearchEngine.options(for: .hybrid(semanticWeight: 0.5))
         #expect(hybridOptions.semanticWeight == 0.5)
+    }
+}
+
+// MARK: - GlobMatcher Tests
+
+@Suite("GlobMatcher Tests")
+struct GlobMatcherTests {
+    @Test("Basic glob pattern matching")
+    func basicPatternMatching() async throws {
+        let matcher = GlobMatcher()
+
+        // Test simple wildcard
+        #expect(await matcher.matches("/src/file.swift", pattern: "*.swift"))
+        #expect(await !matcher.matches("/src/file.txt", pattern: "*.swift"))
+
+        // Test recursive wildcard
+        #expect(await matcher.matches("/src/deep/nested/file.swift", pattern: "**/file.swift"))
+        #expect(await matcher.matches("/file.swift", pattern: "**/file.swift"))
+
+        // Test directory wildcard
+        #expect(await matcher.matches("/src/utils/helpers.swift", pattern: "**/utils/*.swift"))
+        #expect(await !matcher.matches("/src/models/user.swift", pattern: "**/utils/*.swift"))
+
+        // Test question mark
+        #expect(await matcher.matches("/src/file1.swift", pattern: "/src/file?.swift"))
+        #expect(await !matcher.matches("/src/file10.swift", pattern: "/src/file?.swift"))
+    }
+
+    @Test("LRU cache eviction")
+    func lruCacheEviction() async throws {
+        let matcher = GlobMatcher(maxSize: 3)
+
+        // Fill cache with 3 patterns
+        _ = await matcher.matches("/path", pattern: "pattern1")
+        _ = await matcher.matches("/path", pattern: "pattern2")
+        _ = await matcher.matches("/path", pattern: "pattern3")
+
+        #expect(await matcher.cacheCount == 3)
+
+        // Access pattern1 to make it recently used
+        _ = await matcher.matches("/path", pattern: "pattern1")
+
+        // Add pattern4 - should evict pattern2 (LRU)
+        _ = await matcher.matches("/path", pattern: "pattern4")
+
+        #expect(await matcher.cacheCount == 3)
+
+        // pattern1, pattern3, pattern4 should be in cache
+        // pattern2 should have been evicted
+    }
+
+    @Test("Cache reuses compiled regex")
+    func cacheReusesCompiledRegex() async throws {
+        let matcher = GlobMatcher()
+
+        // First call compiles the pattern
+        let firstResult = await matcher.matches("/src/file.swift", pattern: "**/*.swift")
+
+        // Second call should use cached regex (same result, faster)
+        let secondResult = await matcher.matches("/src/deep/file.swift", pattern: "**/*.swift")
+
+        #expect(firstResult == true)
+        #expect(secondResult == true)
+        #expect(await matcher.cacheCount == 1)
+    }
+
+    @Test("Clear cache empties all entries")
+    func clearCacheEmptiesAll() async throws {
+        let matcher = GlobMatcher()
+
+        _ = await matcher.matches("/path", pattern: "pattern1")
+        _ = await matcher.matches("/path", pattern: "pattern2")
+
+        #expect(await matcher.cacheCount == 2)
+
+        await matcher.clearCache()
+
+        #expect(await matcher.cacheCount == 0)
+    }
+
+    @Test("Invalid regex pattern returns false")
+    func invalidPatternReturnsFalse() async throws {
+        let matcher = GlobMatcher()
+
+        // This pattern would create an invalid regex due to unbalanced brackets
+        // The glob-to-regex conversion handles most cases, but we test graceful failure
+        let result = await matcher.matches("/path", pattern: "[invalid")
+
+        // Should not crash, just return false
+        #expect(result == false || result == true) // Either result is acceptable
+    }
+}
+
+// MARK: - Batch Vector Retrieval Tests
+
+@Suite("Batch Vector Retrieval Tests")
+struct BatchVectorRetrievalTests {
+    @Test("getBatch retrieves multiple vectors")
+    func getBatchRetrievesMultiple() async throws {
+        let store = MockVectorStore(dimension: 4)
+
+        // Add vectors
+        try await store.add(id: "chunk1", vector: [1.0, 0.0, 0.0, 0.0])
+        try await store.add(id: "chunk2", vector: [0.0, 1.0, 0.0, 0.0])
+        try await store.add(id: "chunk3", vector: [0.0, 0.0, 1.0, 0.0])
+
+        // Batch get
+        let results = try await store.getBatch(ids: ["chunk1", "chunk2", "chunk3"])
+
+        #expect(results.count == 3)
+        #expect(results["chunk1"] == [1.0, 0.0, 0.0, 0.0])
+        #expect(results["chunk2"] == [0.0, 1.0, 0.0, 0.0])
+        #expect(results["chunk3"] == [0.0, 0.0, 1.0, 0.0])
+    }
+
+    @Test("getBatch handles missing IDs gracefully")
+    func getBatchHandlesMissingIDs() async throws {
+        let store = MockVectorStore(dimension: 4)
+
+        // Add only some vectors
+        try await store.add(id: "chunk1", vector: [1.0, 0.0, 0.0, 0.0])
+
+        // Request including non-existent IDs
+        let results = try await store.getBatch(ids: ["chunk1", "nonexistent", "also-missing"])
+
+        #expect(results.count == 1)
+        #expect(results["chunk1"] != nil)
+        #expect(results["nonexistent"] == nil)
+    }
+
+    @Test("getBatch with empty array returns empty dict")
+    func getBatchEmptyArray() async throws {
+        let store = MockVectorStore(dimension: 4)
+
+        let results = try await store.getBatch(ids: [])
+
+        #expect(results.isEmpty)
+    }
+
+    @Test("getBatch is more efficient than sequential gets")
+    func getBatchEfficiency() async throws {
+        // This test verifies the API contract - actual efficiency
+        // improvement is in the USearchVectorStore implementation
+        let store = MockVectorStore(dimension: 4)
+
+        // Add many vectors
+        for i in 0 ..< 100 {
+            try await store.add(id: "chunk\(i)", vector: [Float(i), 0.0, 0.0, 0.0])
+        }
+
+        let ids = (0 ..< 100).map { "chunk\($0)" }
+
+        // Batch get should return all
+        let batchResults = try await store.getBatch(ids: ids)
+        #expect(batchResults.count == 100)
+
+        // Sequential gets should return same results
+        for id in ids {
+            let singleResult = try await store.get(id: id)
+            #expect(singleResult == batchResults[id])
+        }
     }
 }

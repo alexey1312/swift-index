@@ -55,11 +55,11 @@ Default 10MB handles ~5000 typical code chunks (2KB avg).
 
 New keys under `[embedding]` section:
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `batch_size` | int | 32 | Max chunks per embedding call |
-| `batch_timeout_ms` | int | 150 | Idle timeout before flush |
-| `batch_memory_limit_mb` | int | 10 | Memory limit for pending chunks |
+| Key                     | Type | Default | Description                     |
+| ----------------------- | ---- | ------- | ------------------------------- |
+| `batch_size`            | int  | 32      | Max chunks per embedding call   |
+| `batch_timeout_ms`      | int  | 150     | Idle timeout before flush       |
+| `batch_memory_limit_mb` | int  | 10      | Memory limit for pending chunks |
 
 Provider-specific batch sizes take precedence if configured (e.g., `mlx.batch_size`).
 

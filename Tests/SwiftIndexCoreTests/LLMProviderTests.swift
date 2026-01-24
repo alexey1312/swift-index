@@ -552,6 +552,67 @@ struct FollowUpGeneratorTests {
 
         #expect(callCount == 2) // Two calls after cache cleared
     }
+
+    @Test("LRU eviction keeps frequently used queries")
+    func lruEvictionKeepsFrequentlyUsed() async throws {
+        var callCount = 0
+
+        let provider = CountingMockProvider { callCount += 1 }
+        // Create generator with small cache to trigger eviction
+        let generator = FollowUpGenerator(provider: provider, maxCacheSize: 3)
+
+        // Fill cache with 3 queries
+        _ = try await generator.generate(query: "query1", resultSummary: "summary1", timeout: 5)
+        _ = try await generator.generate(query: "query2", resultSummary: "summary2", timeout: 5)
+        _ = try await generator.generate(query: "query3", resultSummary: "summary3", timeout: 5)
+
+        #expect(callCount == 3) // 3 initial calls
+
+        // Access query1 to make it recently used
+        _ = try await generator.generate(query: "query1", resultSummary: "summary1", timeout: 5)
+        #expect(callCount == 3) // Should be cached, no new call
+
+        // Add a 4th query to trigger eviction
+        _ = try await generator.generate(query: "query4", resultSummary: "summary4", timeout: 5)
+        #expect(callCount == 4) // New query = new call
+
+        // query1 should still be cached (recently used)
+        _ = try await generator.generate(query: "query1", resultSummary: "summary1", timeout: 5)
+        #expect(callCount == 4) // Still cached
+
+        // query2 should have been evicted (LRU)
+        _ = try await generator.generate(query: "query2", resultSummary: "summary2", timeout: 5)
+        #expect(callCount == 5) // Evicted, needs new call
+    }
+
+    @Test("LRU updates access order on cache hit")
+    func lruUpdatesAccessOrder() async throws {
+        var callCount = 0
+
+        let provider = CountingMockProvider { callCount += 1 }
+        let generator = FollowUpGenerator(provider: provider, maxCacheSize: 2)
+
+        // Fill cache
+        _ = try await generator.generate(query: "A", resultSummary: "a", timeout: 5)
+        _ = try await generator.generate(query: "B", resultSummary: "b", timeout: 5)
+        #expect(callCount == 2)
+
+        // Access A to make it more recent than B
+        _ = try await generator.generate(query: "A", resultSummary: "a", timeout: 5)
+        #expect(callCount == 2) // No new call
+
+        // Add C - should evict B (now LRU), not A
+        _ = try await generator.generate(query: "C", resultSummary: "c", timeout: 5)
+        #expect(callCount == 3)
+
+        // A should still be cached
+        _ = try await generator.generate(query: "A", resultSummary: "a", timeout: 5)
+        #expect(callCount == 3) // Still cached
+
+        // B should have been evicted
+        _ = try await generator.generate(query: "B", resultSummary: "b", timeout: 5)
+        #expect(callCount == 4) // Evicted
+    }
 }
 
 // MARK: - DescriptionGenerator Tests

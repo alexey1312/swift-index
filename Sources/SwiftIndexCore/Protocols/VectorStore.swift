@@ -51,6 +51,15 @@ public protocol VectorStore: Sendable {
     /// - Returns: The vector if found, nil otherwise.
     func get(id: String) async throws -> [Float]?
 
+    /// Get multiple vectors by their chunk IDs in a single operation.
+    ///
+    /// This method is more efficient than calling `get(id:)` multiple times
+    /// because it requires only one actor hop instead of N sequential hops.
+    ///
+    /// - Parameter ids: Array of chunk IDs to retrieve.
+    /// - Returns: Dictionary mapping found IDs to their vectors. IDs not found are omitted.
+    func getBatch(ids: [String]) async throws -> [String: [Float]]
+
     /// Get the total count of vectors.
     ///
     /// - Returns: Number of vectors in the store.

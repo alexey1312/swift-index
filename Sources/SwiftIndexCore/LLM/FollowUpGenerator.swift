@@ -25,6 +25,9 @@ public actor FollowUpGenerator {
     /// Cache of generated follow-ups.
     private var cache: [String: [FollowUpSuggestion]] = [:]
 
+    /// Access order for LRU eviction (most recently used at the end).
+    private var accessOrder: [String] = []
+
     /// Maximum cache size.
     private let maxCacheSize: Int
 
@@ -63,6 +66,11 @@ public actor FollowUpGenerator {
 
         // Check cache
         if let cached = cache[cacheKey] {
+            // Move to end of access order (mark as recently used)
+            if let index = accessOrder.firstIndex(of: cacheKey) {
+                accessOrder.remove(at: index)
+            }
+            accessOrder.append(cacheKey)
             return cached
         }
 
@@ -87,13 +95,13 @@ public actor FollowUpGenerator {
         // Parse the response
         let suggestions = parseFollowUpResponse(response)
 
-        // Cache results
-        if cache.count >= maxCacheSize {
-            if let firstKey = cache.keys.first {
-                cache.removeValue(forKey: firstKey)
-            }
+        // Cache results with LRU eviction
+        if cache.count >= maxCacheSize, !accessOrder.isEmpty {
+            let lruKey = accessOrder.removeFirst()
+            cache.removeValue(forKey: lruKey)
         }
         cache[cacheKey] = suggestions
+        accessOrder.append(cacheKey)
 
         return suggestions
     }
@@ -101,6 +109,7 @@ public actor FollowUpGenerator {
     /// Clears the suggestion cache.
     public func clearCache() {
         cache.removeAll()
+        accessOrder.removeAll()
     }
 
     // MARK: - Private Methods

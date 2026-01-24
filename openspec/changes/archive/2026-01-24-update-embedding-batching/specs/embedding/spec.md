@@ -6,11 +6,11 @@ The system SHALL embed texts in batches that can span multiple files during inde
 
 Batching configuration under `[embedding]`:
 
-| Key                    | Type | Default | Description                              |
-| ---------------------- | ---- | ------- | ---------------------------------------- |
-| `batch_size`           | int  | 32      | Maximum chunks per embedding call        |
-| `batch_timeout_ms`     | int  | 150     | Idle timeout before flushing (ms)        |
-| `batch_memory_limit_mb`| int  | 10      | Memory limit for pending chunks (MB)     |
+| Key                     | Type | Default | Description                          |
+| ----------------------- | ---- | ------- | ------------------------------------ |
+| `batch_size`            | int  | 32      | Maximum chunks per embedding call    |
+| `batch_timeout_ms`      | int  | 150     | Idle timeout before flushing (ms)    |
+| `batch_memory_limit_mb` | int  | 10      | Memory limit for pending chunks (MB) |
 
 Batching rules:
 

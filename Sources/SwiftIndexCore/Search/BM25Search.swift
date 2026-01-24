@@ -28,11 +28,17 @@ public actor BM25Search: SearchEngine {
     /// The chunk store providing FTS5 search capabilities.
     private let chunkStore: any ChunkStore
 
+    /// Shared glob pattern matcher with LRU cache.
+    private let globMatcher: GlobMatcher
+
     /// Creates a new BM25 search engine.
     ///
-    /// - Parameter chunkStore: The chunk store with FTS5 support.
-    public init(chunkStore: any ChunkStore) {
+    /// - Parameters:
+    ///   - chunkStore: The chunk store with FTS5 support.
+    ///   - globMatcher: Shared glob pattern matcher for path filtering.
+    public init(chunkStore: any ChunkStore, globMatcher: GlobMatcher = GlobMatcher()) {
         self.chunkStore = chunkStore
+        self.globMatcher = globMatcher
     }
 
     /// Performs a BM25 keyword search.
@@ -54,7 +60,7 @@ public actor BM25Search: SearchEngine {
         for (rank, (chunk, score)) in ftsResults.enumerated() {
             // Apply path filter
             if let pathFilter = options.pathFilter {
-                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
                     continue
                 }
             }
@@ -130,30 +136,5 @@ public actor BM25Search: SearchEngine {
             }
 
         return terms.joined(separator: " ")
-    }
-
-    /// Checks if a path matches a glob pattern.
-    ///
-    /// - Parameters:
-    ///   - path: The file path to check.
-    ///   - pattern: The glob pattern.
-    /// - Returns: True if the path matches the pattern.
-    private func matchesGlob(_ path: String, pattern: String) -> Bool {
-        // Convert glob pattern to regex
-        var regexPattern = pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-            .replacingOccurrences(of: "**", with: ".*")
-            .replacingOccurrences(of: "*", with: "[^/]*")
-            .replacingOccurrences(of: "?", with: ".")
-
-        regexPattern = "^" + regexPattern + "$"
-
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
-            return false
-        }
-
-        let range = NSRange(path.startIndex..., in: path)
-        return regex.firstMatch(in: path, range: range) != nil
     }
 }

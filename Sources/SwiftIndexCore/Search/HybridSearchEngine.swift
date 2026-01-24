@@ -51,6 +51,9 @@ public actor HybridSearchEngine: SearchEngine {
     /// The RRF fusion algorithm instance.
     private let fusion: RRFFusion
 
+    /// Shared glob pattern matcher with LRU cache.
+    private let globMatcher: GlobMatcher
+
     /// Creates a new hybrid search engine.
     ///
     /// - Parameters:
@@ -62,14 +65,17 @@ public actor HybridSearchEngine: SearchEngine {
         chunkStore: any ChunkStore,
         vectorStore: any VectorStore,
         embeddingProvider: any EmbeddingProvider,
-        rrfK: Int = 60
+        rrfK: Int = 60,
+        globMatcher: GlobMatcher = GlobMatcher()
     ) {
         self.chunkStore = chunkStore
-        bm25Search = BM25Search(chunkStore: chunkStore)
+        self.globMatcher = globMatcher
+        bm25Search = BM25Search(chunkStore: chunkStore, globMatcher: globMatcher)
         semanticSearch = SemanticSearch(
             vectorStore: vectorStore,
             chunkStore: chunkStore,
-            embeddingProvider: embeddingProvider
+            embeddingProvider: embeddingProvider,
+            globMatcher: globMatcher
         )
         fusion = RRFFusion(k: rrfK)
     }
@@ -120,7 +126,7 @@ public actor HybridSearchEngine: SearchEngine {
 
             // Apply path filter
             if let pathFilter = options.pathFilter {
-                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
                     continue
                 }
             }
@@ -208,7 +214,7 @@ public actor HybridSearchEngine: SearchEngine {
 
                     // Apply filters
                     if let pathFilter = options.pathFilter {
-                        guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                        guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
                             continue
                         }
                     }
@@ -245,32 +251,6 @@ public actor HybridSearchEngine: SearchEngine {
         return hopResults
     }
 
-    // MARK: - Private Helpers
-
-    /// Checks if a path matches a glob pattern.
-    ///
-    /// - Parameters:
-    ///   - path: The file path to check.
-    ///   - pattern: The glob pattern.
-    /// - Returns: True if the path matches the pattern.
-    private func matchesGlob(_ path: String, pattern: String) -> Bool {
-        var regexPattern = pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-            .replacingOccurrences(of: "**", with: ".*")
-            .replacingOccurrences(of: "*", with: "[^/]*")
-            .replacingOccurrences(of: "?", with: ".")
-
-        regexPattern = "^" + regexPattern + "$"
-
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
-            return false
-        }
-
-        let range = NSRange(path.startIndex..., in: path)
-        return regex.firstMatch(in: path, range: range) != nil
-    }
-
     // MARK: - Info Snippet Search
 
     /// Searches for info snippets (documentation) using BM25 full-text search.
@@ -299,7 +279,7 @@ public actor HybridSearchEngine: SearchEngine {
         for (snippet, score) in rawResults {
             // Apply path filter if specified
             if let pathFilter {
-                guard matchesGlob(snippet.path, pattern: pathFilter) else {
+                guard await globMatcher.matches(snippet.path, pattern: pathFilter) else {
                     continue
                 }
             }
@@ -456,7 +436,7 @@ public extension HybridSearchEngine {
 
             // Apply filters
             if let pathFilter = options.pathFilter {
-                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
                     continue
                 }
             }

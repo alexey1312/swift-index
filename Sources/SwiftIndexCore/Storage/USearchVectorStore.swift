@@ -267,6 +267,23 @@ public actor USearchVectorStore: VectorStore {
         try await getVector(id: id)
     }
 
+    public func getBatch(ids: [String]) async throws -> [String: [Float]] {
+        var result: [String: [Float]] = [:]
+        result.reserveCapacity(ids.count)
+
+        for id in ids {
+            if let key = idToKey[id] {
+                if let vectors: [[Float]] = try index.get(key: key, count: 1),
+                   let vector = vectors.first
+                {
+                    result[id] = vector
+                }
+            }
+        }
+
+        return result
+    }
+
     public func count() async throws -> Int {
         idToKey.count
     }

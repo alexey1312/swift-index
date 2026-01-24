@@ -38,20 +38,26 @@ public actor SemanticSearch: SearchEngine {
     /// The embedding provider for encoding queries.
     private let embeddingProvider: any EmbeddingProvider
 
+    /// Shared glob pattern matcher with LRU cache.
+    private let globMatcher: GlobMatcher
+
     /// Creates a new semantic search engine.
     ///
     /// - Parameters:
     ///   - vectorStore: The vector store with HNSW index.
     ///   - chunkStore: The chunk store for metadata retrieval.
     ///   - embeddingProvider: The provider for query embedding.
+    ///   - globMatcher: Shared glob pattern matcher for path filtering.
     public init(
         vectorStore: any VectorStore,
         chunkStore: any ChunkStore,
-        embeddingProvider: any EmbeddingProvider
+        embeddingProvider: any EmbeddingProvider,
+        globMatcher: GlobMatcher = GlobMatcher()
     ) {
         self.vectorStore = vectorStore
         self.chunkStore = chunkStore
         self.embeddingProvider = embeddingProvider
+        self.globMatcher = globMatcher
     }
 
     /// Performs a semantic similarity search.
@@ -80,7 +86,7 @@ public actor SemanticSearch: SearchEngine {
 
             // Apply path filter
             if let pathFilter = options.pathFilter {
-                guard matchesGlob(chunk.path, pattern: pathFilter) else {
+                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
                     continue
                 }
             }
@@ -143,31 +149,5 @@ public actor SemanticSearch: SearchEngine {
     ) async throws -> [(id: String, score: Float)] {
         let vectorResults = try await vectorStore.search(vector: vector, limit: limit)
         return vectorResults.map { (id: $0.id, score: $0.similarity) }
-    }
-
-    // MARK: - Private Helpers
-
-    /// Checks if a path matches a glob pattern.
-    ///
-    /// - Parameters:
-    ///   - path: The file path to check.
-    ///   - pattern: The glob pattern.
-    /// - Returns: True if the path matches the pattern.
-    private func matchesGlob(_ path: String, pattern: String) -> Bool {
-        var regexPattern = pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-            .replacingOccurrences(of: "**", with: ".*")
-            .replacingOccurrences(of: "*", with: "[^/]*")
-            .replacingOccurrences(of: "?", with: ".")
-
-        regexPattern = "^" + regexPattern + "$"
-
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
-            return false
-        }
-
-        let range = NSRange(path.startIndex..., in: path)
-        return regex.firstMatch(in: path, range: range) != nil
     }
 }
