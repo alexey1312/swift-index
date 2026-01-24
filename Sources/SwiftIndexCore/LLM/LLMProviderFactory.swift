@@ -131,8 +131,8 @@ public enum LLMProviderFactory {
         do {
             primary = try createProvider(from: tierConfig, openAIKey: openAIKey, anthropicKey: anthropicKey)
         } catch {
-            // Fall back to a default provider
-            primary = ClaudeCodeCLIProvider()
+            // Fall back to MLX (matches LLMTierConfig.defaultUtility/defaultSynthesis)
+            primary = MLXLLMProvider()
         }
 
         // Add fallbacks based on availability
