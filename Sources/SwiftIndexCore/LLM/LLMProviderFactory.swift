@@ -21,6 +21,8 @@ public enum LLMProviderFactory {
         case ollama
         case openai
         case mlx
+        case gemini
+        case geminiCLI = "gemini-cli"
     }
 
     // MARK: - Factory Methods
@@ -85,6 +87,13 @@ public enum LLMProviderFactory {
                 return MLXLLMProvider(huggingFaceId: modelId)
             }
             return MLXLLMProvider()
+
+        case .gemini:
+            let key = ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? ""
+            return GeminiLLMProvider(apiKey: key, defaultModel: model ?? "gemini-1.5-flash")
+
+        case .geminiCLI:
+            return GeminiCLIProvider(defaultModel: model)
         }
     }
 

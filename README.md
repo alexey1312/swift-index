@@ -70,6 +70,12 @@ swiftindex install-claude-code
 # Claude Code (global ~/.claude.json)
 swiftindex install-claude-code --global
 
+# Gemini CLI (project-local .gemini.json)
+swiftindex install-gemini
+
+# Gemini CLI (global ~/.gemini.json)
+swiftindex install-gemini --global
+
 # Cursor (project-local .cursor/mcp.json)
 swiftindex install-cursor
 
@@ -109,7 +115,7 @@ swiftindex search "user authentication flow"
 
 ### `swiftindex index <path>`
 
-Index a Swift codebase.
+Index a Swift codebase. Supports graceful shutdown (Ctrl+C) to safely release resources.
 
 ```bash
 # Index current directory
@@ -351,6 +357,7 @@ Configuration is loaded from multiple sources with the following priority (highe
 | `SWIFTINDEX_EMBEDDING_MODEL`    | Embedding model name             |
 | `SWIFTINDEX_LIMIT`              | Default search limit             |
 | `OPENAI_API_KEY`                | API key for OpenAI embeddings    |
+| `GEMINI_API_KEY`                | API key for Gemini embeddings    |
 | `VOYAGE_API_KEY`                | API key for Voyage AI embeddings |
 
 ## Search Enhancement
@@ -384,12 +391,14 @@ timeout = 120
 
 ### Supported Providers
 
-| Provider          | Requirement              | Best For                   |
-| ----------------- | ------------------------ | -------------------------- |
-| `claude-code-cli` | `claude` CLI installed   | Best quality, Claude users |
-| `codex-cli`       | `codex` CLI installed    | OpenAI Codex users         |
-| `ollama`          | Ollama server running    | Local, privacy-preserving  |
-| `openai`          | `OPENAI_API_KEY` env var | Cloud, high availability   |
+| Provider          | Requirement              | Best For                    |
+| ----------------- | ------------------------ | --------------------------- |
+| `claude-code-cli` | `claude` CLI installed   | Best quality, Claude users  |
+| `codex-cli`       | `codex` CLI installed    | OpenAI Codex users          |
+| `ollama`          | Ollama server running    | Local, privacy-preserving   |
+| `openai`          | `OPENAI_API_KEY` env var | Cloud, high availability    |
+| `gemini`          | `GEMINI_API_KEY` env var | Cloud, large context window |
+| `gemini-cli`      | `gemini` CLI installed   | Google Gemini CLI users     |
 
 ### Usage
 
@@ -429,6 +438,7 @@ Different AI assistants require slightly different configuration formats:
 | Client      | Config File                                | Type Field                  | Notes                        |
 | ----------- | ------------------------------------------ | --------------------------- | ---------------------------- |
 | Claude Code | `.mcp.json` or `~/.claude.json`            | Required: `"type": "stdio"` | Use `--global` for user-wide |
+| Gemini CLI  | `.gemini.json` or `~/.gemini.json`         | Required: `"type": "stdio"` | Use `--global` for user-wide |
 | Cursor      | `.cursor/mcp.json` or `~/.cursor/mcp.json` | Required: `"type": "stdio"` | JSON `mcp.json` format       |
 | Codex       | `~/.codex/config.toml`                     | Not needed                  | TOML format (cwd for local)  |
 
@@ -639,6 +649,17 @@ Cloud embeddings via OpenAI API.
 provider = "openai"
 model = "text-embedding-3-small"
 # Set OPENAI_API_KEY environment variable
+```
+
+### Gemini (Google AI)
+
+Cloud embeddings via Gemini API.
+
+```toml
+[embedding]
+provider = "gemini"
+model = "text-embedding-004"
+# Set GEMINI_API_KEY environment variable
 ```
 
 ### Voyage AI

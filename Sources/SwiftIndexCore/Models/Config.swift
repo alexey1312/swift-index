@@ -92,6 +92,9 @@ public struct Config: Sendable, Equatable {
     /// OpenAI API key (optional).
     public var openAIAPIKey: String?
 
+    /// Gemini API key (optional).
+    public var geminiAPIKey: String?
+
     // MARK: - Performance
 
     /// Maximum concurrent tasks for parallel indexing.
@@ -140,6 +143,7 @@ public struct Config: Sendable, Equatable {
         cachePath: String = "~/.cache/swiftindex",
         voyageAPIKey: String? = nil,
         openAIAPIKey: String? = nil,
+        geminiAPIKey: String? = nil,
         maxConcurrentTasks: Int = ProcessInfo.processInfo.activeProcessorCount,
         watchDebounceMs: Int = 500,
         logLevel: String = "info",
@@ -170,6 +174,7 @@ public struct Config: Sendable, Equatable {
         self.cachePath = cachePath
         self.voyageAPIKey = voyageAPIKey
         self.openAIAPIKey = openAIAPIKey
+        self.geminiAPIKey = geminiAPIKey
         self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
@@ -315,6 +320,7 @@ public extension Config {
         applyIfPresent(partial.cachePath, to: \.cachePath)
         applyIfPresent(partial.voyageAPIKey, to: \.voyageAPIKey)
         applyIfPresent(partial.openAIAPIKey, to: \.openAIAPIKey)
+        applyIfPresent(partial.geminiAPIKey, to: \.geminiAPIKey)
         applyIfPresent(partial.maxConcurrentTasks, to: \.maxConcurrentTasks)
         applyIfPresent(partial.watchDebounceMs, to: \.watchDebounceMs)
         applyIfPresent(partial.logLevel, to: \.logLevel)

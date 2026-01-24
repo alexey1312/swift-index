@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Embedding Configuration
 
@@ -17,4 +17,10 @@ The system SHALL support enabling LLM-powered search enhancements and selecting 
 #### Scenario: Configure Gemini LLM
 
 - **WHEN** config file contains `[search.enhancement.utility]` with `provider = "gemini"`
-- **THEN** the system uses the Google Gemini LLM for utility tasks
+- **THEN** the system uses the Google Gemini REST API
+- **AND** reads `GEMINI_API_KEY` from the environment
+
+#### Scenario: Configure Gemini CLI
+
+- **WHEN** config file contains `[search.enhancement.utility]` with `provider = "gemini-cli"`
+- **THEN** the system invokes the `gemini` command-line tool

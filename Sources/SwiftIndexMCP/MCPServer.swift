@@ -162,11 +162,12 @@ public actor MCPServer {
 
         // Parse client info if available
         if let clientInfoObj = params["clientInfo"]?.objectValue {
-            clientInfo = MCPClientInfo(
+            let info = MCPClientInfo(
                 name: clientInfoObj["name"]?.stringValue ?? "unknown",
                 version: clientInfoObj["version"]?.stringValue ?? "unknown"
             )
-            logger.info("Client connected: \(clientInfo!.name) \(clientInfo!.version)")
+            clientInfo = info
+            logger.info("Client connected: \(info.name) \(info.version)")
         }
 
         let result = InitializeResult(

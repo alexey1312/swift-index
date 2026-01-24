@@ -159,6 +159,28 @@ timeout = 30
 - `gpt-4o-mini` - Fast, cost-effective (recommended for utility tier)
 - `gpt-4o` - Most capable (recommended for synthesis tier)
 
+### Gemini (`gemini`) / Gemini CLI (`gemini-cli`)
+
+Uses Google's Gemini models via API or CLI.
+
+**Gemini API (`gemini`):**
+
+- **Requirements:** `GEMINI_API_KEY` environment variable set
+- **Configuration:** `provider = "gemini"`
+- **Models:** `gemini-1.5-flash` (default), `gemini-1.5-pro`
+
+**Gemini CLI (`gemini-cli`):**
+
+- **Requirements:** `gemini` command installed
+- **Configuration:** `provider = "gemini-cli"`
+
+```toml
+[search.enhancement.utility]
+provider = "gemini"
+model = "gemini-1.5-flash"
+timeout = 30
+```
+
 ## Provider Selection Guide
 
 | Use Case              | Recommended Provider | Model           |

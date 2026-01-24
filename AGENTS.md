@@ -116,6 +116,7 @@ TOON is the default format for both CLI and MCP server.
 - `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
   - `TOMLConfigValidator.allowedSections` must be updated when adding new config keys to `TOMLConfig` structs
 - `/Embedding` — Providers (MLX, Ollama, Voyage, OpenAI, SwiftEmbeddings), HubModelManager
+  - `EmbeddingBatcher` — Batches cross-file embedding requests for max GPU utilization
 - `/Index` — IndexManager (orchestrates storage and embedding)
 - `/LLM` — LLM providers and search enhancement features
   - `LLMProvider` protocol, `LLMMessage`, `LLMProviderChain`
@@ -154,6 +155,7 @@ TOON is the default format for both CLI and MCP server.
 | swift-log              | 1.9.0   | Structured logging            |
 | swift-async-algorithms | 1.1.0   | Async sequence utilities      |
 | swift-crypto           | 4.0.0   | Cryptographic operations      |
+| swift-nio              | 2.62.0  | Signal handling (shutdown)    |
 
 ### USearch Library Notes
 

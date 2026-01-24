@@ -74,6 +74,10 @@ struct IndexCommand: AsyncParsableCommand {
         let logger = CLIUtils.makeLogger(verbose: verbose)
         logger.info("Starting index operation")
 
+        // Setup graceful shutdown
+        let shutdownManager = GracefulShutdownManager(logger: logger)
+        await shutdownManager.start()
+
         let startTime = Date()
 
         let resolvedPath = try resolvePath(logger: logger)
@@ -133,25 +137,17 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Index files in parallel
         let stats = AtomicIndexingStats()
-        let capturedProgressRenderer = progressRenderer
-        let capturedTerminal = terminal
-        let indexingContext = IndexingContext(
+        let indexingContext = createIndexingContext(from: IndexingContextParams(
             indexManager: indexManager,
             parser: parser,
             embeddingBatcher: embeddingBatcher,
             descriptionGenerator: descriptionGenerator,
             descriptionState: descriptionState,
-            descriptionProgress: { completed, total, file in
-                let displayFile = (file as NSString).lastPathComponent
-                let message = "  └─ Descriptions: \(completed)/\(total) (\(displayFile))"
-                let pipeline: StandardPipelining = capturedTerminal.isInteractive
-                    ? StandardOutputPipeline()
-                    : StandardErrorPipeline()
-                capturedProgressRenderer.log(message, standardPipeline: pipeline)
-            },
+            progressRenderer: progressRenderer,
+            terminal: terminal,
             projectPath: resolvedPath,
             logger: logger
-        )
+        ))
 
         let maxConcurrentTasks = configuration.maxConcurrentTasks
         print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks")
@@ -161,29 +157,41 @@ struct IndexCommand: AsyncParsableCommand {
         let forceReindex = force
         let ui = Noora()
         var fatalError: Error?
-        try await ui.progressBarStep(
-            message: "Indexing files",
-            successMessage: "Indexing completed",
-            errorMessage: "Indexing failed",
-            renderer: progressRenderer
-        ) { updateProgress in
-            fatalError = try await IndexCommand.runIndexingTasks(
-                files: files,
-                config: IndexingTaskConfig(
-                    context: indexingContext,
-                    stats: stats,
-                    maxConcurrentTasks: maxConcurrentTasks,
-                    forceReindex: forceReindex,
-                    logger: logger,
-                    reportProgress: { processed, inFlight, total in
-                        let safeTotal = max(total, 1)
-                        // Count in-flight files as 10% done to show immediate activity without a large jump
-                        let effectiveProcessed = Double(processed) + (Double(inFlight) * 0.1)
-                        updateProgress(min(effectiveProcessed / Double(safeTotal), 1.0))
-                    }
+
+        // Register shutdown handler to cancel indexing
+        let indexingTask = Task { () -> Error? in
+            var taskResult: Error?
+            try await ui.progressBarStep(
+                message: "Indexing files",
+                successMessage: "Indexing completed",
+                errorMessage: "Indexing failed",
+                renderer: progressRenderer
+            ) { updateProgress in
+                taskResult = try await IndexCommand.runIndexingTasks(
+                    files: files,
+                    config: IndexingTaskConfig(
+                        context: indexingContext,
+                        stats: stats,
+                        maxConcurrentTasks: maxConcurrentTasks,
+                        forceReindex: forceReindex,
+                        logger: logger,
+                        reportProgress: { processed, inFlight, total in
+                            let safeTotal = max(total, 1)
+                            // Count in-flight files as 50% done to show clear immediate activity
+                            let effectiveProcessed = Double(processed) + (Double(inFlight) * 0.5)
+                            updateProgress(min(effectiveProcessed / Double(safeTotal), 1.0))
+                        }
+                    )
                 )
-            )
+            }
+            return taskResult
         }
+
+        await shutdownManager.onShutdown {
+            indexingTask.cancel()
+        }
+
+        fatalError = try await indexingTask.value
 
         // Handle fatal errors after task group completes
         if let fatalError {
@@ -298,6 +306,38 @@ struct IndexCommand: AsyncParsableCommand {
         }
     }
 
+    private struct IndexingContextParams {
+        let indexManager: IndexManager
+        let parser: HybridParser
+        let embeddingBatcher: EmbeddingBatcher
+        let descriptionGenerator: DescriptionGenerator?
+        let descriptionState: DescriptionGenerationState
+        let progressRenderer: StickyProgressRenderer
+        let terminal: Terminaling
+        let projectPath: String
+        let logger: Logger
+    }
+
+    private func createIndexingContext(from params: IndexingContextParams) -> IndexingContext {
+        IndexingContext(
+            indexManager: params.indexManager,
+            parser: params.parser,
+            embeddingBatcher: params.embeddingBatcher,
+            descriptionGenerator: params.descriptionGenerator,
+            descriptionState: params.descriptionState,
+            descriptionProgress: { completed, total, file in
+                let displayFile = (file as NSString).lastPathComponent
+                let message = "  └─ Descriptions: \(completed)/\(total) (\(displayFile))"
+                let pipeline: StandardPipelining = params.terminal.isInteractive
+                    ? StandardOutputPipeline()
+                    : StandardErrorPipeline()
+                params.progressRenderer.log(message, standardPipeline: pipeline)
+            },
+            projectPath: params.projectPath,
+            logger: params.logger
+        )
+    }
+
     private func ensureEmbeddingProviderAvailable(
         _ embeddingProvider: EmbeddingProviderChain
     ) async throws {
@@ -364,6 +404,12 @@ struct IndexCommand: AsyncParsableCommand {
 
             for try await (_, result, error) in group {
                 inFlight -= 1
+
+                // Check for cancellation to stop early
+                if Task.isCancelled {
+                    group.cancelAll()
+                    break
+                }
 
                 if let error = error as? VectorStoreError {
                     if case .indexDimensionMismatch = error {
@@ -513,6 +559,26 @@ struct IndexCommand: AsyncParsableCommand {
                 return EmbeddingProviderChain.default
             }
 
+        case "gemini":
+            logger.debug("Using Gemini embedding provider")
+            if let apiKey = config.geminiAPIKey {
+                return EmbeddingProviderChain(
+                    providers: [
+                        GeminiEmbeddingProvider(
+                            apiKey: apiKey,
+                            modelName: config.embeddingModel,
+                            dimension: config.embeddingDimension
+                        ),
+                        SwiftEmbeddingsProvider(),
+                    ],
+                    id: "gemini-chain",
+                    name: "Gemini with fallback"
+                )
+            } else {
+                logger.warning("GEMINI_API_KEY not set, falling back to local provider")
+                return EmbeddingProviderChain.default
+            }
+
         case "auto":
             logger.debug("Using auto provider selection")
             return EmbeddingProviderChain.default
@@ -636,6 +702,9 @@ struct IndexCommand: AsyncParsableCommand {
         context: IndexingContext,
         force: Bool
     ) async throws -> FileIndexResult {
+        // Check for cancellation
+        try Task.checkCancellation()
+
         // Read file content
         let content = try String(contentsOfFile: path, encoding: .utf8)
 

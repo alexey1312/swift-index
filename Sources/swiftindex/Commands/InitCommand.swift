@@ -211,10 +211,9 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("# OpenAI (cloud)")
         lines.append("# provider = \"openai\"")
         lines.append("# model = \"text-embedding-3-large\"")
-        lines.append("")
-        lines.append("# API keys are read from environment variables:")
-        lines.append("#   VOYAGE_API_KEY for Voyage")
-        lines.append("#   OPENAI_API_KEY for OpenAI")
+        lines.append("# Gemini (Google AI)")
+        lines.append("# provider = \"gemini\"")
+        lines.append("# model = \"text-embedding-004\"")
         lines.append("")
 
         // Search section
@@ -320,7 +319,7 @@ struct InitCommand: AsyncParsableCommand {
         // MLX, Voyage, and OpenAI require explicit dimension in config
         // Swift Embeddings auto-detects from model
         switch provider.lowercased() {
-        case "mlx", "voyage", "openai":
+        case "mlx", "voyage", "openai", "gemini":
             true
         default:
             false
@@ -338,6 +337,8 @@ struct InitCommand: AsyncParsableCommand {
             return "voyage-large-2"
         case "openai":
             return "text-embedding-3-large"
+        case "gemini":
+            return "text-embedding-004"
         default:
             return "bge-small-en-v1.5"
         }
@@ -360,6 +361,8 @@ struct InitCommand: AsyncParsableCommand {
         case "all-MiniLM-L6-v2",
              "bge-small-en-v1.5":
             return 384
+        case "text-embedding-004":
+            return 768
         default:
             return nil
         }
@@ -467,6 +470,14 @@ private struct InitWizard {
                 title: "Embeddings",
                 question: "Select an OpenAI embedding model:",
                 options: OpenAIModelOption.allCases,
+                customOption: .custom,
+                preselectedModel: modelFlag
+            ) { $0.modelName }
+        case .gemini:
+            selectModel(
+                title: "Embeddings",
+                question: "Select a Gemini embedding model:",
+                options: GeminiModelOption.allCases,
                 customOption: .custom,
                 preselectedModel: modelFlag
             ) { $0.modelName }
@@ -606,8 +617,15 @@ private struct InitWizard {
             isCommandAvailable("claude")
         case .codexCLI:
             isCommandAvailable("codex")
-        case .ollama, .openai:
+        case .ollama:
             true
+        case .openai:
+            true
+        case .gemini:
+            // Gemini API is always available (just needs key)
+            true
+        case .geminiCLI:
+            isCommandAvailable("gemini")
         }
     }
 
@@ -667,6 +685,7 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
     case ollama
     case voyage
     case openai
+    case gemini
 
     var description: String {
         switch self {
@@ -680,6 +699,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             "Voyage (cloud API)"
         case .openai:
             "OpenAI (cloud API)"
+        case .gemini:
+            "Gemini (Google AI API)"
         }
     }
 
@@ -695,6 +716,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             "voyage"
         case .openai:
             "openai"
+        case .gemini:
+            "gemini"
         }
     }
 
@@ -713,6 +736,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             return .voyage
         case "openai":
             return .openai
+        case "gemini":
+            return .gemini
         default:
             return nil
         }
@@ -725,6 +750,8 @@ enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
     case codexCLI
     case ollama
     case openai
+    case gemini
+    case geminiCLI
 
     var description: String {
         switch self {
@@ -738,6 +765,10 @@ enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             "Ollama (local server)"
         case .openai:
             "OpenAI (cloud API)"
+        case .gemini:
+            "Gemini API (Google AI)"
+        case .geminiCLI:
+            "Gemini CLI (gemini command)"
         }
     }
 
@@ -753,6 +784,10 @@ enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             "ollama"
         case .openai:
             "openai"
+        case .gemini:
+            "gemini"
+        case .geminiCLI:
+            "gemini-cli"
         }
     }
 }
@@ -896,6 +931,29 @@ enum OpenAIModelOption: CaseIterable, CustomStringConvertible, Equatable {
             "text-embedding-3-small"
         case .large:
             "text-embedding-3-large"
+        case .custom:
+            "Custom..."
+        }
+    }
+}
+
+enum GeminiModelOption: CaseIterable, CustomStringConvertible, Equatable {
+    case embedding004
+    case custom
+
+    var modelName: String? {
+        switch self {
+        case .embedding004:
+            "text-embedding-004"
+        case .custom:
+            nil
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .embedding004:
+            "text-embedding-004"
         case .custom:
             "Custom..."
         }

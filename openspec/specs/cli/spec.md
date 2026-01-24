@@ -472,3 +472,13 @@ The system SHALL run lint/format validation on any CLI command that reads config
 - **WHEN** running `swiftindex search` (or any command that loads config)
 - **THEN** CLI runs TOML lint/format validation
 - **AND** fails fast on configuration errors
+
+### Requirement: Install Gemini CLI Configuration
+
+The system SHALL provide a command to configure the project for the Google Gemini CLI assistant.
+
+#### Scenario: Install for Gemini
+
+- **WHEN** user runs `swiftindex install-gemini`
+- **THEN** it checks for Gemini CLI configuration location
+- **AND** creates or updates the configuration to register the `swiftindex serve` MCP server
