@@ -525,6 +525,9 @@ struct SearchCommand: AsyncParsableCommand {
             if let breadcrumb = result.chunk.breadcrumb {
                 item["breadcrumb"] = breadcrumb
             }
+            if let description = result.chunk.generatedDescription {
+                item["generatedDescription"] = description
+            }
 
             if let bm25Score = result.bm25Score {
                 item["bm25Score"] = Double(bm25Score)
@@ -638,6 +641,11 @@ struct SearchCommand: AsyncParsableCommand {
                 print(" (keyword rank #\(bm25Rank))")
             } else {
                 print("")
+            }
+
+            // Show generated description if available
+            if let description = result.chunk.generatedDescription {
+                print("    Description: \(description)")
             }
 
             // Show doc comment if available (truncated)
@@ -773,6 +781,19 @@ struct SearchCommand: AsyncParsableCommand {
                     let truncated = String(doc.prefix(150)).replacingOccurrences(of: "\n", with: " ")
                     let suffix = doc.count > 150 ? "..." : ""
                     output += "  \"\(escapeString(truncated))\(suffix)\"\n"
+                } else {
+                    output += "  ~\n"
+                }
+            }
+        }
+
+        // Generated descriptions section
+        let hasDescriptions = results.contains { $0.chunk.generatedDescription != nil }
+        if hasDescriptions {
+            output += "\ndescs[\(results.count)]:\n"
+            for result in results {
+                if let desc = result.chunk.generatedDescription {
+                    output += "  \"\(escapeString(desc))\"\n"
                 } else {
                     output += "  ~\n"
                 }

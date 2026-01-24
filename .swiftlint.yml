@@ -23,6 +23,7 @@ opt_in_rules:
 file_length:
   warning: 900
   error: 1200
+  ignore_comment_only_lines: true
 
 line_length:
   warning: 120

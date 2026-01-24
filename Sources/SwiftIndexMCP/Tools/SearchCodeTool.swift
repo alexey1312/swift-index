@@ -306,6 +306,19 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             }
         }
 
+        // Generated descriptions section
+        let hasDescriptions = results.contains { $0.chunk.generatedDescription != nil }
+        if hasDescriptions {
+            output += "\ndescs[\(results.count)]:\n"
+            for result in results {
+                if let desc = result.chunk.generatedDescription {
+                    output += "  \"\(escapeString(desc))\"\n"
+                } else {
+                    output += "  ~\n"
+                }
+            }
+        }
+
         output += "\ncode[\(results.count)]:\n"
 
         for result in results {
@@ -427,6 +440,10 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         }
         output += "\n"
 
+        if let description = result.chunk.generatedDescription {
+            output += "    Description: \(description)\n"
+        }
+
         if let docComment = result.chunk.docComment {
             let truncated = String(docComment.prefix(100))
             let suffix = docComment.count > 100 ? "..." : ""
@@ -509,6 +526,9 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             }
             if let breadcrumb = result.chunk.breadcrumb {
                 item["breadcrumb"] = breadcrumb
+            }
+            if let description = result.chunk.generatedDescription {
+                item["generated_description"] = description
             }
 
             if let bm25Score = result.bm25Score {

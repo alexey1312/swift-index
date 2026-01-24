@@ -74,12 +74,13 @@ See `docs/search-enhancement.md`.
 
 ### Indexing Flags
 
-| Flag                      | Description                                   |
-| ------------------------- | --------------------------------------------- |
-| `--force`                 | Re-index all files, ignoring change detection |
-| `--generate-descriptions` | Generate LLM descriptions for code chunks     |
+| Flag      | Description                                   |
+| --------- | --------------------------------------------- |
+| `--force` | Re-index all files, ignoring change detection |
 
-`--generate-descriptions` requires `[search.enhancement]` config with an LLM provider.
+**LLM Descriptions**: Automatically generated when an LLM provider is available.
+No flag needed - descriptions are created during indexing if `[search.enhancement]`
+is configured or `claude` CLI is installed.
 
 ### Search Output Formats
 

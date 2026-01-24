@@ -52,12 +52,6 @@ struct IndexCommand: AsyncParsableCommand {
     )
     var verbose: Bool = false
 
-    @Flag(
-        name: .long,
-        help: "Generate LLM descriptions for code chunks (requires LLM provider)"
-    )
-    var generateDescriptions: Bool = false
-
     // MARK: - Execution
 
     mutating func run() async throws {
@@ -106,23 +100,15 @@ struct IndexCommand: AsyncParsableCommand {
 
         print("Found \(files.count) files to process")
 
-        // Create description generator if requested
-        let descriptionGenerator: DescriptionGenerator? = if generateDescriptions {
-            createDescriptionGenerator(config: configuration, logger: logger)
-        } else {
-            nil
-        }
+        // Create description generator (auto-generates when LLM provider is available)
+        let descriptionGenerator = createDescriptionGenerator(config: configuration, logger: logger)
 
-        if generateDescriptions {
-            if let generator = descriptionGenerator {
-                let available = await generator.isAvailable()
-                if available {
-                    print("Description generation: enabled")
-                } else {
-                    print("Warning: LLM provider not available, descriptions will be skipped")
-                }
+        if let generator = descriptionGenerator {
+            let available = await generator.isAvailable()
+            if available {
+                print("Description generation: enabled")
             } else {
-                print("Warning: Could not create description generator")
+                logger.debug("LLM provider not available, descriptions will be skipped")
             }
         }
 

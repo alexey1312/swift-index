@@ -18,7 +18,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 - **Local-First Embeddings**: Privacy-preserving embedding generation using MLX (Apple Silicon) or swift-embeddings
 - **Parallel Indexing**: Concurrent file processing with bounded concurrency for faster indexing
 - **Content-Based Change Detection**: SHA-256 content hashing for precise incremental re-indexing
-- **LLM Description Generation**: Optional AI-generated descriptions for code chunks during indexing
+- **LLM Description Generation**: Automatic AI-generated descriptions for code chunks (when LLM provider available)
 - **Watch Mode**: Automatically updates the index when files change
 - **MCP Server**: Exposes search capabilities to AI assistants via Model Context Protocol
 
@@ -121,9 +121,6 @@ swiftindex watch .
 
 # Use custom config
 swiftindex index --config custom.toml .
-
-# Generate LLM descriptions for code chunks (requires LLM provider)
-swiftindex index --generate-descriptions .
 ```
 
 ### `swiftindex search <query>`
@@ -547,6 +544,9 @@ meta[n]{sig,bc}:                # Signatures and breadcrumbs
 docs[n]:                        # Doc comments (truncated)
   "Description of the code..."
 
+descs[n]:                       # LLM-generated descriptions
+  "Validates user credentials"  # ~ = null if not generated
+
 code[n]:                        # Code content (max 15 lines)
   ---
   func example() { ... }
@@ -679,15 +679,16 @@ swiftindex/
 
 Each code chunk includes rich metadata for improved search:
 
-| Field         | Description                                      |
-| ------------- | ------------------------------------------------ |
-| `content`     | The actual code                                  |
-| `docComment`  | Associated documentation comment                 |
-| `signature`   | Function/type signature (if applicable)          |
-| `breadcrumb`  | Hierarchy path (e.g., "Module > Class > Method") |
-| `tokenCount`  | Approximate token count (content.count / 4)      |
-| `language`    | Programming language                             |
-| `contentHash` | SHA-256 hash for change detection                |
+| Field                  | Description                                         |
+| ---------------------- | --------------------------------------------------- |
+| `content`              | The actual code                                     |
+| `docComment`           | Associated documentation comment                    |
+| `signature`            | Function/type signature (if applicable)             |
+| `breadcrumb`           | Hierarchy path (e.g., "Module > Class > Method")    |
+| `tokenCount`           | Approximate token count (content.count / 4)         |
+| `language`             | Programming language                                |
+| `contentHash`          | SHA-256 hash for change detection                   |
+| `generatedDescription` | LLM-generated description (when provider available) |
 
 ## Development
 

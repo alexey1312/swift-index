@@ -192,19 +192,24 @@ swiftindex search --expand-query --synthesize "error handling"
 
 ## Description Generation
 
-Generate AI descriptions for code chunks during indexing:
+AI descriptions for code chunks are **automatically generated** during indexing when an LLM provider is available:
 
 ```bash
-swiftindex index --generate-descriptions .
+swiftindex index .
 ```
 
-This creates human-readable summaries explaining each code chunk's purpose. Descriptions are:
+Descriptions are generated when:
+
+- `[search.enhancement]` is configured with a utility provider, OR
+- The `claude` CLI is installed (used as default fallback)
+
+Descriptions provide human-readable summaries explaining each code chunk's purpose. They are:
 
 - Stored in the database alongside code chunks
-- Used to improve search relevance
-- Visible in search results (JSON/TOON formats)
+- **Indexed in FTS5** for BM25 keyword search (searchable!)
+- Visible in search results (human/JSON/TOON formats)
 
-**Note:** Description generation uses the **utility tier** LLM provider. For large codebases, consider using a fast provider like `ollama` or `gpt-4o-mini` to avoid long indexing times.
+**Note:** Description generation uses the **utility tier** LLM provider. For large codebases, consider using a fast provider like `ollama` or `gpt-4o-mini` to reduce indexing times.
 
 ## MCP Server Behavior
 

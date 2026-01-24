@@ -72,6 +72,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerInfoSnippetsMigration(&migrator)
         registerContentHashMigration(&migrator)
         registerGeneratedDescriptionMigration(&migrator)
+        registerDescriptionFTSMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -292,10 +293,76 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         // Version 5: LLM-generated descriptions for code chunks
         migrator.registerMigration("v5_generated_description") { db in
             // Add generated_description column to chunks table
-            // Nullable - only populated when --generate-descriptions flag is used
+            // Nullable - populated automatically when LLM provider is available
             try db.alter(table: "chunks") { table in
                 table.add(column: "generated_description", .text)
             }
+        }
+    }
+
+    private nonisolated func registerDescriptionFTSMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 6: Include generated_description in FTS5 index for BM25 search
+        migrator.registerMigration("v6_description_fts") { db in
+            // Drop old FTS table and triggers
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ai")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ad")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_au")
+            try db.execute(sql: "DROP TABLE IF EXISTS chunks_fts")
+
+            // Create FTS5 with generated_description included
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    symbols,
+                    doc_comment,
+                    generated_description,
+                    path UNINDEXED,
+                    content='chunks',
+                    content_rowid='rowid',
+                    tokenize='porter unicode61'
+                )
+            """)
+
+            // Triggers with generated_description
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, generated_description, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_au AFTER UPDATE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''), OLD.path);
+                    INSERT INTO chunks_fts(rowid, id, content, symbols,
+                                           doc_comment, generated_description, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''), NEW.path);
+                END
+            """)
+
+            // Rebuild FTS index with existing data
+            try db.execute(sql: """
+                INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, generated_description, path)
+                SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''),
+                       COALESCE(generated_description, ''), path FROM chunks
+            """)
         }
     }
 

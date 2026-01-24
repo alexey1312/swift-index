@@ -61,7 +61,7 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     public let contentHash: String
 
     /// LLM-generated description of the code chunk's purpose and functionality.
-    /// Generated offline during indexing with `--generate-descriptions` flag.
+    /// Automatically generated during indexing when an LLM provider is available.
     public let generatedDescription: String?
 
     public init(
