@@ -25,6 +25,9 @@ public struct PartialConfig: Sendable, Equatable {
     public var embeddingProvider: String?
     public var embeddingModel: String?
     public var embeddingDimension: Int?
+    public var embeddingBatchSize: Int?
+    public var embeddingBatchTimeoutMs: Int?
+    public var embeddingBatchMemoryLimitMB: Int?
 
     // MARK: - Search
 
@@ -77,6 +80,9 @@ public struct PartialConfig: Sendable, Equatable {
         embeddingProvider: String? = nil,
         embeddingModel: String? = nil,
         embeddingDimension: Int? = nil,
+        embeddingBatchSize: Int? = nil,
+        embeddingBatchTimeoutMs: Int? = nil,
+        embeddingBatchMemoryLimitMB: Int? = nil,
         semanticWeight: Float? = nil,
         rrfK: Int? = nil,
         multiHopEnabled: Bool? = nil,
@@ -104,6 +110,9 @@ public struct PartialConfig: Sendable, Equatable {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
         self.embeddingDimension = embeddingDimension
+        self.embeddingBatchSize = embeddingBatchSize
+        self.embeddingBatchTimeoutMs = embeddingBatchTimeoutMs
+        self.embeddingBatchMemoryLimitMB = embeddingBatchMemoryLimitMB
         self.semanticWeight = semanticWeight
         self.rrfK = rrfK
         self.multiHopEnabled = multiHopEnabled

@@ -149,6 +149,9 @@ private struct TOMLConfig: Codable {
         var provider: String?
         var model: String?
         var dimension: Int?
+        var batch_size: Int?
+        var batch_timeout_ms: Int?
+        var batch_memory_limit_mb: Int?
     }
 
     struct SearchSection: Codable {
@@ -208,6 +211,9 @@ private struct TOMLConfig: Codable {
             config.embeddingProvider = embedding.provider
             config.embeddingModel = embedding.model
             config.embeddingDimension = embedding.dimension
+            config.embeddingBatchSize = embedding.batch_size
+            config.embeddingBatchTimeoutMs = embedding.batch_timeout_ms
+            config.embeddingBatchMemoryLimitMB = embedding.batch_memory_limit_mb
         }
 
         // Search section

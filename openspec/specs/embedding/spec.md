@@ -258,18 +258,31 @@ The system SHALL cache embeddings to avoid recomputation.
 
 ### Requirement: Batch Embedding
 
-The system SHALL support efficient batch embedding.
+The system SHALL embed texts in batches that can span multiple files during indexing to reduce per-call overhead and improve MLX/GPU utilization.
 
-#### Scenario: Batch processing
+Batching rules:
 
-- **WHEN** indexing 100 chunks
-- **THEN** embed in batches of `mlx.batch_size`
-- **AND** show progress indicator
+- The batcher MUST aggregate chunk contents across files up to the configured batch size.
+- The batcher MUST preserve per-request ordering so callers receive embeddings matching their input chunk order.
+- The batcher MUST flush remaining items on indexing completion or after a bounded idle timeout.
+- Errors from the embedding provider MUST be propagated to all requests in the affected batch.
 
-#### Scenario: Batch size configuration
+#### Scenario: Cross-file batching
 
-- **WHEN** `mlx.batch_size = 64` in config
-- **THEN** process 64 texts per provider call
+- **WHEN** indexing produces many small chunk lists across multiple files
+- **THEN** the system aggregates them into larger batches
+- **AND** reduces the number of embedding calls compared to per-file embedding
+
+#### Scenario: Flush on completion
+
+- **WHEN** indexing finishes with a partially filled batch
+- **THEN** the system flushes the remaining items
+- **AND** all pending callers receive embeddings
+
+#### Scenario: Order preservation
+
+- **WHEN** two callers submit chunk lists
+- **THEN** each caller receives embeddings corresponding to their original chunk order
 
 ### Requirement: Code-Optimized Embedding Models
 

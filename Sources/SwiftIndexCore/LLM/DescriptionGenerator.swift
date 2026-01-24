@@ -1,6 +1,22 @@
-// MARK: - DescriptionGenerator
+// MARK: - DescriptionProgressCallback
 
 import Foundation
+
+/// Progress callback for description generation.
+///
+/// Called after each batch completion to report intermediate progress.
+///
+/// - Parameters:
+///   - completed: Number of chunks with descriptions generated so far.
+///   - total: Total number of chunks being processed.
+///   - currentFile: Relative path of the file being processed.
+public typealias DescriptionProgressCallback = @Sendable (
+    _ completed: Int,
+    _ total: Int,
+    _ currentFile: String
+) async -> Void
+
+// MARK: - DescriptionGenerator
 
 /// Generates concise descriptions for code chunks using an LLM.
 ///
@@ -80,10 +96,15 @@ public actor DescriptionGenerator {
     /// Processes chunks in parallel batches for efficiency.
     /// Chunks that fail generation will be counted as failures.
     ///
-    /// - Parameter chunks: The code chunks to describe.
+    /// - Parameters:
+    ///   - chunks: The code chunks to describe.
+    ///   - file: Relative path of the file being processed (for progress reporting).
+    ///   - onProgress: Optional callback invoked after each batch completion.
     /// - Returns: Result containing descriptions and failure details.
     public func generateBatch(
-        for chunks: [CodeChunk]
+        for chunks: [CodeChunk],
+        file: String = "",
+        onProgress: DescriptionProgressCallback? = nil
     ) async -> DescriptionBatchResult {
         var results: [String: String] = [:]
         var failures = 0
@@ -129,6 +150,9 @@ public actor DescriptionGenerator {
                     }
                 }
             }
+
+            // Report progress after each batch
+            await onProgress?(results.count, chunks.count, file)
         }
 
         return DescriptionBatchResult(

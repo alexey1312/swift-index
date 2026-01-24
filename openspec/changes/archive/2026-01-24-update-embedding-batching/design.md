@@ -31,6 +31,38 @@ Introduce an `EmbeddingBatcher` actor that receives chunk embedding requests fro
 - The batcher is an actor to safely coordinate between concurrent indexing tasks.
 - Indexing tasks await their embeddings without blocking unrelated parsing/indexing work.
 
+## Idle Timeout
+
+The batcher flushes pending items after **150ms** of idle time (no new requests).
+
+Rationale:
+
+- 150ms balances latency vs. batching efficiency
+- Typical file parsing takes 10-50ms, so 150ms allows 3-5 files to accumulate
+- Configurable via `embedding.batch_timeout_ms` (default: 150)
+
+## Memory Safeguard
+
+To prevent unbounded memory growth with large chunks:
+
+- Flush batch if pending content exceeds **10MB** total size
+- Calculate size as sum of UTF-8 encoded chunk contents
+- This limit is independent of batch count
+
+Default 10MB handles ~5000 typical code chunks (2KB avg).
+
+## Configuration
+
+New keys under `[embedding]` section:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `batch_size` | int | 32 | Max chunks per embedding call |
+| `batch_timeout_ms` | int | 150 | Idle timeout before flush |
+| `batch_memory_limit_mb` | int | 10 | Memory limit for pending chunks |
+
+Provider-specific batch sizes take precedence if configured (e.g., `mlx.batch_size`).
+
 ## Observability
 
 - Optionally log batch sizes and flush events at debug level for performance tuning.

@@ -18,6 +18,15 @@ public struct Config: Sendable, Equatable {
     /// Expected dimension of embedding vectors.
     public var embeddingDimension: Int
 
+    /// Maximum chunks per embedding batch call.
+    public var embeddingBatchSize: Int
+
+    /// Idle timeout before flushing embedding batch (milliseconds).
+    public var embeddingBatchTimeoutMs: Int
+
+    /// Memory limit for pending embedding chunks (megabytes).
+    public var embeddingBatchMemoryLimitMB: Int
+
     // MARK: - Search Configuration
 
     /// Weight for semantic search (0.0 to 1.0).
@@ -109,6 +118,9 @@ public struct Config: Sendable, Equatable {
         embeddingProvider: String = "auto",
         embeddingModel: String = "all-MiniLM-L6-v2",
         embeddingDimension: Int = 384,
+        embeddingBatchSize: Int = 32,
+        embeddingBatchTimeoutMs: Int = 150,
+        embeddingBatchMemoryLimitMB: Int = 10,
         semanticWeight: Float = 0.7,
         rrfK: Int = 60,
         multiHopEnabled: Bool = false,
@@ -136,6 +148,9 @@ public struct Config: Sendable, Equatable {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
         self.embeddingDimension = embeddingDimension
+        self.embeddingBatchSize = embeddingBatchSize
+        self.embeddingBatchTimeoutMs = embeddingBatchTimeoutMs
+        self.embeddingBatchMemoryLimitMB = embeddingBatchMemoryLimitMB
         self.semanticWeight = semanticWeight
         self.rrfK = rrfK
         self.multiHopEnabled = multiHopEnabled
@@ -275,6 +290,9 @@ public extension Config {
         applyIfPresent(partial.embeddingProvider, to: \.embeddingProvider)
         applyIfPresent(partial.embeddingModel, to: \.embeddingModel)
         applyIfPresent(partial.embeddingDimension, to: \.embeddingDimension)
+        applyIfPresent(partial.embeddingBatchSize, to: \.embeddingBatchSize)
+        applyIfPresent(partial.embeddingBatchTimeoutMs, to: \.embeddingBatchTimeoutMs)
+        applyIfPresent(partial.embeddingBatchMemoryLimitMB, to: \.embeddingBatchMemoryLimitMB)
         applyIfPresent(partial.semanticWeight, to: \.semanticWeight)
         applyIfPresent(partial.rrfK, to: \.rrfK)
         applyIfPresent(partial.multiHopEnabled, to: \.multiHopEnabled)

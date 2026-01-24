@@ -43,6 +43,15 @@ When `description_batch_mode = grouped`, the system SHALL request a structured J
 - **THEN** the system sends up to 5 chunks in one request
 - **AND** parses a JSON array of descriptions keyed by chunk id
 
+#### Scenario: Grouped request with ID tracking
+
+- **WHEN** `description_batch_mode = grouped`
+- **AND** `description_chunks_per_request = 3`
+- **AND** chunks have IDs ["a1b2", "c3d4", "e5f6"]
+- **THEN** request includes chunk IDs in prompt context
+- **AND** response MUST be JSON array with matching IDs
+- **AND** format: `[{"id": "a1b2", "description": "..."}, ...]`
+
 #### Scenario: Grouped request invalid response
 
 - **WHEN** grouped request returns invalid JSON
@@ -54,6 +63,26 @@ When `description_batch_mode = grouped`, the system SHALL request a structured J
 - **WHEN** `description_chunks_per_request` is 0 or negative
 - **THEN** configuration validation fails
 - **AND** an error indicates the value must be positive
+
+---
+
+### Requirement: Description Generation Progress Reporting
+
+The system SHALL report progress during description generation via callback mechanism.
+
+#### Scenario: Progress callback during batch processing
+
+- **WHEN** `generateBatch()` completes a batch of chunks
+- **THEN** progress callback is invoked with (completed, total, file)
+- **AND** callback is optional (nil = no reporting)
+
+#### Scenario: CLI progress display
+
+- **WHEN** description generation is active
+- **THEN** Noora displays nested progress under main progress bar
+- **AND** shows completed/total chunks and current filename
+
+---
 
 ## MODIFIED Requirements
 

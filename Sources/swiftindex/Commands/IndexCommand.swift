@@ -118,24 +118,38 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Create description generator (auto-generates when LLM provider is available)
         let descriptionGenerator = createDescriptionGenerator(config: configuration, logger: logger)
+        await checkDescriptionGeneratorAvailability(descriptionGenerator, logger: logger)
 
-        if let generator = descriptionGenerator {
-            let available = await generator.isAvailable()
-            if available {
-                print("Description generation: enabled")
-            } else {
-                logger.debug("LLM provider not available, descriptions will be skipped")
-            }
-        }
+        // Create embedding batcher for cross-file batching
+        let batcherConfig = EmbeddingBatcher.Configuration(
+            batchSize: configuration.embeddingBatchSize,
+            timeoutMs: configuration.embeddingBatchTimeoutMs,
+            memoryLimitMB: configuration.embeddingBatchMemoryLimitMB
+        )
+        let embeddingBatcher = EmbeddingBatcher(
+            provider: embeddingProvider,
+            configuration: batcherConfig
+        )
 
         // Index files in parallel
         let stats = AtomicIndexingStats()
+        let capturedProgressRenderer = progressRenderer
+        let capturedTerminal = terminal
         let indexingContext = IndexingContext(
             indexManager: indexManager,
             parser: parser,
-            embeddingProvider: embeddingProvider,
+            embeddingBatcher: embeddingBatcher,
             descriptionGenerator: descriptionGenerator,
             descriptionState: descriptionState,
+            descriptionProgress: { completed, total, file in
+                let displayFile = (file as NSString).lastPathComponent
+                let message = "  └─ Descriptions: \(completed)/\(total) (\(displayFile))"
+                let pipeline: StandardPipelining = capturedTerminal.isInteractive
+                    ? StandardOutputPipeline()
+                    : StandardErrorPipeline()
+                capturedProgressRenderer.log(message, standardPipeline: pipeline)
+            },
+            projectPath: resolvedPath,
             logger: logger
         )
 
@@ -177,10 +191,27 @@ struct IndexCommand: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
+        // Flush any remaining embedding requests
+        try await embeddingBatcher.flush()
+
         // Save index
         try await indexManager.save()
 
         // Final statistics
+        try await printFinalStatistics(
+            startTime: startTime,
+            stats: stats,
+            indexManager: indexManager,
+            logger: logger
+        )
+    }
+
+    private func printFinalStatistics(
+        startTime: Date,
+        stats: AtomicIndexingStats,
+        indexManager: IndexManager,
+        logger: Logger
+    ) async throws {
         let elapsed = Date().timeIntervalSince(startTime)
         let statistics = try await indexManager.statistics()
         let finalStats = stats.snapshot()
@@ -522,6 +553,19 @@ struct IndexCommand: AsyncParsableCommand {
         }
     }
 
+    private func checkDescriptionGeneratorAvailability(
+        _ generator: DescriptionGenerator?,
+        logger: Logger
+    ) async {
+        guard let generator else { return }
+        let available = await generator.isAvailable()
+        if available {
+            print("Description generation: enabled")
+        } else {
+            logger.debug("LLM provider not available, descriptions will be skipped")
+        }
+    }
+
     private func collectFiles(
         at path: String,
         config: Config,
@@ -630,7 +674,18 @@ struct IndexCommand: AsyncParsableCommand {
         // Generate descriptions if enabled
         var descriptionsGenerated = 0
         if let generator = context.descriptionGenerator, await context.descriptionState.isActive() {
-            let batchResult = await generator.generateBatch(for: chunks)
+            // Compute relative path for progress display
+            let relativePath: String = if path.hasPrefix(context.projectPath) {
+                String(path.dropFirst(context.projectPath.count + 1))
+            } else {
+                (path as NSString).lastPathComponent
+            }
+
+            let batchResult = await generator.generateBatch(
+                for: chunks,
+                file: relativePath,
+                onProgress: context.descriptionProgress
+            )
             if batchResult.failures > 0 {
                 let reason = batchResult.firstError ?? "Unknown error"
                 let didDisable = await context.descriptionState.disable(reason: reason)
@@ -677,13 +732,14 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Re-index the file with content-hash-based change detection
         // This avoids re-embedding unchanged chunks
+        // Uses EmbeddingBatcher for cross-file batching to maximize GPU utilization
         let reindexResult = try await context.indexManager.reindexWithChangeDetection(
             path: path,
             newChunks: chunks
         ) { chunksToEmbed in
-            // Embedding closure - only called for chunks that need new embeddings
+            // Embedding closure - uses batcher for cross-file aggregation
             let contents = chunksToEmbed.map(\.content)
-            return try await context.embeddingProvider.embed(contents)
+            return try await context.embeddingBatcher.embed(contents)
         }
 
         context.logger.debug("Indexed file", metadata: [
@@ -735,9 +791,11 @@ struct IndexCommand: AsyncParsableCommand {
 private struct IndexingContext: Sendable {
     let indexManager: IndexManager
     let parser: HybridParser
-    let embeddingProvider: EmbeddingProviderChain
+    let embeddingBatcher: EmbeddingBatcher
     let descriptionGenerator: DescriptionGenerator?
     let descriptionState: DescriptionGenerationState
+    let descriptionProgress: DescriptionProgressCallback?
+    let projectPath: String
     let logger: Logger
 }
 
