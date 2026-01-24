@@ -119,6 +119,7 @@ TOON is the default format for both CLI and MCP server.
 - `/Index` — IndexManager (orchestrates storage and embedding)
 - `/LLM` — LLM providers and search enhancement features
   - `LLMProvider` protocol, `LLMMessage`, `LLMProviderChain`
+  - `MLXLLMProvider` — fully local LLM on Apple Silicon (no cloud required)
   - `ClaudeCodeCLIProvider`, `CodexCLIProvider`, `OllamaLLMProvider`, `OpenAILLMProvider`
   - `QueryExpander` — LLM-powered query expansion
   - `ResultSynthesizer` — multi-result summarization
@@ -303,13 +304,23 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 enabled = false  # opt-in
 
 [search.enhancement.utility]
-provider = "claude-code-cli"  # claude-code-cli | codex-cli | ollama | openai
-timeout = 30
+provider = "mlx"  # mlx | claude-code-cli | codex-cli | ollama | openai
+model = "mlx-community/Qwen3-4B-4bit"  # optional (default: Qwen3-4B-4bit)
+timeout = 60
 
 [search.enhancement.synthesis]
-provider = "claude-code-cli"
+provider = "mlx"
 timeout = 120
 ```
+
+**MLX LLM Models** (4-bit quantized, local-only):
+
+- `mlx-community/Qwen3-4B-4bit` — default, good balance of quality/speed
+- `mlx-community/SmolLM-135M-Instruct-4bit` — ultra-fast, basic capabilities
+- `mlx-community/Llama-3.2-1B-Instruct-4bit` — compact, good for simple tasks
+- `mlx-community/Llama-3.2-3B-Instruct-4bit` — larger, better quality
+
+First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~/.cache/huggingface/`.
 
 ### Environment Variables
 

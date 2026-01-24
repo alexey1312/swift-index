@@ -86,6 +86,10 @@ let package = Package(
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
 
+                // LLM (MLX-based local text generation)
+                .product(name: "MLXLLM", package: "mlx-swift-lm"),
+                .product(name: "MLXLMCommon", package: "mlx-swift-lm"),
+
                 // Storage
                 .product(name: "GRDB", package: "GRDB.swift"),
                 .product(name: "USearch", package: "usearch"),

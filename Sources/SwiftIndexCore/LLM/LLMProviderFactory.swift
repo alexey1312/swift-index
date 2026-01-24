@@ -20,6 +20,7 @@ public enum LLMProviderFactory {
         case codexCLI = "codex-cli"
         case ollama
         case openai
+        case mlx
     }
 
     // MARK: - Factory Methods
@@ -78,6 +79,12 @@ public enum LLMProviderFactory {
                 apiKey: key,
                 defaultModel: defaultModel
             )
+
+        case .mlx:
+            if let modelId = model {
+                return MLXLLMProvider(huggingFaceId: modelId)
+            }
+            return MLXLLMProvider()
         }
     }
 

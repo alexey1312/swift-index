@@ -19,7 +19,7 @@ import TOML
 /// [search]
 /// semantic_weight = 0.7
 /// rrf_k = 60
-/// multi_hop_enabled = false
+/// multi_hop_enabled = true
 /// multi_hop_depth = 2
 /// output_format = "toon"  # toon, human, or json
 ///

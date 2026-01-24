@@ -123,9 +123,9 @@ public struct Config: Sendable, Equatable {
         embeddingBatchMemoryLimitMB: Int = 10,
         semanticWeight: Float = 0.7,
         rrfK: Int = 60,
-        multiHopEnabled: Bool = false,
+        multiHopEnabled: Bool = true,
         multiHopDepth: Int = 2,
-        outputFormat: String = "human",
+        outputFormat: String = "toon",
         searchLimit: Int = 20,
         expandQueryByDefault: Bool = false,
         synthesizeByDefault: Bool = false,
@@ -214,6 +214,7 @@ public struct LLMTierConfig: Sendable, Equatable {
     /// LLM provider identifier.
     ///
     /// Supported providers:
+    /// - `mlx`: MLX local LLM (default, fully local on Apple Silicon)
     /// - `claude-code-cli`: Claude Code CLI (requires `claude` command)
     /// - `codex-cli`: Codex CLI (requires `codex` command)
     /// - `ollama`: Local Ollama server
@@ -237,17 +238,18 @@ public struct LLMTierConfig: Sendable, Equatable {
     }
 
     /// Default utility tier (fast operations).
-    /// Uses Haiku for cost efficiency — sufficient for short descriptions.
+    /// Uses MLX for fully local, privacy-first operation.
     public static let defaultUtility = LLMTierConfig(
-        provider: "claude-code-cli",
-        model: "haiku",
-        timeout: 30
+        provider: "mlx",
+        model: nil, // Uses default: Qwen3-4B-4bit
+        timeout: 60
     )
 
     /// Default synthesis tier (deep analysis).
+    /// Uses MLX for fully local, privacy-first operation.
     public static let defaultSynthesis = LLMTierConfig(
-        provider: "claude-code-cli",
-        model: nil,
+        provider: "mlx",
+        model: nil, // Uses default: Qwen3-4B-4bit
         timeout: 120
     )
 }

@@ -221,7 +221,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("[search]")
         lines.append("semantic_weight = 0.7")
         lines.append("rrf_k = 60")
-        lines.append("multi_hop_enabled = false")
+        lines.append("multi_hop_enabled = true")
         lines.append("multi_hop_depth = 2")
         lines.append("output_format = \"toon\"  # toon (token-optimized), human, or json")
         lines.append("")
@@ -240,10 +240,10 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("")
         lines.append("# Utility tier - fast operations (query expansion, follow-ups)")
         lines.append("[search.enhancement.utility]")
-        let resolvedLLMProvider = llmProvider?.configValue ?? "claude-code-cli"
-        lines.append("provider = \"\(resolvedLLMProvider)\"  # claude-code-cli | codex-cli | ollama | openai")
+        let resolvedLLMProvider = llmProvider?.configValue ?? "mlx"
+        lines.append("provider = \"\(resolvedLLMProvider)\"  # mlx | claude-code-cli | codex-cli | ollama | openai")
         lines.append("# model = \"haiku\"  # default: haiku (cost-efficient for descriptions)")
-        lines.append("timeout = 30")
+        lines.append("timeout = 60")
         lines.append("")
         lines.append("# Synthesis tier - deep analysis (result summarization)")
         lines.append("[search.enhancement.synthesis]")
@@ -252,6 +252,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("timeout = 120")
         lines.append("")
         lines.append("# Provider examples:")
+        lines.append("# mlx: Uses MLX for local text generation (Apple Silicon only, fully offline)")
         lines.append("# claude-code-cli: Uses 'claude' CLI (requires: npm install -g @anthropic-ai/claude-code)")
         lines.append("# codex-cli: Uses 'codex' CLI (requires: npm install -g @openai/codex)")
         lines.append("# ollama: Uses local Ollama server (requires: ollama serve)")
@@ -526,18 +527,19 @@ private struct InitWizard {
             title: "Search enhancements",
             question: "Enable LLM-powered query expansion and synthesis?",
             defaultAnswer: false,
-            description: "Requires Claude Code, Codex CLI, Ollama, or OpenAI."
+            description: "MLX (local), Claude Code, Codex CLI, Ollama, or OpenAI."
         )
 
         guard enableLLM else {
             return nil
         }
 
+        // Default to MLX (fully local on Apple Silicon)
         var provider = ui.singleChoicePrompt(
             title: "Search enhancements",
             question: "Select an LLM provider:",
-            options: orderedOptions(LLMProviderOption.allCases, preselected: .claudeCodeCLI),
-            description: "CLI providers require their respective tools installed."
+            options: orderedOptions(LLMProviderOption.allCases, preselected: .mlx),
+            description: "MLX runs fully local on Apple Silicon. CLI providers require tools."
         )
 
         while !isLLMProviderAvailable(provider) {
@@ -597,6 +599,9 @@ private struct InitWizard {
 
     private func isLLMProviderAvailable(_ provider: LLMProviderOption) -> Bool {
         switch provider {
+        case .mlx:
+            // MLX is always available on Apple Silicon (this product is arm64-only)
+            true
         case .claudeCodeCLI:
             isCommandAvailable("claude")
         case .codexCLI:
@@ -715,6 +720,7 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
 }
 
 enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
+    case mlx
     case claudeCodeCLI
     case codexCLI
     case ollama
@@ -722,6 +728,8 @@ enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
 
     var description: String {
         switch self {
+        case .mlx:
+            "MLX (Apple Silicon, fully local)"
         case .claudeCodeCLI:
             "Claude Code (claude CLI)"
         case .codexCLI:
@@ -735,6 +743,8 @@ enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
 
     var configValue: String {
         switch self {
+        case .mlx:
+            "mlx"
         case .claudeCodeCLI:
             "claude-code-cli"
         case .codexCLI:

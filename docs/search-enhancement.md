@@ -39,7 +39,35 @@ timeout = 120
 
 ## LLM Providers
 
-SwiftIndex supports four LLM providers:
+SwiftIndex supports five LLM providers:
+
+### MLX (`mlx`)
+
+Uses Apple MLX for fully local text generation on Apple Silicon. Best for privacy-sensitive use cases and offline operation.
+
+**Requirements:**
+
+- Apple Silicon Mac (M1 or later)
+- macOS 14.0+
+- First run downloads model from HuggingFace (~2-7GB)
+
+**Configuration:**
+
+```toml
+[search.enhancement.utility]
+provider = "mlx"
+model = "mlx-community/Qwen3-4B-4bit"  # optional (default)
+timeout = 60
+```
+
+**Supported Models:**
+
+- `mlx-community/Qwen3-4B-4bit` - Default, good balance of quality/speed
+- `mlx-community/SmolLM-135M-Instruct-4bit` - Ultra-fast, basic capabilities
+- `mlx-community/Llama-3.2-1B-Instruct-4bit` - Compact, good for simple tasks
+- `mlx-community/Llama-3.2-3B-Instruct-4bit` - Larger, better quality
+
+Models are cached in `~/.cache/huggingface/` after first download.
 
 ### Claude Code CLI (`claude-code-cli`)
 
@@ -133,12 +161,16 @@ timeout = 30
 
 ## Provider Selection Guide
 
-| Use Case          | Recommended Provider | Model         |
-| ----------------- | -------------------- | ------------- |
-| Claude Code user  | `claude-code-cli`    | default       |
-| Privacy-first     | `ollama`             | `llama3.2`    |
-| High availability | `openai`             | `gpt-4o-mini` |
-| Codex user        | `codex-cli`          | default       |
+| Use Case              | Recommended Provider | Model           |
+| --------------------- | -------------------- | --------------- |
+| Privacy-first (local) | `mlx`                | `Qwen3-4B-4bit` |
+| Offline usage         | `mlx`                | `Qwen3-4B-4bit` |
+| Claude Code user      | `claude-code-cli`    | default         |
+| Local server (non-M1) | `ollama`             | `llama3.2`      |
+| High availability     | `openai`             | `gpt-4o-mini`   |
+| Codex user            | `codex-cli`          | default         |
+
+**Note:** MLX is recommended for Apple Silicon users who want fully local, private LLM operations with no cloud dependency.
 
 ## Timeout Configuration
 

@@ -239,6 +239,20 @@ struct LLMProviderFactoryTests {
         #expect(provider.id == "openai")
     }
 
+    @Test("Create provider from tier config - MLX")
+    func mlx() throws {
+        let config = LLMTierConfig(provider: "mlx")
+        let provider = try LLMProviderFactory.createProvider(from: config)
+        #expect(provider.id == "mlx")
+    }
+
+    @Test("Create MLX provider with custom model")
+    func mlxCustomModel() throws {
+        let config = LLMTierConfig(provider: "mlx", model: "mlx-community/SmolLM-135M-Instruct-4bit")
+        let provider = try LLMProviderFactory.createProvider(from: config)
+        #expect(provider.id == "mlx")
+    }
+
     @Test("Unknown provider throws error")
     func unknownProvider() {
         let config = LLMTierConfig(provider: "unknown-provider")
@@ -258,18 +272,18 @@ struct SearchEnhancementConfigTests {
         #expect(config.enabled == false)
     }
 
-    @Test("Default utility tier uses claude-code-cli with haiku")
+    @Test("Default utility tier uses mlx")
     func defaultUtilityProvider() {
         let config = SearchEnhancementConfig.default
-        #expect(config.utility.provider == "claude-code-cli")
-        #expect(config.utility.model == "haiku")
-        #expect(config.utility.timeout == 30)
+        #expect(config.utility.provider == "mlx")
+        #expect(config.utility.model == nil) // Uses default Qwen3-4B-4bit
+        #expect(config.utility.timeout == 60)
     }
 
-    @Test("Default synthesis tier uses claude-code-cli")
+    @Test("Default synthesis tier uses mlx")
     func defaultSynthesisProvider() {
         let config = SearchEnhancementConfig.default
-        #expect(config.synthesis.provider == "claude-code-cli")
+        #expect(config.synthesis.provider == "mlx")
         #expect(config.synthesis.timeout == 120)
     }
 }
@@ -816,5 +830,59 @@ private final class FailingMockProvider: LLMProvider, @unchecked Sendable {
             throw LLMError.timeout(seconds: timeout)
         }
         return "Test description."
+    }
+}
+
+// MARK: - MLXLLMProvider Tests
+
+@Suite("MLXLLMProvider")
+struct MLXLLMProviderTests {
+    @Test("Provider has correct ID and name")
+    func idAndName() {
+        let provider = MLXLLMProvider()
+        #expect(provider.id == "mlx")
+        #expect(provider.name == "MLX LLM Provider")
+    }
+
+    @Test("Provider with default model")
+    func defaultModel() {
+        let provider = MLXLLMProvider()
+        #expect(provider.id == "mlx")
+    }
+
+    @Test("Provider with preset model")
+    func presetModel() {
+        let provider = MLXLLMProvider(model: .smolLM)
+        #expect(provider.id == "mlx")
+    }
+
+    @Test("Provider with custom HuggingFace model")
+    func customModel() {
+        let provider = MLXLLMProvider(huggingFaceId: "mlx-community/custom-model-4bit")
+        #expect(provider.id == "mlx")
+    }
+
+    @Test("Complete throws on empty messages")
+    func emptyMessages() async {
+        let provider = MLXLLMProvider()
+        await #expect(throws: LLMError.self) {
+            _ = try await provider.complete(messages: [], model: nil, timeout: 30)
+        }
+    }
+
+    @Test("Model enum has correct HuggingFace IDs")
+    func modelHuggingFaceIds() {
+        #expect(MLXLLMProvider.Model.qwen3_4b.huggingFaceId == "mlx-community/Qwen3-4B-4bit")
+        #expect(MLXLLMProvider.Model.smolLM.huggingFaceId == "mlx-community/SmolLM-135M-Instruct-4bit")
+        #expect(MLXLLMProvider.Model.llama32_1b.huggingFaceId == "mlx-community/Llama-3.2-1B-Instruct-4bit")
+        #expect(MLXLLMProvider.Model.llama32_3b.huggingFaceId == "mlx-community/Llama-3.2-3B-Instruct-4bit")
+    }
+
+    @Test("Model enum has recommended max tokens")
+    func modelMaxTokens() {
+        #expect(MLXLLMProvider.Model.smolLM.recommendedMaxTokens == 256)
+        #expect(MLXLLMProvider.Model.qwen3_4b.recommendedMaxTokens == 512)
+        #expect(MLXLLMProvider.Model.llama32_1b.recommendedMaxTokens == 512)
+        #expect(MLXLLMProvider.Model.llama32_3b.recommendedMaxTokens == 512)
     }
 }
