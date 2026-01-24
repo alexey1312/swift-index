@@ -175,10 +175,11 @@ struct IndexCommand: AsyncParsableCommand {
                     maxConcurrentTasks: maxConcurrentTasks,
                     forceReindex: forceReindex,
                     logger: logger,
-                    reportProgress: { processed, _, total in
+                    reportProgress: { processed, inFlight, total in
                         let safeTotal = max(total, 1)
-                        // Use only processed count for smooth, accurate progress from 0% to 100%
-                        updateProgress(Double(processed) / Double(safeTotal))
+                        // Count in-flight files as 10% done to show immediate activity without a large jump
+                        let effectiveProcessed = Double(processed) + (Double(inFlight) * 0.1)
+                        updateProgress(min(effectiveProcessed / Double(safeTotal), 1.0))
                     }
                 )
             )
