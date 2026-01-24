@@ -64,6 +64,9 @@ let package = Package(
             from: "0.3.0",
             traits: ["strictStandardJSON"]
         ),
+
+        // Signal handling
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.62.0"),
     ],
     targets: [
         // MARK: - Core Library
@@ -134,6 +137,7 @@ let package = Package(
                 .product(name: "Logging", package: "swift-log"),
                 .product(name: "ToonFormat", package: "toon-swift"),
                 .product(name: "Noora", package: "Noora"),
+                .product(name: "NIOPosix", package: "swift-nio"),
             ],
             path: "Sources/swiftindex"
         ),
