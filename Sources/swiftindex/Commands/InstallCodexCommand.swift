@@ -8,7 +8,7 @@ import SwiftIndexCore
 /// Command to install SwiftIndex as an MCP server for OpenAI Codex.
 ///
 /// Usage:
-///   swiftindex install-codex           # Project-local (.mcp.json)
+///   swiftindex install-codex           # Project-local (adds cwd to ~/.codex/config.toml)
 ///   swiftindex install-codex --global  # Global (~/.codex/config.toml)
 ///   swiftindex install-codex --dry-run
 ///   swiftindex install-codex --force
@@ -20,13 +20,14 @@ struct InstallCodexCommand: ParsableCommand {
         Configures SwiftIndex as a Model Context Protocol (MCP) server
         for OpenAI Codex.
 
-        By default, creates a project-local .mcp.json in the current directory.
-        Use --global to add to ~/.codex/config.toml for global availability.
+        By default, adds a project-local MCP server with cwd to ~/.codex/config.toml.
+        Use --global to add a global MCP server (no cwd) in ~/.codex/config.toml.
 
         Global configuration format (TOML):
         [mcp_servers.swiftindex]
         command = "/path/to/swiftindex"
         args = ["serve"]
+        cwd = "/path/to/project"  # Only for project-local installs
         """
     )
 
@@ -40,7 +41,7 @@ struct InstallCodexCommand: ParsableCommand {
 
     @Flag(
         name: .long,
-        help: "Install globally to ~/.codex/config.toml instead of project-local .mcp.json"
+        help: "Install globally to ~/.codex/config.toml instead of project-local (with cwd)"
     )
     var global: Bool = false
 
@@ -69,119 +70,42 @@ struct InstallCodexCommand: ParsableCommand {
         let fileManager = FileManager.default
 
         if global {
-            try installGlobal(
+            try installCodexConfig(
                 executable: resolvedExecutable,
+                cwd: nil,
                 fileManager: fileManager,
-                logger: logger
+                logger: logger,
+                scopeDescription: "global"
             )
         } else {
-            try installLocal(
+            try installCodexConfig(
                 executable: resolvedExecutable,
+                cwd: fileManager.currentDirectoryPath,
                 fileManager: fileManager,
-                logger: logger
+                logger: logger,
+                scopeDescription: "project-local"
             )
         }
     }
 
     // MARK: - Private Helpers
 
-    private func installLocal(
+    private func installCodexConfig(
         executable: String,
+        cwd: String?,
         fileManager: FileManager,
-        logger: Logger
-    ) throws {
-        let configPath = fileManager.currentDirectoryPath + "/.mcp.json"
-        let scopeDescription = "project-local"
-
-        logger.debug("Target config path: \(configPath)")
-        logger.debug("Executable path: \(executable)")
-        logger.debug("Scope: \(scopeDescription)")
-
-        // Create MCP configuration entry
-        let mcpServerConfig: [String: Any] = [
-            "command": executable,
-            "args": ["serve"],
-        ]
-
-        if dryRun {
-            print("Dry run - would perform the following:")
-            print("")
-            print("Target: OpenAI Codex (\(scopeDescription))")
-            print("Config: \(configPath)")
-            print("")
-            print("Would add MCP server configuration:")
-            let fullConfig: [String: Any] = ["mcpServers": ["swiftindex": mcpServerConfig]]
-            if let jsonData = try? JSONCodec.serialize(fullConfig, options: [.prettyPrinted, .sortedKeys]),
-               let jsonString = String(data: jsonData, encoding: .utf8)
-            {
-                print(jsonString)
-            }
-            return
-        }
-
-        // Read existing config or create new one
-        var existingConfig: [String: Any] = [:]
-
-        if fileManager.fileExists(atPath: configPath) {
-            logger.debug("Reading existing config")
-            if let data = fileManager.contents(atPath: configPath),
-               let json = try? JSONCodec.deserialize(data) as? [String: Any]
-            {
-                existingConfig = json
-            }
-        }
-
-        // Get or create mcpServers section
-        var mcpServers = existingConfig["mcpServers"] as? [String: Any] ?? [:]
-
-        // Check if already installed
-        if mcpServers["swiftindex"] != nil, !force {
-            logger.warning("SwiftIndex is already installed for OpenAI Codex")
-            print("SwiftIndex is already configured for OpenAI Codex")
-            print("Config: \(configPath)")
-            print("")
-            print("Use --force to overwrite existing configuration")
-            return
-        }
-
-        // Add swiftindex configuration
-        mcpServers["swiftindex"] = mcpServerConfig
-        existingConfig["mcpServers"] = mcpServers
-
-        // Write updated config
-        logger.info("Writing updated config")
-        let jsonData = try JSONCodec.serialize(existingConfig, options: [.prettyPrinted, .sortedKeys])
-
-        try jsonData.write(to: URL(fileURLWithPath: configPath))
-
-        print("Successfully installed SwiftIndex for OpenAI Codex (\(scopeDescription))")
-        print("")
-        print("Configuration written to: \(configPath)")
-        print("")
-        print("Restart Codex to enable SwiftIndex tools.")
-
-        logger.info("Installation completed")
-    }
-
-    private func installGlobal(
-        executable: String,
-        fileManager: FileManager,
-        logger: Logger
+        logger: Logger,
+        scopeDescription: String
     ) throws {
         // Config path: ~/.codex/config.toml
         let configPath = ("~/.codex/config.toml" as NSString).expandingTildeInPath
-        let scopeDescription = "global"
 
         logger.debug("Target config path: \(configPath)")
         logger.debug("Executable path: \(executable)")
         logger.debug("Scope: \(scopeDescription)")
 
         // Create TOML configuration section
-        let tomlSection = """
-        [mcp_servers.swiftindex]
-        command = "\(executable)"
-        args = ["serve"]
-        """
+        let tomlSection = buildTomlSection(executable: executable, cwd: cwd)
 
         if dryRun {
             print("Dry run - would perform the following:")
@@ -214,6 +138,13 @@ struct InstallCodexCommand: ParsableCommand {
                let content = String(data: data, encoding: .utf8)
             {
                 existingContent = content
+            } else if !force {
+                logger.warning("Unable to read existing config; refusing to overwrite without --force")
+                print("Unable to read existing Codex config")
+                print("Config: \(configPath)")
+                print("")
+                print("Use --force to overwrite existing configuration")
+                return
             }
         }
 
@@ -258,6 +189,21 @@ struct InstallCodexCommand: ParsableCommand {
         print("Restart Codex to enable SwiftIndex tools.")
 
         logger.info("Installation completed")
+    }
+
+    private func buildTomlSection(executable: String, cwd: String?) -> String {
+        var section = """
+        [mcp_servers.swiftindex]
+        command = "\(executable)"
+        args = ["serve"]
+        """
+
+        if let cwd {
+            section += "\n"
+            section += "cwd = \"\(cwd)\""
+        }
+
+        return section
     }
 
     /// Removes existing [mcp_servers.swiftindex] section from TOML content.

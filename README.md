@@ -70,14 +70,16 @@ swiftindex install-claude-code
 # Claude Code (global ~/.claude.json)
 swiftindex install-claude-code --global
 
-# Cursor (project-local .mcp.json)
+# Cursor (project-local .cursor/mcp.json)
 swiftindex install-cursor
 
-# Codex (project-local .mcp.json)
+# Codex (project-local entry in ~/.codex/config.toml with cwd)
 swiftindex install-codex
 ```
 
-By default, install commands create a project-local `.mcp.json` configuration.
+By default, install commands create a project-local configuration.
+For Cursor, the project-local entry is written to `.cursor/mcp.json`.
+For Codex, the project-local entry is written to `~/.codex/config.toml` with `cwd`.
 Use `--global` to install to the user-wide configuration file instead.
 
 ## Quick Start
@@ -224,8 +226,8 @@ swiftindex install-claude-code --dry-run
 
 Similar commands exist for other AI assistants:
 
-- `swiftindex install-cursor` — Cursor IDE (local: `.mcp.json`, global: `~/.cursor/mcp.json`)
-- `swiftindex install-codex` — Codex CLI (local: `.mcp.json`, global: `~/.codex/config.toml`)
+- `swiftindex install-cursor` — Cursor IDE (local: `.cursor/mcp.json`, global: `~/.cursor/mcp.json`)
+- `swiftindex install-codex` — Codex CLI (local: `~/.codex/config.toml` with `cwd`, global: `~/.codex/config.toml`)
 
 ## Assistant Guidance Files
 
@@ -398,11 +400,20 @@ SwiftIndex implements [Model Context Protocol](https://modelcontextprotocol.io/)
 
 Different AI assistants require slightly different configuration formats:
 
-| Client      | Config File                           | Type Field                  | Notes                        |
-| ----------- | ------------------------------------- | --------------------------- | ---------------------------- |
-| Claude Code | `.mcp.json` or `~/.claude.json`       | Required: `"type": "stdio"` | Use `--global` for user-wide |
-| Cursor      | `.mcp.json` or `~/.cursor/mcp.json`   | Not needed                  | Standard MCP format          |
-| Codex       | `.mcp.json` or `~/.codex/config.toml` | Not needed                  | TOML format for global       |
+| Client      | Config File                                | Type Field                  | Notes                        |
+| ----------- | ------------------------------------------ | --------------------------- | ---------------------------- |
+| Claude Code | `.mcp.json` or `~/.claude.json`            | Required: `"type": "stdio"` | Use `--global` for user-wide |
+| Cursor      | `.cursor/mcp.json` or `~/.cursor/mcp.json` | Required: `"type": "stdio"` | JSON `mcp.json` format       |
+| Codex       | `~/.codex/config.toml`                     | Not needed                  | TOML format (cwd for local)  |
+
+### Cursor MCP install links
+
+Cursor supports install links for MCP servers. The `config` parameter is a base64-encoded
+JSON object that matches the `mcp.json` format (server name as the top-level key). Example:
+
+```
+cursor://anysphere.cursor-deeplink/mcp/install?name=swiftindex&config=<BASE64_JSON>
+```
 
 ### Error Responses
 

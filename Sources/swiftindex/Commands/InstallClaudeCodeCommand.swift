@@ -122,6 +122,13 @@ struct InstallClaudeCodeCommand: ParsableCommand {
                let json = try? JSONCodec.deserialize(data) as? [String: Any]
             {
                 existingConfig = json
+            } else if !force {
+                logger.warning("Unable to read existing config; refusing to overwrite without --force")
+                print("Unable to read existing Claude Code config")
+                print("Config: \(configPath)")
+                print("")
+                print("Use --force to overwrite existing configuration")
+                return
             }
         }
 

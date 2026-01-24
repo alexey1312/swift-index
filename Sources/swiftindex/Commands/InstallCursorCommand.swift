@@ -8,7 +8,7 @@ import SwiftIndexCore
 /// Command to install SwiftIndex as an MCP server for Cursor IDE.
 ///
 /// Usage:
-///   swiftindex install-cursor           # Project-local (.mcp.json)
+///   swiftindex install-cursor           # Project-local (.cursor/mcp.json)
 ///   swiftindex install-cursor --global  # Global (~/.cursor/mcp.json)
 ///   swiftindex install-cursor --dry-run
 ///   swiftindex install-cursor --force
@@ -20,13 +20,14 @@ struct InstallCursorCommand: ParsableCommand {
         Configures SwiftIndex as a Model Context Protocol (MCP) server
         for Cursor IDE.
 
-        By default, creates a project-local .mcp.json in the current directory.
+        By default, creates a project-local .cursor/mcp.json in the current directory.
         Use --global to add to ~/.cursor/mcp.json for global availability.
 
         Configuration format:
         {
           "mcpServers": {
             "swiftindex": {
+              "type": "stdio",
               "command": "/path/to/swiftindex",
               "args": ["serve"]
             }
@@ -45,7 +46,7 @@ struct InstallCursorCommand: ParsableCommand {
 
     @Flag(
         name: .long,
-        help: "Install globally to ~/.cursor/mcp.json instead of project-local .mcp.json"
+        help: "Install globally to ~/.cursor/mcp.json instead of project-local .cursor/mcp.json"
     )
     var global: Bool = false
 
@@ -79,7 +80,7 @@ struct InstallCursorCommand: ParsableCommand {
             configPath = ("~/.cursor/mcp.json" as NSString).expandingTildeInPath
             scopeDescription = "global"
         } else {
-            configPath = FileManager.default.currentDirectoryPath + "/.mcp.json"
+            configPath = FileManager.default.currentDirectoryPath + "/.cursor/mcp.json"
             scopeDescription = "project-local"
         }
 
@@ -87,8 +88,9 @@ struct InstallCursorCommand: ParsableCommand {
         logger.debug("Executable path: \(resolvedExecutable)")
         logger.debug("Scope: \(scopeDescription)")
 
-        // Create MCP configuration entry (Cursor does not require "type" field)
+        // Create MCP configuration entry (Cursor requires "type": "stdio")
         let mcpServerConfig: [String: Any] = [
+            "type": "stdio",
             "command": resolvedExecutable,
             "args": ["serve"],
         ]
@@ -109,21 +111,16 @@ struct InstallCursorCommand: ParsableCommand {
             return
         }
 
-        // Check if config directory exists (for global)
-        if global {
-            let configDir = (configPath as NSString).deletingLastPathComponent
-            let fileManager = FileManager.default
-
-            if !fileManager.fileExists(atPath: configDir) {
-                logger.info("Creating config directory: \(configDir)")
-                try fileManager.createDirectory(
-                    atPath: configDir,
-                    withIntermediateDirectories: true
-                )
-            }
-        }
-
         let fileManager = FileManager.default
+        let configDir = (configPath as NSString).deletingLastPathComponent
+
+        if !fileManager.fileExists(atPath: configDir) {
+            logger.info("Creating config directory: \(configDir)")
+            try fileManager.createDirectory(
+                atPath: configDir,
+                withIntermediateDirectories: true
+            )
+        }
 
         // Read existing config or create new one
         var existingConfig: [String: Any] = [:]
@@ -134,6 +131,13 @@ struct InstallCursorCommand: ParsableCommand {
                let json = try? JSONCodec.deserialize(data) as? [String: Any]
             {
                 existingConfig = json
+            } else if !force {
+                logger.warning("Unable to read existing config; refusing to overwrite without --force")
+                print("Unable to read existing Cursor config")
+                print("Config: \(configPath)")
+                print("")
+                print("Use --force to overwrite existing configuration")
+                return
             }
         }
 

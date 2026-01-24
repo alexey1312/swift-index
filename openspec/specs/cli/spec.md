@@ -193,22 +193,24 @@ Options:
 #### Scenario: Install Codex (project-local default)
 
 - **WHEN** running `swiftindex install-codex`
-- **THEN** creates `.mcp.json` in current directory
+- **THEN** adds MCP server to `~/.codex/config.toml` with `cwd` set to current directory
 
 #### Scenario: Install Codex (global)
 
 - **WHEN** running `swiftindex install-codex --global`
-- **THEN** adds to `~/.codex/config.yaml`
+- **THEN** adds to `~/.codex/config.toml`
 
 #### Scenario: Install Cursor (project-local default)
 
 - **WHEN** running `swiftindex install-cursor`
-- **THEN** creates `.mcp.json` in current directory
+- **THEN** adds MCP server to `.cursor/mcp.json` in the current directory
+- **AND** configures the `swiftindex` MCP server with `type = "stdio"`
 
 #### Scenario: Install Cursor (global)
 
 - **WHEN** running `swiftindex install-cursor --global`
-- **THEN** adds MCP server to Cursor settings
+- **THEN** adds MCP server to `~/.cursor/mcp.json`
+- **AND** configures the `swiftindex` MCP server with `type = "stdio"`
 
 #### Scenario: Already installed
 

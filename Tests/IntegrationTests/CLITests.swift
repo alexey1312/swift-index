@@ -400,6 +400,8 @@ struct CLITests {
 
         #expect(exitCode == 0, "Should succeed")
         #expect(stdout.contains("Cursor"), "Should mention Cursor")
+        #expect(stdout.contains(".cursor/mcp.json"), "Should mention project-local Cursor config")
+        #expect(stdout.contains("\"type\"") && stdout.contains("stdio"), "Should include stdio type")
     }
 
     // MARK: - General CLI Tests

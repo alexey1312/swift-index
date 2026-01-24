@@ -3,6 +3,7 @@
 import ArgumentParser
 import Foundation
 import Logging
+import Noora
 import SwiftIndexCore
 
 /// Command to index a Swift codebase for semantic search.
@@ -55,6 +56,13 @@ struct IndexCommand: AsyncParsableCommand {
     // MARK: - Execution
 
     mutating func run() async throws {
+        let verboseFlag = verbose
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardError(label: label)
+            handler.logLevel = verboseFlag ? .debug : .info
+            return handler
+        }
+
         let logger = CLIUtils.makeLogger(verbose: verbose)
         logger.info("Starting index operation")
 
@@ -128,16 +136,29 @@ struct IndexCommand: AsyncParsableCommand {
         // Use TaskGroup for parallel processing with bounded concurrency
         // Capture force as local constant to avoid capturing self
         let forceReindex = force
-        let fatalError = try await runIndexingTasks(
-            files: files,
-            config: IndexingTaskConfig(
-                context: indexingContext,
-                stats: stats,
-                maxConcurrentTasks: maxConcurrentTasks,
-                forceReindex: forceReindex,
-                logger: logger
+        let ui = Noora()
+        var fatalError: Error?
+        try await ui.progressBarStep(
+            message: "Indexing files",
+            successMessage: "Indexing completed",
+            errorMessage: "Indexing failed"
+        ) { updateProgress in
+            fatalError = try await IndexCommand.runIndexingTasks(
+                files: files,
+                config: IndexingTaskConfig(
+                    context: indexingContext,
+                    stats: stats,
+                    maxConcurrentTasks: maxConcurrentTasks,
+                    forceReindex: forceReindex,
+                    logger: logger,
+                    reportProgress: { processed, inFlight, total in
+                        let safeTotal = max(total, 1)
+                        let visible = min(processed + inFlight, safeTotal)
+                        updateProgress(Double(visible) / Double(safeTotal))
+                    }
+                )
             )
-        )
+        }
 
         // Handle fatal errors after task group completes
         if let fatalError {
@@ -273,9 +294,10 @@ struct IndexCommand: AsyncParsableCommand {
         let maxConcurrentTasks: Int
         let forceReindex: Bool
         let logger: Logger
+        let reportProgress: (Int, Int, Int) -> Void
     }
 
-    private func runIndexingTasks(
+    private static func runIndexingTasks(
         files: [String],
         config: IndexingTaskConfig
     ) async throws -> Error? {
@@ -296,6 +318,7 @@ struct IndexCommand: AsyncParsableCommand {
                 currentIndex += 1
                 inFlight += 1
             }
+            config.reportProgress(config.stats.filesProcessed, inFlight, files.count)
 
             for try await (_, result, error) in group {
                 inFlight -= 1
@@ -326,11 +349,7 @@ struct IndexCommand: AsyncParsableCommand {
                 }
 
                 let processed = config.stats.filesProcessed
-                let chunks = config.stats.chunksIndexed
-                let progress = processed * 100 / files.count
-                let progressMsg = "\r[\(progress)%] Processing: \(processed)/\(files.count)"
-                print("\(progressMsg) files, \(chunks) chunks", terminator: "")
-                fflush(stdout)
+                config.reportProgress(processed, inFlight, files.count)
 
                 if currentIndex < files.count {
                     enqueueIndexingTask(
@@ -342,6 +361,7 @@ struct IndexCommand: AsyncParsableCommand {
                     )
                     currentIndex += 1
                     inFlight += 1
+                    config.reportProgress(processed, inFlight, files.count)
                 }
             }
         }
@@ -349,7 +369,7 @@ struct IndexCommand: AsyncParsableCommand {
         return fatalError
     }
 
-    private func enqueueIndexingTask(
+    private static func enqueueIndexingTask(
         group: inout ThrowingTaskGroup<(Int, FileIndexResult?, Error?), Error>,
         index: Int,
         filePath: String,
