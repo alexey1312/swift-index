@@ -26,7 +26,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 
 - **macOS 14 (Sonoma)** or later
 - **Swift 6.1+** (Xcode 16+). Swift 6.2.3 recommended.
-- **Apple Silicon** (recommended for MLX embeddings) or Intel x86_64
+- **Apple Silicon** (M1/M2/M3/M4) — required for MLX embeddings
 
 ## Installation
 
@@ -725,21 +725,6 @@ swift-index/
 ```
 
 ## Troubleshooting
-
-### MLX not available on Intel Macs
-
-SwiftIndex automatically falls back to Swift Embeddings on Intel Macs. You can explicitly set the provider:
-
-```bash
-export SWIFTINDEX_EMBEDDING_PROVIDER=swift
-```
-
-Or in `.swiftindex.toml`:
-
-```toml
-[embedding]
-provider = "swift"
-```
 
 ### MLX Metal library missing
 

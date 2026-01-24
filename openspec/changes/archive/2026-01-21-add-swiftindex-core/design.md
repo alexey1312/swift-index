@@ -236,7 +236,7 @@ func hybridSearch(query: String, semanticWeight: Float = 0.7) -> [SearchResult] 
 ### R4: MLX Compatibility
 
 - **Risk:** MLX только для Apple Silicon
-- **Mitigation:** Automatic fallback to Ollama/swift-embeddings on Intel
+- **Mitigation:** Apple Silicon (arm64) is a hard requirement; Intel not supported due to Float16 dependency in usearch
 
 ## Migration Plan
 

@@ -14,7 +14,7 @@ env:
 
 jobs:
   build:
-    name: Build macOS Universal
+    name: Build macOS (Apple Silicon)
     runs-on: macos-15
 
     steps:
@@ -35,22 +35,16 @@ jobs:
           sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/swiftindex/SwiftIndexApp.swift
           sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/SwiftIndexMCP/MCPServer.swift
 
-      - name: Build release binary (Universal)
+      - name: Build release binary (arm64)
         run: |
           set -euo pipefail
           swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
-          swift build -c release --arch x86_64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
-          mkdir -p .build/universal
-          lipo -create \
-            .build/arm64-apple-macosx/release/swiftindex \
-            .build/x86_64-apple-macosx/release/swiftindex \
-            -output .build/universal/swiftindex
           ./scripts/build-mlx-metallib
 
       - name: Create release archive
         run: |
           mkdir -p dist
-          cp .build/universal/swiftindex dist/
+          cp .build/arm64-apple-macosx/release/swiftindex dist/
           cp .build/mlx-metal/default.metallib dist/
           cp .build/mlx-metal/mlx.metallib dist/
           cp LICENSE dist/ 2>/dev/null || echo "No LICENSE file"

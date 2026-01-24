@@ -255,7 +255,7 @@ let object = try JSONCodec.deserialize(data)
 
 - **Workflow**: `.github/workflows/release.yml`
 - **Trigger**: Push tag `v*.*.*` (e.g., `git tag v0.1.0 && git push --tags`)
-- **Artifacts**: Universal binary (arm64 + x86_64) in `swiftindex-macos.zip`
+- **Artifacts**: arm64 binary (Apple Silicon) in `swiftindex-macos.zip`
 - **Auto-updates**: Homebrew formula SHA256 on stable releases
 
 ### Homebrew
