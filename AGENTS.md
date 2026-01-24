@@ -84,13 +84,13 @@ is configured or `claude` CLI is installed.
 
 ### Search Output Formats
 
-| Format | Flag             | Description                                |
-| ------ | ---------------- | ------------------------------------------ |
-| human  | `--format human` | Default, with relevance percentages        |
-| json   | `--format json`  | Verbose JSON with all metadata             |
-| toon   | `--format toon`  | Token-optimized (40-60% smaller than JSON) |
+| Format | Flag             | Description                                      |
+| ------ | ---------------- | ------------------------------------------------ |
+| toon   | `--format toon`  | Default, token-optimized (57% smaller than JSON) |
+| human  | `--format human` | Human-readable with relevance percentages        |
+| json   | `--format json`  | Verbose JSON with all metadata                   |
 
-MCP server uses TOON format by default for optimal token efficiency.
+TOON is the default format for both CLI and MCP server.
 
 ## Architecture
 
@@ -288,7 +288,7 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 | ----------------------- | -------- | ------- | ----------------------------------------- |
 | semantic_weight         | float    | 0.7     | Weight for semantic vs BM25 (0.0-1.0)     |
 | rrf_k                   | int      | 60      | RRF fusion constant                       |
-| output_format           | string   | "human" | Default format: human, json, or toon      |
+| output_format           | string   | "toon"  | Default format: toon, human, or json      |
 | limit                   | int      | 20      | Default number of search results          |
 | expand_query_by_default | bool     | false   | Enable LLM query expansion by default     |
 | synthesize_by_default   | bool     | false   | Enable LLM result synthesis by default    |

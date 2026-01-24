@@ -21,7 +21,7 @@ import TOML
 /// rrf_k = 60
 /// multi_hop_enabled = false
 /// multi_hop_depth = 2
-/// output_format = "human"  # human, json, or toon
+/// output_format = "toon"  # toon, human, or json
 ///
 /// [indexing]
 /// exclude = [".git", ".build", "DerivedData"]

@@ -12,7 +12,7 @@ enum OutputFormat: String, ExpressibleByArgument, CaseIterable, Sendable {
     case json
     case toon
 
-    static var defaultValueDescription: String { "human" }
+    static var defaultValueDescription: String { "toon" }
 }
 
 /// Command to search the indexed codebase.

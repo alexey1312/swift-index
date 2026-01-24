@@ -134,10 +134,10 @@ swiftindex search "authentication"
 # Limit results
 swiftindex search --limit 5 "user login"
 
-# Output formats
-swiftindex search --format human "error handling"  # Default, with relevance %
-swiftindex search --format json "error handling"   # Verbose JSON
-swiftindex search --format toon "error handling"   # Token-optimized (40-60% smaller)
+# Output formats (toon is default)
+swiftindex search "error handling"                 # Default: TOON (token-optimized)
+swiftindex search --format human "error handling"  # Human-readable with relevance %
+swiftindex search --format json "error handling"   # Verbose JSON with all metadata
 
 # Legacy JSON flag (deprecated, use --format json)
 swiftindex search --json "error handling"
@@ -152,11 +152,11 @@ swiftindex search --synthesize "authentication flow"   # Generate summary and fo
 
 **Output Formats:**
 
-| Format  | Description                         | Use Case                       |
-| ------- | ----------------------------------- | ------------------------------ |
-| `human` | Readable with relevance percentages | Terminal/interactive use       |
-| `json`  | Verbose JSON with all metadata      | Scripting/automation           |
-| `toon`  | Token-optimized (TOON format)       | AI assistants (40-60% smaller) |
+| Format  | Description                         | Use Case                    |
+| ------- | ----------------------------------- | --------------------------- |
+| `toon`  | Token-optimized (default)           | AI assistants (57% smaller) |
+| `human` | Readable with relevance percentages | Terminal/interactive use    |
+| `json`  | Verbose JSON with all metadata      | Scripting/automation        |
 
 **Search Enhancement Flags:**
 
@@ -294,8 +294,8 @@ semantic_weight = 0.7
 # RRF fusion constant
 rrf_k = 60
 
-# Output format: human, json, or toon (token-optimized)
-output_format = "human"
+# Output format: toon (token-optimized), human, or json
+output_format = "toon"
 
 [storage]
 # Index storage location

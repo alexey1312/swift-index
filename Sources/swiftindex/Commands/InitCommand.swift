@@ -219,7 +219,7 @@ struct InitCommand: AsyncParsableCommand {
         lines.append("rrf_k = 60")
         lines.append("multi_hop_enabled = false")
         lines.append("multi_hop_depth = 2")
-        lines.append("output_format = \"human\"  # human, json, or toon (token-optimized)")
+        lines.append("output_format = \"toon\"  # toon (token-optimized), human, or json")
         lines.append("")
         lines.append("# Search defaults (can be overridden via CLI flags)")
         lines.append("limit = 20                      # default --limit")
