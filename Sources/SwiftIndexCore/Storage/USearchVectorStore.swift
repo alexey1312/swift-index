@@ -361,6 +361,9 @@ public actor USearchVectorStore: VectorStore {
         nextKey = 0
         trackedCapacity = Self.initialCapacity
 
+        // Re-reserve capacity after clear - USearch resets capacity to 0 on clear()
+        try index.reserve(Self.initialCapacity)
+
         // Delete persistence files to ensure clean slate on next save
         if let indexPath {
             try Self.deleteIndex(at: indexPath)
