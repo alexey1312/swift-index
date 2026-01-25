@@ -19,7 +19,7 @@ struct EnvironmentConfigLoaderTests {
             for key in keys {
                 saved[key] = ProcessInfo.processInfo.environment[key]
             }
-            self.savedValues = saved
+            savedValues = saved
         }
 
         deinit {

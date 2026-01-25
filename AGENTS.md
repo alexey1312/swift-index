@@ -351,14 +351,14 @@ First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~
 
 ### Environment Variables
 
-| Variable                         | Description                      |
-| -------------------------------- | -------------------------------- |
-| `SWIFTINDEX_EMBEDDING_PROVIDER`  | mlx, ollama, voyage, openai      |
-| `SWIFTINDEX_ANTHROPIC_API_KEY`   | Anthropic API key (priority)     |
-| `ANTHROPIC_API_KEY`              | Anthropic API key (fallback)     |
-| `SWIFTINDEX_VOYAGE_API_KEY`      | Voyage AI key (priority)         |
-| `VOYAGE_API_KEY`                 | Voyage AI key (fallback)         |
-| `SWIFTINDEX_OPENAI_API_KEY`      | OpenAI key (priority)            |
-| `OPENAI_API_KEY`                 | OpenAI key (fallback)            |
-| `SWIFTINDEX_GEMINI_API_KEY`      | Gemini API key (priority)        |
-| `GEMINI_API_KEY`                 | Gemini API key (fallback)        |
+| Variable                        | Description                  |
+| ------------------------------- | ---------------------------- |
+| `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai  |
+| `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (priority) |
+| `ANTHROPIC_API_KEY`             | Anthropic API key (fallback) |
+| `SWIFTINDEX_VOYAGE_API_KEY`     | Voyage AI key (priority)     |
+| `VOYAGE_API_KEY`                | Voyage AI key (fallback)     |
+| `SWIFTINDEX_OPENAI_API_KEY`     | OpenAI key (priority)        |
+| `OPENAI_API_KEY`                | OpenAI key (fallback)        |
+| `SWIFTINDEX_GEMINI_API_KEY`     | Gemini API key (priority)    |
+| `GEMINI_API_KEY`                | Gemini API key (fallback)    |
