@@ -25,7 +25,7 @@ import TOML
 ///
 /// [indexing]
 /// exclude = [".git", ".build", "DerivedData"]
-/// include_extensions = [".swift", ".m", ".h"]
+/// include_extensions = [".swift", ".m", ".h", ".md"]
 /// max_file_size = 1000000
 /// chunk_size = 1500
 /// chunk_overlap = 200

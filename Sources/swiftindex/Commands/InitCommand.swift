@@ -275,7 +275,7 @@ struct InitCommand: AsyncParsableCommand {
         let excludeStr = excludePatterns.map { "\"\($0)\"" }.joined(separator: ", ")
         lines.append("exclude = [\(excludeStr)]")
 
-        lines.append("include_extensions = [\".swift\", \".m\", \".h\"]")
+        lines.append("include_extensions = [\".swift\", \".m\", \".h\", \".md\"]")
         lines.append("max_file_size = 1000000")
         lines.append("chunk_size = 1500")
         lines.append("chunk_overlap = 200")

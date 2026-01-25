@@ -108,6 +108,34 @@ public actor IndexManager {
         ])
     }
 
+    // MARK: - Snippet Indexing
+
+    /// Reindex info snippets for a file.
+    ///
+    /// This removes all existing snippets for the path and inserts new ones.
+    /// Snippets are BM25-only (no embeddings required).
+    ///
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - snippets: New snippets to index.
+    /// - Returns: Number of snippets indexed.
+    @discardableResult
+    public func reindexSnippets(path: String, snippets: [InfoSnippet]) async throws -> Int {
+        // Delete old snippets for this path
+        try await chunkStore.deleteSnippetsByPath(path)
+
+        // Insert new snippets
+        guard !snippets.isEmpty else { return 0 }
+        try await chunkStore.insertSnippetBatch(snippets)
+
+        logger.debug("Indexed snippets", metadata: [
+            "path": "\(path)",
+            "count": "\(snippets.count)",
+        ])
+
+        return snippets.count
+    }
+
     /// Check if a file needs reindexing based on its path and content hash.
     ///
     /// - Parameters:
@@ -412,6 +440,13 @@ public actor IndexManager {
         try await chunkStore.allPaths()
     }
 
+    /// Get the total number of indexed info snippets.
+    ///
+    /// - Returns: Snippet count.
+    public func snippetCount() async throws -> Int {
+        try await chunkStore.snippetCount()
+    }
+
     /// Get index statistics.
     ///
     /// - Returns: Statistics about the index.
@@ -419,12 +454,14 @@ public actor IndexManager {
         async let chunks = chunkCount()
         async let vectors = vectorCount()
         async let paths = indexedPaths()
+        async let snippets = snippetCount()
 
         return try await IndexStatistics(
             chunkCount: chunks,
             vectorCount: vectors,
             fileCount: paths.count,
-            dimension: vectorStore.dimension
+            dimension: vectorStore.dimension,
+            snippetCount: snippets
         )
     }
 
@@ -455,6 +492,7 @@ public actor IndexManager {
     /// - Throws: If clearing fails.
     public func clear() async throws {
         try await chunkStore.clear()
+        try await chunkStore.clearSnippets()
         try await vectorStore.clear()
         logger.info("Index cleared")
     }
@@ -605,9 +643,26 @@ public struct IndexStatistics: Sendable {
     /// Vector embedding dimension.
     public let dimension: Int
 
+    /// Number of indexed info snippets (documentation).
+    public let snippetCount: Int
+
     /// Whether chunk and vector counts match.
     public var isConsistent: Bool {
         chunkCount == vectorCount
+    }
+
+    public init(
+        chunkCount: Int,
+        vectorCount: Int,
+        fileCount: Int,
+        dimension: Int,
+        snippetCount: Int = 0
+    ) {
+        self.chunkCount = chunkCount
+        self.vectorCount = vectorCount
+        self.fileCount = fileCount
+        self.dimension = dimension
+        self.snippetCount = snippetCount
     }
 }
 

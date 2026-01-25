@@ -776,12 +776,21 @@ struct IndexCommand: AsyncParsableCommand {
             return try await context.embeddingBatcher.embed(contents)
         }
 
+        // Index info snippets (documentation) if present
+        // Snippets are BM25-only, no embeddings needed
+        let snippets = parseResult.snippets
+        var snippetsIndexed = 0
+        if !snippets.isEmpty {
+            snippetsIndexed = try await context.indexManager.reindexSnippets(path: path, snippets: snippets)
+        }
+
         context.logger.debug("Indexed file", metadata: [
             "path": "\(path)",
             "total": "\(reindexResult.totalChunks)",
             "embedded": "\(reindexResult.embeddedChunks)",
             "reused": "\(reindexResult.reusedChunks)",
             "descriptions": "\(descriptionsGenerated)",
+            "snippets": "\(snippetsIndexed)",
         ])
 
         return FileIndexResult(
