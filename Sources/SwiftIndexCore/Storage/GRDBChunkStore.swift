@@ -1,4 +1,4 @@
-// swiftlint:disable file_length
+// swiftlint:disable file_length type_body_length
 // MARK: - GRDBChunkStore
 
 import Foundation
@@ -80,6 +80,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerDescriptionFTSMigration(&migrator)
         registerConformancesMigration(&migrator)
         registerTypeDeclarationMigration(&migrator)
+        registerTokenizerFixMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -508,6 +509,127 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
             """)
 
             // Trigger on delete is handled by CASCADE foreign key
+        }
+    }
+
+    private nonisolated func registerTokenizerFixMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 9: Switch FTS5 tokenizer from 'porter unicode61' to 'unicode61'
+        // This improves exact match precision for code identifiers (e.g., CamelCase)
+        migrator.registerMigration("v9_tokenizer_fix") { db in
+            // 1. CHUNKS FTS
+            // Drop old FTS table and triggers
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ai")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ad")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_au")
+            try db.execute(sql: "DROP TABLE IF EXISTS chunks_fts")
+
+            // Recreate FTS5 with unicode61 tokenizer (no porter)
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    symbols,
+                    doc_comment,
+                    generated_description,
+                    conformances,
+                    path UNINDEXED,
+                    content='chunks',
+                    content_rowid='rowid',
+                    tokenize='unicode61'
+                )
+            """)
+
+            // Recreate triggers (same as v7/v8)
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                           generated_description, conformances, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''),
+                            COALESCE(NEW.conformances, '[]'), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, conformances, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''),
+                            COALESCE(OLD.conformances, '[]'), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_au AFTER UPDATE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, conformances, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''),
+                            COALESCE(OLD.conformances, '[]'), OLD.path);
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                           generated_description, conformances, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''),
+                            COALESCE(NEW.conformances, '[]'), NEW.path);
+                END
+            """)
+
+            // Rebuild FTS index with existing data
+            try db.execute(sql: """
+                INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                       generated_description, conformances, path)
+                SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''),
+                       COALESCE(generated_description, ''), COALESCE(conformances, '[]'), path FROM chunks
+            """)
+
+            // 2. INFO SNIPPETS FTS (Also updating for consistency)
+            try db.execute(sql: "DROP TRIGGER IF EXISTS info_snippets_ai")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS info_snippets_ad")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS info_snippets_au")
+            try db.execute(sql: "DROP TABLE IF EXISTS info_snippets_fts")
+
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE info_snippets_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    breadcrumb,
+                    path UNINDEXED,
+                    content='info_snippets',
+                    content_rowid='rowid',
+                    tokenize='unicode61'
+                )
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_ai AFTER INSERT ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(rowid, id, content, breadcrumb, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, COALESCE(NEW.breadcrumb, ''), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_ad AFTER DELETE ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(info_snippets_fts, rowid, id, content, breadcrumb, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, COALESCE(OLD.breadcrumb, ''), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER info_snippets_au AFTER UPDATE ON info_snippets BEGIN
+                    INSERT INTO info_snippets_fts(info_snippets_fts, rowid, id, content, breadcrumb, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, COALESCE(OLD.breadcrumb, ''), OLD.path);
+                    INSERT INTO info_snippets_fts(rowid, id, content, breadcrumb, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, COALESCE(NEW.breadcrumb, ''), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                INSERT INTO info_snippets_fts(rowid, id, content, breadcrumb, path)
+                SELECT rowid, id, content, COALESCE(breadcrumb, ''), path FROM info_snippets
+            """)
         }
     }
 
