@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "swiftindex": {
+            "args": [
+                "serve"
+            ],
+            "command": "/Users/aleksei/Developer/swift-index/.build/release/swiftindex",
+            "type": "stdio"
+        }
+    }
+}

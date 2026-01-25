@@ -265,6 +265,13 @@ actor MockChunkStoreWithSnippets: ChunkStore, InfoSnippetStore {
         fileHashesByPath.removeAll()
     }
 
+    func getTermFrequency(term: String) async throws -> Int {
+        chunks.values.count(where: { chunk in
+            chunk.symbols.contains(term) ||
+                chunk.content.lowercased().contains(term.lowercased())
+        })
+    }
+
     // MARK: - InfoSnippetStore
 
     func insertSnippet(_ snippet: InfoSnippet) async throws {

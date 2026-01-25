@@ -18,6 +18,7 @@ struct SwiftIndex: AsyncParsableCommand {
         Quick start:
           swiftindex index           Index current directory
           swiftindex search "query"  Search the index
+          swiftindex search-docs "q" Search documentation
           swiftindex watch           Watch for changes
 
         For AI assistant integration:
@@ -31,6 +32,7 @@ struct SwiftIndex: AsyncParsableCommand {
             FmtCommand.self,
             IndexCommand.self,
             SearchCommand.self,
+            SearchDocsCommand.self,
             WatchCommand.self,
             ProvidersCommand.self,
             ServeCommand.self,

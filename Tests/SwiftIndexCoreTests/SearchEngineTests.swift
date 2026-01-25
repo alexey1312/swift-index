@@ -106,6 +106,14 @@ actor MockChunkStore: ChunkStore {
         chunks.removeAll()
         fileHashesByPath.removeAll()
     }
+
+    func getTermFrequency(term: String) async throws -> Int {
+        // Simple mock: count chunks that contain the term in symbols or content
+        chunks.values.count(where: { chunk in
+            chunk.symbols.contains(term) ||
+                chunk.content.lowercased().contains(term.lowercased())
+        })
+    }
 }
 
 /// Mock vector store for testing semantic search.

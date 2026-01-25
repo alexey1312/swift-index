@@ -89,6 +89,15 @@ public protocol ChunkStore: Sendable {
     /// - Returns: Dictionary mapping content hash to existing chunk.
     func getByContentHashes(_ hashes: Set<String>) async throws -> [String: CodeChunk]
 
+    /// Get term frequency for a term (count of chunks containing this term).
+    ///
+    /// Used for exact symbol boost threshold checking. Terms appearing fewer
+    /// than the rare term threshold receive higher boost in search ranking.
+    ///
+    /// - Parameter term: The term to count occurrences of.
+    /// - Returns: Number of chunks containing this term.
+    func getTermFrequency(term: String) async throws -> Int
+
     /// Clear all data from the store.
     func clear() async throws
 }

@@ -584,8 +584,8 @@ struct GRDBChunkStoreTests {
             makeChunk(id: "tf-5", symbols: ["CommonSymbol"]),
         ])
 
-        let rareTermFreq = try await store.getTermFrequency(symbol: "USearchError")
-        let commonTermFreq = try await store.getTermFrequency(symbol: "CommonSymbol")
+        let rareTermFreq = try await store.getTermFrequency(term: "USearchError")
+        let commonTermFreq = try await store.getTermFrequency(term: "CommonSymbol")
 
         #expect(rareTermFreq == 2)
         #expect(commonTermFreq == 3)

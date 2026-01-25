@@ -1,3 +1,4 @@
+// swiftlint:disable file_length
 // MARK: - GRDBChunkStore
 
 import Foundation
@@ -18,6 +19,10 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
     /// The path to the database file.
     public let databasePath: String
+
+    /// LRU cache for term frequency lookups (max 100 entries).
+    private var termFrequencyCache: [String: (count: Int, accessTime: Date)] = [:]
+    private let termFrequencyCacheLimit = 100
 
     // MARK: - Initialization
 
@@ -512,6 +517,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         try await dbWriter.write { db in
             try ChunkRecord(chunk: chunk).insert(db)
         }
+        invalidateTermFrequencyCache()
     }
 
     public func insertBatch(_ chunks: [CodeChunk]) async throws {
@@ -522,6 +528,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
                 try ChunkRecord(chunk: chunk).insert(db)
             }
         }
+        invalidateTermFrequencyCache()
     }
 
     public func get(id: String) async throws -> CodeChunk? {
@@ -547,12 +554,14 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         try await dbWriter.write { db in
             try ChunkRecord(chunk: chunk).update(db)
         }
+        invalidateTermFrequencyCache()
     }
 
     public func delete(id: String) async throws {
         _ = try await dbWriter.write { db in
             try ChunkRecord.deleteOne(db, key: id)
         }
+        invalidateTermFrequencyCache()
     }
 
     public func deleteByPath(_ path: String) async throws {
@@ -561,6 +570,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
                 .filter(Column("path") == path)
                 .deleteAll(db)
         }
+        invalidateTermFrequencyCache()
     }
 
     public func searchFTS(
@@ -655,6 +665,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
             try db.execute(sql: "DELETE FROM info_snippets")
             try db.execute(sql: "DELETE FROM file_hashes")
         }
+        invalidateTermFrequencyCache()
     }
 
     // MARK: - InfoSnippetStore Protocol
@@ -830,22 +841,52 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
     }
 
-    /// Get term frequency for a symbol (count of chunks containing this symbol).
+    /// Get term frequency for a term (count of chunks containing this term).
     ///
-    /// Used for exact symbol boost threshold checking.
+    /// Used for exact symbol boost threshold checking. Checks both symbols
+    /// and content fields. Results are cached with LRU eviction (100 entries).
     ///
-    /// - Parameter symbol: The symbol name to count.
-    /// - Returns: Number of chunks containing this symbol.
-    public func getTermFrequency(symbol: String) async throws -> Int {
-        try await dbWriter.read { db in
+    /// - Parameter term: The term to count occurrences of.
+    /// - Returns: Number of chunks containing this term.
+    public func getTermFrequency(term: String) async throws -> Int {
+        // Check cache first
+        if let cached = termFrequencyCache[term] {
+            // Update access time for LRU
+            termFrequencyCache[term] = (cached.count, Date())
+            return cached.count
+        }
+
+        let count = try await dbWriter.read { db in
+            // Match term in symbols JSON array: ["term"] or ["other", "term"] etc.
+            // Also check content for broader matching
+            let symbolPattern = "%\"\(term)\"%"
+            let contentPattern = "%\(term)%"
+
             let sql = """
                 SELECT COUNT(*) FROM chunks
-                WHERE symbols LIKE ?
+                WHERE symbols LIKE ? OR content LIKE ?
             """
-            // Match symbol in JSON array: ["symbol"] or ["other", "symbol"] etc.
-            let pattern = "%\"\(symbol)\"%"
-            return try Int.fetchOne(db, sql: sql, arguments: [pattern]) ?? 0
+            return try Int.fetchOne(db, sql: sql, arguments: [symbolPattern, contentPattern]) ?? 0
         }
+
+        // Add to cache with LRU eviction
+        if termFrequencyCache.count >= termFrequencyCacheLimit {
+            // Remove oldest entry
+            if let oldest = termFrequencyCache.min(by: { $0.value.accessTime < $1.value.accessTime }) {
+                termFrequencyCache.removeValue(forKey: oldest.key)
+            }
+        }
+        termFrequencyCache[term] = (count, Date())
+
+        return count
+    }
+
+    /// Clears the term frequency cache.
+    ///
+    /// Called when the index is modified (insert, update, delete) to ensure
+    /// cache consistency.
+    private func invalidateTermFrequencyCache() {
+        termFrequencyCache.removeAll()
     }
 
     // MARK: - Private Helpers

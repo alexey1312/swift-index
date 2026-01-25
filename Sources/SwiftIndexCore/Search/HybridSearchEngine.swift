@@ -158,10 +158,11 @@ public actor HybridSearchEngine: SearchEngine {
             let bm25Info = bm25Scores[fusedItem.id]
             let semanticInfo = semanticScores[fusedItem.id]
 
-            // Calculate exact symbol match boost
-            let (boostedScore, hasExactMatch) = try await applyExactSymbolBoost(
+            // Apply all ranking boosts
+            let (boostedScore, hasExactMatch) = try await applyRankingBoosts(
                 baseScore: fusedItem.score,
                 chunk: chunk,
+                query: query,
                 queryTerms: queryTerms
             )
 
@@ -197,18 +198,114 @@ public actor HybridSearchEngine: SearchEngine {
         return Array(results.sorted { $0.score > $1.score }.prefix(options.limit))
     }
 
-    // MARK: - Exact Symbol Boost
+    // MARK: - Ranking Boost Constants
 
-    /// Applies exact symbol boost for rare terms.
+    /// Threshold for rare term detection (terms appearing fewer times receive boost).
+    private static let rareTermThreshold = 10
+
+    /// Boost multiplier for exact symbol match on rare terms.
+    private static let exactSymbolBoost: Float = 2.5
+
+    /// Boost multiplier for paths containing "/Sources/" vs "/Tests/".
+    private static let sourcePathBoost: Float = 1.1
+
+    /// Boost multiplier for public declarations.
+    private static let publicModifierBoost: Float = 1.1
+
+    /// Demotion multiplier for standard protocol extensions in conceptual queries.
+    private static let standardProtocolDemotion: Float = 0.5
+
+    /// Standard Swift protocols that often add noise to conceptual queries.
+    private static let standardProtocols: Set<String> = [
+        "Comparable", "Equatable", "Hashable", "Codable",
+        "Sendable", "CustomStringConvertible", "CustomDebugStringConvertible",
+        "Encodable", "Decodable", "Identifiable", "CaseIterable",
+    ]
+
+    /// Applies all ranking boosts to a search result.
     ///
-    /// When a query term exactly matches a chunk's symbol and the term is rare
-    /// (< 10 occurrences in the index), a 2.0x boost is applied.
+    /// Combines multiple boost factors:
+    /// - Exact symbol match boost (2.5x for rare terms)
+    /// - Source path boost (1.1x for /Sources/ vs /Tests/)
+    /// - Public modifier boost (1.1x for public declarations)
+    /// - Standard protocol extension demotion (0.5x in conceptual queries)
     ///
     /// - Parameters:
     ///   - baseScore: The original fusion score.
-    ///   - chunk: The code chunk to check.
+    ///   - chunk: The code chunk to evaluate.
+    ///   - query: The original query string.
     ///   - queryTerms: Extracted query terms.
     /// - Returns: Tuple of (boosted score, whether exact match was found).
+    private func applyRankingBoosts(
+        baseScore: Float,
+        chunk: CodeChunk,
+        query: String,
+        queryTerms: [String]
+    ) async throws -> (score: Float, hasExactMatch: Bool) {
+        var score = baseScore
+        var hasExactMatch = false
+
+        // 1. Exact symbol match boost for rare terms
+        for term in queryTerms {
+            if chunk.symbols.contains(term) {
+                let frequency = try await chunkStore.getTermFrequency(term: term)
+                if frequency < Self.rareTermThreshold {
+                    hasExactMatch = true
+                    score *= Self.exactSymbolBoost
+                    break // Only apply once
+                }
+            }
+        }
+
+        // 2. Source path boost (prioritize production code over tests)
+        if chunk.path.contains("/Sources/") {
+            score *= Self.sourcePathBoost
+        }
+
+        // 3. Public modifier boost (prioritize public API)
+        if let signature = chunk.signature, signature.hasPrefix("public ") {
+            score *= Self.publicModifierBoost
+        }
+
+        // 4. Standard protocol extension demotion (for conceptual queries)
+        if isConceptualQuery(query), isStandardProtocolExtension(chunk) {
+            score *= Self.standardProtocolDemotion
+        }
+
+        return (score, hasExactMatch)
+    }
+
+    /// Detects if a query is conceptual (asking "how", "what", "where").
+    ///
+    /// Conceptual queries focus on understanding rather than finding specific code,
+    /// so standard protocol extensions (Comparable, Equatable, etc.) are demoted.
+    ///
+    /// - Parameter query: The search query.
+    /// - Returns: True if the query is conceptual.
+    private nonisolated func isConceptualQuery(_ query: String) -> Bool {
+        let lowercased = query.lowercased()
+        let conceptualPatterns = ["how ", "what ", "where ", "why ", "which "]
+        return conceptualPatterns.contains { lowercased.contains($0) }
+    }
+
+    /// Checks if a chunk is an extension conforming to a standard protocol.
+    ///
+    /// Standard protocols like Comparable, Equatable, Hashable often add noise
+    /// to conceptual searches because they appear in many types but don't represent
+    /// the core functionality being searched for.
+    ///
+    /// - Parameter chunk: The code chunk to check.
+    /// - Returns: True if the chunk is a standard protocol extension.
+    private nonisolated func isStandardProtocolExtension(_ chunk: CodeChunk) -> Bool {
+        guard chunk.kind == .extension else { return false }
+
+        // Check if any conformance is a standard protocol
+        return chunk.conformances.contains { conformance in
+            Self.standardProtocols.contains(conformance)
+        }
+    }
+
+    /// Legacy method for backward compatibility.
     private func applyExactSymbolBoost(
         baseScore: Float,
         chunk: CodeChunk,
@@ -218,19 +315,11 @@ public actor HybridSearchEngine: SearchEngine {
         var boostMultiplier: Float = 1.0
 
         for term in queryTerms {
-            // Check for exact symbol match
             if chunk.symbols.contains(term) {
-                // Check if this is a rare term (< 10 occurrences)
-                if let grdbStore = chunkStore as? GRDBChunkStore {
-                    let frequency = try await grdbStore.getTermFrequency(symbol: term)
-                    if frequency < 10 {
-                        hasExactMatch = true
-                        boostMultiplier = max(boostMultiplier, 2.0)
-                    }
-                } else {
-                    // For non-GRDB stores, apply boost conservatively
+                let frequency = try await chunkStore.getTermFrequency(term: term)
+                if frequency < Self.rareTermThreshold {
                     hasExactMatch = true
-                    boostMultiplier = max(boostMultiplier, 1.5)
+                    boostMultiplier = max(boostMultiplier, Self.exactSymbolBoost)
                 }
             }
         }
