@@ -159,6 +159,11 @@ TOON is the default format for both CLI and MCP server.
   - `EmbeddingProvider`, `LLMProvider`
   - `ChunkStore`, `InfoSnippetStore`, `VectorStore`
 - `/Search` — BM25, Semantic, HybridSearchEngine, RRFFusion
+  - **Ranking Boosts** in HybridSearchEngine:
+    - Exact symbol match: 2.5x for rare terms (< 10 occurrences)
+    - Source path: 1.1x for `/Sources/` paths
+    - Public modifier: 1.1x for `public` declarations
+    - Standard protocol demotion: 0.5x for Comparable/Equatable/etc extensions in conceptual queries
 - `/Storage` — GRDBChunkStore (SQLite/FTS5), USearchVectorStore (HNSW)
 - `/Watch` — FileWatcher, IncrementalIndexer
 
