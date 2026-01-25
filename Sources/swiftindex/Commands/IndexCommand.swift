@@ -492,16 +492,11 @@ struct IndexCommand: AsyncParsableCommand {
 
         case "mlx":
             logger.debug("Using MLX embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    MLXEmbeddingProvider(
-                        huggingFaceId: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "mlx-chain",
-                name: "MLX with Swift Embeddings fallback"
+            return EmbeddingProviderChain.single(
+                MLXEmbeddingProvider(
+                    huggingFaceId: config.embeddingModel,
+                    dimension: config.embeddingDimension
+                )
             )
 
         case "swift-embeddings", "swift", "swiftembeddings":
@@ -510,32 +505,22 @@ struct IndexCommand: AsyncParsableCommand {
 
         case "ollama":
             logger.debug("Using Ollama embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    OllamaEmbeddingProvider(
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "ollama-chain",
-                name: "Ollama with fallback"
+            return EmbeddingProviderChain.single(
+                OllamaEmbeddingProvider(
+                    modelName: config.embeddingModel,
+                    dimension: config.embeddingDimension
+                )
             )
 
         case "voyage":
             logger.debug("Using Voyage AI embedding provider")
             if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        VoyageProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "voyage-chain",
-                    name: "Voyage AI with fallback"
+                return EmbeddingProviderChain.single(
+                    VoyageProvider(
+                        apiKey: apiKey,
+                        modelName: config.embeddingModel,
+                        dimension: config.embeddingDimension
+                    )
                 )
             } else {
                 throw ProviderError.apiKeyMissing(provider: "Voyage AI")
@@ -544,14 +529,7 @@ struct IndexCommand: AsyncParsableCommand {
         case "openai":
             logger.debug("Using OpenAI embedding provider")
             if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        OpenAIProvider(apiKey: apiKey),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "openai-chain",
-                    name: "OpenAI with fallback"
-                )
+                return EmbeddingProviderChain.single(OpenAIProvider(apiKey: apiKey))
             } else {
                 throw ProviderError.apiKeyMissing(provider: "OpenAI")
             }
@@ -559,17 +537,12 @@ struct IndexCommand: AsyncParsableCommand {
         case "gemini":
             logger.debug("Using Gemini embedding provider")
             if let apiKey = config.geminiAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        GeminiEmbeddingProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "gemini-chain",
-                    name: "Gemini with fallback"
+                return EmbeddingProviderChain.single(
+                    GeminiEmbeddingProvider(
+                        apiKey: apiKey,
+                        modelName: config.embeddingModel,
+                        dimension: config.embeddingDimension
+                    )
                 )
             } else {
                 throw ProviderError.apiKeyMissing(provider: "Gemini")

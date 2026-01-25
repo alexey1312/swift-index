@@ -177,8 +177,11 @@ public actor EmbeddingBatcher {
         timeoutTask = Task { [weak self] in
             do {
                 try await Task.sleep(nanoseconds: timeoutNs)
-                // Timeout expired, flush the batch
-                try? await self?.processPendingBatch()
+                // Spawn separate task for processing so cancelling timeout
+                // doesn't cancel the batch operation mid-flight
+                Task { [weak self] in
+                    try? await self?.processPendingBatch()
+                }
             } catch {
                 // Task was cancelled, ignore
             }
