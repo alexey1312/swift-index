@@ -114,7 +114,7 @@ public struct WatchCodebaseTool: MCPToolHandler, Sendable {
 
             // Get index manager and embedding provider
             let indexManager = try await context.getIndexManager(for: path, config: config)
-            let embeddingProvider = await context.getEmbeddingProvider(config: config)
+            let embeddingProvider = try await context.getEmbeddingProvider(config: config)
 
             // Create incremental indexer
             let incrementalIndexer = IncrementalIndexer(

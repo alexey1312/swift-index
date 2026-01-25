@@ -29,6 +29,20 @@ public actor MCPContext {
 
     private init() {}
 
+    // MARK: - Testing Support
+
+    /// Resets all cached state. For testing only.
+    @_spi(Testing)
+    public func resetForTesting() {
+        indexManagers.removeAll()
+        embeddingProvider = nil
+        loadedConfigs.removeAll()
+        llmProviders = nil
+        queryExpander = nil
+        resultSynthesizer = nil
+        followUpGenerator = nil
+    }
+
     // MARK: - Configuration
 
     /// Load or get cached configuration for a path.
@@ -51,17 +65,17 @@ public actor MCPContext {
     // MARK: - Embedding Provider
 
     /// Get or create the embedding provider chain.
-    public func getEmbeddingProvider(config: Config) async -> EmbeddingProviderChain {
+    public func getEmbeddingProvider(config: Config) async throws -> EmbeddingProviderChain {
         if let existing = embeddingProvider {
             return existing
         }
 
-        let provider = createEmbeddingProvider(config: config)
+        let provider = try createEmbeddingProvider(config: config)
         embeddingProvider = provider
         return provider
     }
 
-    private func createEmbeddingProvider(config: Config) -> EmbeddingProviderChain {
+    private func createEmbeddingProvider(config: Config) throws -> EmbeddingProviderChain {
         switch config.embeddingProvider.lowercased() {
         case "mock":
             logger.debug("Creating mock embedding provider")
@@ -119,8 +133,7 @@ public actor MCPContext {
                     name: "Voyage AI with fallback"
                 )
             } else {
-                logger.warning("VOYAGE_API_KEY not set, using default provider")
-                return EmbeddingProviderChain.default
+                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
             }
 
         case "openai":
@@ -135,8 +148,7 @@ public actor MCPContext {
                     name: "OpenAI with fallback"
                 )
             } else {
-                logger.warning("OPENAI_API_KEY not set, using default provider")
-                return EmbeddingProviderChain.default
+                throw ProviderError.apiKeyMissing(provider: "OpenAI")
             }
 
         default:
@@ -157,7 +169,7 @@ public actor MCPContext {
         }
 
         // Get embedding provider for dimension
-        let provider = await getEmbeddingProvider(config: config)
+        let provider = try await getEmbeddingProvider(config: config)
 
         // Create index manager
         let manager = try IndexManager(
@@ -205,7 +217,7 @@ public actor MCPContext {
         config: Config
     ) async throws -> HybridSearchEngine {
         let manager = try await getIndexManager(for: basePath, config: config)
-        let provider = await getEmbeddingProvider(config: config)
+        let provider = try await getEmbeddingProvider(config: config)
 
         let chunkStore = await manager.chunkStore
         let vectorStore = await manager.vectorStore

@@ -77,7 +77,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         let config = try await context.getConfig(for: path)
 
         // Create embedding provider
-        let embeddingProvider = await context.getEmbeddingProvider(config: config)
+        let embeddingProvider = try await context.getEmbeddingProvider(config: config)
 
         // Check provider availability
         guard await embeddingProvider.isAvailable() else {

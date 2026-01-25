@@ -95,7 +95,7 @@ struct IndexCommand: AsyncParsableCommand {
         )
 
         // Create embedding provider chain
-        let embeddingProvider = createEmbeddingProvider(config: configuration, logger: logger)
+        let embeddingProvider = try createEmbeddingProvider(config: configuration, logger: logger)
 
         // Check provider availability
         try await ensureEmbeddingProviderAvailable(embeddingProvider)
@@ -480,7 +480,7 @@ struct IndexCommand: AsyncParsableCommand {
     private func createEmbeddingProvider(
         config: Config,
         logger: Logger
-    ) -> EmbeddingProviderChain {
+    ) throws -> EmbeddingProviderChain {
         switch config.embeddingProvider.lowercased() {
         case "mock":
             logger.debug("Using mock embedding provider")
@@ -538,8 +538,7 @@ struct IndexCommand: AsyncParsableCommand {
                     name: "Voyage AI with fallback"
                 )
             } else {
-                logger.warning("VOYAGE_API_KEY not set, falling back to local provider")
-                return EmbeddingProviderChain.default
+                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
             }
 
         case "openai":
@@ -554,8 +553,7 @@ struct IndexCommand: AsyncParsableCommand {
                     name: "OpenAI with fallback"
                 )
             } else {
-                logger.warning("OPENAI_API_KEY not set, falling back to local provider")
-                return EmbeddingProviderChain.default
+                throw ProviderError.apiKeyMissing(provider: "OpenAI")
             }
 
         case "gemini":
@@ -574,8 +572,7 @@ struct IndexCommand: AsyncParsableCommand {
                     name: "Gemini with fallback"
                 )
             } else {
-                logger.warning("GEMINI_API_KEY not set, falling back to local provider")
-                return EmbeddingProviderChain.default
+                throw ProviderError.apiKeyMissing(provider: "Gemini")
             }
 
         case "auto":

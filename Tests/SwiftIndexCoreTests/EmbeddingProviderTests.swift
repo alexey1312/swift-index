@@ -497,6 +497,16 @@ struct EmbeddingProviderChainBuilderTests {
 
 @Suite("ProviderError Tests")
 struct ProviderErrorTests {
+    @Test("apiKeyMissing error description")
+    func apiKeyMissingDescription() {
+        let error = ProviderError.apiKeyMissing(provider: "OpenAI")
+
+        let description = error.errorDescription
+        #expect(description != nil)
+        #expect(description!.contains("API key required"))
+        #expect(description!.contains("OpenAI"))
+    }
+
     @Test("allProvidersFailed error description")
     func allProvidersFailedDescription() {
         let errors: [String: ProviderError] = [
