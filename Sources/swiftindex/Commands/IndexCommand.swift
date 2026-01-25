@@ -600,7 +600,8 @@ struct IndexCommand: AsyncParsableCommand {
         do {
             let provider = try LLMProviderFactory.createProvider(
                 from: config.searchEnhancement.utility,
-                openAIKey: config.openAIAPIKey
+                openAIKey: config.openAIAPIKey,
+                anthropicKey: config.anthropicAPIKey
             )
             return DescriptionGenerator(
                 provider: provider,

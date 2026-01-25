@@ -239,7 +239,8 @@ public actor MCPContext {
         do {
             let provider = try LLMProviderFactory.createProvider(
                 from: config.searchEnhancement.utility,
-                openAIKey: config.openAIAPIKey
+                openAIKey: config.openAIAPIKey,
+                anthropicKey: config.anthropicAPIKey
             )
             utilityProvider = LLMProviderChain.single(provider)
             logger.debug("Created utility LLM provider: \(config.searchEnhancement.utility.provider)")
@@ -253,7 +254,8 @@ public actor MCPContext {
         do {
             let provider = try LLMProviderFactory.createProvider(
                 from: config.searchEnhancement.synthesis,
-                openAIKey: config.openAIAPIKey
+                openAIKey: config.openAIAPIKey,
+                anthropicKey: config.anthropicAPIKey
             )
             synthesisProvider = LLMProviderChain.single(provider)
             logger.debug("Created synthesis LLM provider: \(config.searchEnhancement.synthesis.provider)")

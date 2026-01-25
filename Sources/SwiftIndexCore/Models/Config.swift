@@ -95,6 +95,9 @@ public struct Config: Sendable, Equatable {
     /// Gemini API key (optional).
     public var geminiAPIKey: String?
 
+    /// Anthropic API key (optional).
+    public var anthropicAPIKey: String?
+
     // MARK: - Performance
 
     /// Maximum concurrent tasks for parallel indexing.
@@ -144,6 +147,7 @@ public struct Config: Sendable, Equatable {
         voyageAPIKey: String? = nil,
         openAIAPIKey: String? = nil,
         geminiAPIKey: String? = nil,
+        anthropicAPIKey: String? = nil,
         maxConcurrentTasks: Int = ProcessInfo.processInfo.activeProcessorCount,
         watchDebounceMs: Int = 500,
         logLevel: String = "info",
@@ -175,6 +179,7 @@ public struct Config: Sendable, Equatable {
         self.voyageAPIKey = voyageAPIKey
         self.openAIAPIKey = openAIAPIKey
         self.geminiAPIKey = geminiAPIKey
+        self.anthropicAPIKey = anthropicAPIKey
         self.maxConcurrentTasks = maxConcurrentTasks
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
@@ -321,6 +326,7 @@ public extension Config {
         applyIfPresent(partial.voyageAPIKey, to: \.voyageAPIKey)
         applyIfPresent(partial.openAIAPIKey, to: \.openAIAPIKey)
         applyIfPresent(partial.geminiAPIKey, to: \.geminiAPIKey)
+        applyIfPresent(partial.anthropicAPIKey, to: \.anthropicAPIKey)
         applyIfPresent(partial.maxConcurrentTasks, to: \.maxConcurrentTasks)
         applyIfPresent(partial.watchDebounceMs, to: \.watchDebounceMs)
         applyIfPresent(partial.logLevel, to: \.logLevel)

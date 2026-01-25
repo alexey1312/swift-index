@@ -244,7 +244,8 @@ struct SearchCommand: AsyncParsableCommand {
                 do {
                     let utilityProvider = try LLMProviderFactory.createProvider(
                         from: configuration.searchEnhancement.utility,
-                        openAIKey: configuration.openAIAPIKey
+                        openAIKey: configuration.openAIAPIKey,
+                        anthropicKey: configuration.anthropicAPIKey
                     )
                     if effectiveExpandQuery {
                         queryExpander = QueryExpander(provider: utilityProvider)
@@ -265,7 +266,8 @@ struct SearchCommand: AsyncParsableCommand {
                 do {
                     let synthesisProvider = try LLMProviderFactory.createProvider(
                         from: configuration.searchEnhancement.synthesis,
-                        openAIKey: configuration.openAIAPIKey
+                        openAIKey: configuration.openAIAPIKey,
+                        anthropicKey: configuration.anthropicAPIKey
                     )
                     resultSynthesizer = ResultSynthesizer(provider: synthesisProvider)
                     logger.debug(
