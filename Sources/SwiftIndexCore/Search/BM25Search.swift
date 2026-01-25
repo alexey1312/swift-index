@@ -137,6 +137,12 @@ public actor BM25Search: SearchEngine {
                 // Escape double quotes for FTS5
                 let escaped = sanitized.replacingOccurrences(of: "\"", with: "\"\"")
 
+                // CamelCase identifiers should use exact matching (no wildcard)
+                // to prevent "USearchError" from matching just "Search"
+                if isCamelCaseIdentifier(escaped) {
+                    return "\"\(escaped)\""
+                }
+
                 // Use prefix matching for partial words (3+ chars)
                 if escaped.count >= 3 {
                     return "\"\(escaped)\"*"
@@ -145,5 +151,22 @@ public actor BM25Search: SearchEngine {
             }
 
         return terms.joined(separator: " ")
+    }
+
+    /// Detects if a term is a CamelCase identifier (e.g., USearchError, CodeChunk).
+    ///
+    /// - Parameter term: The term to check.
+    /// - Returns: True if the term is a CamelCase identifier.
+    private nonisolated func isCamelCaseIdentifier(_ term: String) -> Bool {
+        // Minimum 3 characters, starts with letter, no spaces
+        guard term.count >= 3,
+              term.first?.isLetter == true,
+              !term.contains(" ")
+        else {
+            return false
+        }
+        // Must contain both uppercase and lowercase letters
+        return term.contains(where: \.isUppercase) &&
+            term.contains(where: \.isLowercase)
     }
 }

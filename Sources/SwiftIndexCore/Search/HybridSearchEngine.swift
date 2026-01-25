@@ -206,6 +206,10 @@ public actor HybridSearchEngine: SearchEngine {
     /// Boost multiplier for exact symbol match on rare terms.
     private static let exactSymbolBoost: Float = 2.5
 
+    /// Boost multiplier for exact content match on rare CamelCase terms.
+    /// Lower than symbol boost since content matches are less precise.
+    private static let exactContentBoost: Float = 2.0
+
     /// Boost multiplier for paths containing "/Sources/" vs "/Tests/".
     private static let sourcePathBoost: Float = 1.1
 
@@ -226,6 +230,7 @@ public actor HybridSearchEngine: SearchEngine {
     ///
     /// Combines multiple boost factors:
     /// - Exact symbol match boost (2.5x for rare terms)
+    /// - Content-based CamelCase match boost (2.0x for rare CamelCase identifiers)
     /// - Source path boost (1.1x for /Sources/ vs /Tests/)
     /// - Public modifier boost (1.1x for public declarations)
     /// - Standard protocol extension demotion (0.5x in conceptual queries)
@@ -257,17 +262,32 @@ public actor HybridSearchEngine: SearchEngine {
             }
         }
 
-        // 2. Source path boost (prioritize production code over tests)
+        // 2. Content-based exact match boost for rare CamelCase terms
+        // Only applies if no symbol match was found (prevents double-boosting)
+        if !hasExactMatch {
+            for term in queryTerms where isCamelCaseIdentifier(term) {
+                if chunk.content.contains(term) {
+                    let frequency = try await chunkStore.getTermFrequency(term: term)
+                    if frequency < Self.rareTermThreshold {
+                        hasExactMatch = true
+                        score *= Self.exactContentBoost
+                        break // Only apply once
+                    }
+                }
+            }
+        }
+
+        // 3. Source path boost (prioritize production code over tests)
         if chunk.path.contains("/Sources/") {
             score *= Self.sourcePathBoost
         }
 
-        // 3. Public modifier boost (prioritize public API)
+        // 4. Public modifier boost (prioritize public API)
         if let signature = chunk.signature, signature.hasPrefix("public ") {
             score *= Self.publicModifierBoost
         }
 
-        // 4. Standard protocol extension demotion (for conceptual queries)
+        // 5. Standard protocol extension demotion (for conceptual queries)
         if isConceptualQuery(query), isStandardProtocolExtension(chunk) {
             score *= Self.standardProtocolDemotion
         }
@@ -303,6 +323,26 @@ public actor HybridSearchEngine: SearchEngine {
         return chunk.conformances.contains { conformance in
             Self.standardProtocols.contains(conformance)
         }
+    }
+
+    /// Detects if a term is a CamelCase identifier (e.g., USearchError, CodeChunk).
+    ///
+    /// CamelCase identifiers are common in Swift code and warrant exact matching
+    /// to avoid false positives from partial matches.
+    ///
+    /// - Parameter term: The term to check.
+    /// - Returns: True if the term is a CamelCase identifier.
+    private nonisolated func isCamelCaseIdentifier(_ term: String) -> Bool {
+        // Minimum 3 characters, starts with letter, no spaces
+        guard term.count >= 3,
+              term.first?.isLetter == true,
+              !term.contains(" ")
+        else {
+            return false
+        }
+        // Must contain both uppercase and lowercase letters
+        return term.contains(where: \.isUppercase) &&
+            term.contains(where: \.isLowercase)
     }
 
     /// Legacy method for backward compatibility.
