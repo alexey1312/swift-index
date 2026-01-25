@@ -62,6 +62,12 @@ struct InstallCursorCommand: ParsableCommand {
     )
     var force: Bool = false
 
+    @Option(
+        name: .long,
+        help: "Path to swiftindex binary (auto-detected if not specified)"
+    )
+    var binaryPath: String?
+
     // MARK: - Execution
 
     mutating func run() throws {
@@ -69,8 +75,14 @@ struct InstallCursorCommand: ParsableCommand {
         logger.info("Installing SwiftIndex for Cursor IDE")
 
         // Get the executable path
-        let executablePath = CommandLine.arguments[0]
-        let resolvedExecutable = CLIUtils.resolvePath(executablePath)
+        let pathResult = CLIUtils.resolveExecutablePath(explicitPath: binaryPath)
+
+        if pathResult.isDevelopmentBuild {
+            logger.warning("Development build detected: \(pathResult.path)")
+            print("Warning: Using development build path. Use --binary-path to override.")
+        }
+
+        logger.debug("Binary path: \(pathResult.path) (source: \(pathResult.source.rawValue))")
 
         // Config path depends on --global flag
         let configPath: String
@@ -85,13 +97,12 @@ struct InstallCursorCommand: ParsableCommand {
         }
 
         logger.debug("Target config path: \(configPath)")
-        logger.debug("Executable path: \(resolvedExecutable)")
         logger.debug("Scope: \(scopeDescription)")
 
         // Create MCP configuration entry (Cursor requires "type": "stdio")
         let mcpServerConfig: [String: Any] = [
             "type": "stdio",
-            "command": resolvedExecutable,
+            "command": pathResult.path,
             "args": ["serve"],
         ]
 

@@ -57,6 +57,12 @@ struct InstallCodexCommand: ParsableCommand {
     )
     var force: Bool = false
 
+    @Option(
+        name: .long,
+        help: "Path to swiftindex binary (auto-detected if not specified)"
+    )
+    var binaryPath: String?
+
     // MARK: - Execution
 
     mutating func run() throws {
@@ -64,14 +70,20 @@ struct InstallCodexCommand: ParsableCommand {
         logger.info("Installing SwiftIndex for OpenAI Codex")
 
         // Get the executable path
-        let executablePath = CommandLine.arguments[0]
-        let resolvedExecutable = CLIUtils.resolvePath(executablePath)
+        let pathResult = CLIUtils.resolveExecutablePath(explicitPath: binaryPath)
+
+        if pathResult.isDevelopmentBuild {
+            logger.warning("Development build detected: \(pathResult.path)")
+            print("Warning: Using development build path. Use --binary-path to override.")
+        }
+
+        logger.debug("Binary path: \(pathResult.path) (source: \(pathResult.source.rawValue))")
 
         let fileManager = FileManager.default
 
         if global {
             try installCodexConfig(
-                executable: resolvedExecutable,
+                executable: pathResult.path,
                 cwd: nil,
                 fileManager: fileManager,
                 logger: logger,
@@ -79,7 +91,7 @@ struct InstallCodexCommand: ParsableCommand {
             )
         } else {
             try installCodexConfig(
-                executable: resolvedExecutable,
+                executable: pathResult.path,
                 cwd: fileManager.currentDirectoryPath,
                 fileManager: fileManager,
                 logger: logger,

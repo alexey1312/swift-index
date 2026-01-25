@@ -28,6 +28,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 - **CLI tool + MCP server** for AI assistants
 - **Hybrid search**: BM25 + semantic + RRF fusion
 - **Privacy-first**: local embeddings by default
+- **Platform**: Apple Silicon (ARM) only — Intel not supported
 - **Terminal UI**: Use Noora components for CLI progress, spinners, and status steps (avoid custom print-based animations)
 
 > **Note**: `CLAUDE.md` is a symlink to `AGENTS.md` — editing either file modifies both.

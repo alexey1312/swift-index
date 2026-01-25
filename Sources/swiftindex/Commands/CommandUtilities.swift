@@ -42,6 +42,104 @@ enum CLIUtils {
         return (currentDirectory as NSString).appendingPathComponent(expandedPath)
     }
 
+    // MARK: - Executable Path Resolution
+
+    /// Result of executable path resolution with metadata about the source.
+    struct ExecutablePathResult {
+        let path: String
+        let isDevelopmentBuild: Bool
+        let source: ExecutablePathSource
+    }
+
+    /// Source of resolved executable path.
+    enum ExecutablePathSource: String {
+        case explicitOverride = "explicit override"
+        case homebrew = "Homebrew"
+        case mise
+        case pathLookup = "PATH"
+        case currentExecutable = "current executable"
+    }
+
+    /// Resolves the swiftindex executable path with intelligent detection.
+    ///
+    /// Resolution priority:
+    /// 1. Explicit override via `--binary-path`
+    /// 2. Homebrew path (`/opt/homebrew/bin/swiftindex`) — ARM macOS only
+    /// 3. mise shim (`~/.local/share/mise/shims/swiftindex`)
+    /// 4. `which swiftindex` PATH lookup
+    /// 5. Fallback to `CommandLine.arguments[0]` with dev build warning
+    ///
+    /// - Parameter explicitPath: Optional explicit path override (from `--binary-path`).
+    /// - Returns: Resolved path with metadata about the source and dev build status.
+    static func resolveExecutablePath(explicitPath: String? = nil) -> ExecutablePathResult {
+        let fm = FileManager.default
+
+        // 1. Explicit override
+        if let explicitPath {
+            return ExecutablePathResult(
+                path: resolvePath(explicitPath),
+                isDevelopmentBuild: false,
+                source: .explicitOverride
+            )
+        }
+
+        // 2. Check Homebrew path (ARM macOS only, Intel not supported)
+        let homebrewPath = "/opt/homebrew/bin/swiftindex"
+        if fm.fileExists(atPath: homebrewPath) {
+            return ExecutablePathResult(path: homebrewPath, isDevelopmentBuild: false, source: .homebrew)
+        }
+
+        // 3. Check mise shim
+        let miseShimPath = ("~/.local/share/mise/shims/swiftindex" as NSString).expandingTildeInPath
+        if fm.fileExists(atPath: miseShimPath) {
+            return ExecutablePathResult(path: miseShimPath, isDevelopmentBuild: false, source: .mise)
+        }
+
+        // 4. Try `which swiftindex`
+        if let path = runWhichSwiftindex() {
+            return ExecutablePathResult(
+                path: path,
+                isDevelopmentBuild: isDevelopmentPath(path),
+                source: .pathLookup
+            )
+        }
+
+        // 5. Fall back to current executable
+        let current = resolvePath(CommandLine.arguments[0])
+        return ExecutablePathResult(
+            path: current,
+            isDevelopmentBuild: isDevelopmentPath(current),
+            source: .currentExecutable
+        )
+    }
+
+    /// Runs `which swiftindex` to find the binary in PATH.
+    private static func runWhichSwiftindex() -> String? {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
+        process.arguments = ["swiftindex"]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            return String(data: data, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            return nil
+        }
+    }
+
+    /// Checks if a path appears to be a development build.
+    private static func isDevelopmentPath(_ path: String) -> Bool {
+        [".build/debug/", ".build/release/", "DerivedData/", ".swiftpm/"]
+            .contains { path.contains($0) }
+    }
+
     // MARK: - Configuration Loading
 
     /// Loads configuration from file or uses defaults.
