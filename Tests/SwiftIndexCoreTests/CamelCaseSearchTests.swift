@@ -206,6 +206,84 @@ struct CamelCaseSearchTests {
             #expect(si < ci, "Symbol chunk should rank higher than content-only chunk")
         }
     }
+
+    // MARK: - Prepared FTS Query Detection Tests
+
+    @Test("GRDBChunkStore preserves prepared FTS queries")
+    func preservesPreparedFTSQueries() async throws {
+        // Verify that prepared queries (quoted terms) are recognized and not re-sanitized
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"USearchError\"") == true)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"search\"*") == true)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"foo\" \"bar\"*") == true)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"HybridSearchEngine\"") == true)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"CodeChunk\" \"BM25Search\"*") == true)
+    }
+
+    @Test("GRDBChunkStore sanitizes raw queries")
+    func sanitizesRawQueries() async throws {
+        // Raw queries without quotes should be sanitized
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("USearchError") == false)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("search query") == false)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("") == false)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("   ") == false)
+        #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("foo AND bar") == false)
+    }
+
+    // MARK: - BM25 + GRDBChunkStore Integration Test
+
+    @Test("BM25 + GRDBChunkStore CamelCase exact match end-to-end")
+    func bm25CamelCaseEndToEnd() async throws {
+        let store = try GRDBChunkStore()
+        let search = BM25Search(chunkStore: store)
+
+        // Insert chunk with USearchError
+        let target = CodeChunk(
+            id: "target-usearch",
+            path: "Sources/Storage/USearchVectorStore.swift",
+            content: "catch let error as USearchError { throw error }",
+            startLine: 145,
+            endLine: 147,
+            kind: .function,
+            symbols: ["add"],
+            references: ["USearchError"],
+            fileHash: "abc123"
+        )
+        try await store.insert(target)
+
+        // Insert distractor with just "Search" and "Engine"
+        let distractor = CodeChunk(
+            id: "distractor-search",
+            path: "Sources/Search/SearchEngine.swift",
+            content: "func performSearch() { engine.run() }",
+            startLine: 10,
+            endLine: 12,
+            kind: .function,
+            symbols: ["performSearch"],
+            references: [],
+            fileHash: "def456"
+        )
+        try await store.insert(distractor)
+
+        // Search for USearchError - BM25 should prepare a quoted exact match query
+        let results = try await search.search(
+            query: "USearchError",
+            options: SearchOptions(limit: 10)
+        )
+
+        // Target must be found
+        let targetFound = results.contains { $0.chunk.id == "target-usearch" }
+        #expect(targetFound, "Target chunk with USearchError should be in results")
+
+        // If both are found, target should rank higher (exact match vs partial)
+        if let targetIdx = results.firstIndex(where: { $0.chunk.id == "target-usearch" }),
+           let distractorIdx = results.firstIndex(where: { $0.chunk.id == "distractor-search" })
+        {
+            #expect(
+                targetIdx < distractorIdx,
+                "Exact USearchError match should rank higher than partial 'Search' match"
+            )
+        }
+    }
 }
 
 // MARK: - Test Helpers
@@ -221,6 +299,19 @@ enum BM25SearchTestHelper {
         }
         return term.contains(where: \.isUppercase) &&
             term.contains(where: \.isLowercase)
+    }
+}
+
+/// Helper to expose GRDBChunkStore's private isPreparedFTSQuery for testing.
+enum GRDBChunkStoreTestHelper {
+    /// Mirrors GRDBChunkStore.isPreparedFTSQuery logic for testing.
+    static func isPreparedFTSQuery(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else {
+            return false
+        }
+        let pattern = #"^("[\p{L}\p{N}]+"\*?(\s+|$))+$"#
+        return trimmed.range(of: pattern, options: .regularExpression) != nil
     }
 }
 

@@ -992,12 +992,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
 
         // Add to cache with LRU eviction
-        if termFrequencyCache.count >= termFrequencyCacheLimit {
-            // Remove oldest entry
-            if let oldest = termFrequencyCache.min(by: { $0.value.accessTime < $1.value.accessTime }) {
-                termFrequencyCache.removeValue(forKey: oldest.key)
-            }
-        }
+        evictOldestCacheEntryIfNeeded()
         termFrequencyCache[term] = (count, Date())
 
         return count
@@ -1011,29 +1006,60 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         termFrequencyCache.removeAll()
     }
 
+    /// Evicts the oldest cache entry if the cache is at capacity.
+    private func evictOldestCacheEntryIfNeeded() {
+        guard termFrequencyCache.count >= termFrequencyCacheLimit,
+              let oldest = termFrequencyCache.min(by: { $0.value.accessTime < $1.value.accessTime })
+        else { return }
+        termFrequencyCache.removeValue(forKey: oldest.key)
+    }
+
     // MARK: - Private Helpers
 
+    private static let ftsBooleanOperators: Set<String> = ["OR", "AND", "NOT"]
+    private static let ftsSpecialCharacters = CharacterSet(charactersIn: "\"*():-^")
+        .union(.whitespacesAndNewlines)
+
     private nonisolated func sanitizeFTSQuery(_ query: String) -> String {
+        // Bypass: prepared queries from BM25Search already have correct FTS5 syntax.
+        if isPreparedFTSQuery(query) {
+            return query
+        }
+
         // Remove FTS5 special characters and boolean operators that can cause syntax errors.
-        let separators = CharacterSet(charactersIn: "\"*():-^")
-            .union(.whitespacesAndNewlines)
-        let rawTokens = query
-            .components(separatedBy: separators)
+        let words = query
+            .components(separatedBy: Self.ftsSpecialCharacters)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
+            .filter { !$0.isEmpty && !Self.ftsBooleanOperators.contains($0.uppercased()) }
 
-        let words = rawTokens.filter { token in
-            let upper = token.uppercased()
-            return upper != "OR" && upper != "AND" && upper != "NOT"
-        }
-
-        if words.isEmpty {
+        switch words.count {
+        case 0:
             return ""
-        }
-        if words.count == 1 {
+        case 1:
             return "\(words[0])*"
+        default:
+            return words.map { "\($0)*" }.joined(separator: " OR ")
         }
-        return words.map { "\($0)*" }.joined(separator: " OR ")
+    }
+
+    /// Detects if a query is already in FTS5 prepared format from BM25Search.
+    ///
+    /// Prepared queries use quoted terms with optional wildcards:
+    /// - `"USearchError"` — exact match
+    /// - `"search"*` — prefix match
+    /// - `"foo" "bar"*` — multiple terms
+    ///
+    /// - Parameter query: The query string to check.
+    /// - Returns: `true` if the query appears to be pre-formatted for FTS5.
+    private nonisolated func isPreparedFTSQuery(_ query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return false }
+
+        // Pattern: quoted terms with optional wildcard, space-separated
+        // Examples: "USearchError", "search"*, "foo" "bar"*
+        // Unicode letters and numbers allowed inside quotes: [\p{L}\p{N}]
+        let pattern = #"^("[\p{L}\p{N}]+"\*?(\s+|$))+$"#
+        return trimmed.range(of: pattern, options: .regularExpression) != nil
     }
 }
 
@@ -1092,10 +1118,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         startLine = chunk.startLine
         endLine = chunk.endLine
         kind = chunk.kind.rawValue
-        symbols = (try? JSONCodec.makeEncoder().encode(chunk.symbols))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-        references = (try? JSONCodec.makeEncoder().encode(chunk.references))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        symbols = Self.encodeJSONArray(chunk.symbols)
+        references = Self.encodeJSONArray(chunk.references)
         fileHash = chunk.fileHash
         createdAt = chunk.createdAt
         docComment = chunk.docComment
@@ -1105,9 +1129,19 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         language = chunk.language
         contentHash = chunk.contentHash
         generatedDescription = chunk.generatedDescription
-        conformances = (try? JSONCodec.makeEncoder().encode(chunk.conformances))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        conformances = Self.encodeJSONArray(chunk.conformances)
         isTypeDeclaration = chunk.isTypeDeclaration
+    }
+
+    private static func encodeJSONArray(_ array: [String]) -> String {
+        guard let data = try? JSONCodec.makeEncoder().encode(array),
+              let string = String(data: data, encoding: .utf8)
+        else { return "[]" }
+        return string
+    }
+
+    private static func decodeJSONArray(_ json: String) -> [String] {
+        (try? JSONCodec.makeDecoder().decode([String].self, from: Data(json.utf8))) ?? []
     }
 
     init(row: Row) {
@@ -1137,21 +1171,6 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             throw ChunkStoreError.invalidKind(kind)
         }
 
-        let symbolsArray: [String] = (try? JSONCodec.makeDecoder().decode(
-            [String].self,
-            from: Data(symbols.utf8)
-        )) ?? []
-
-        let referencesArray: [String] = (try? JSONCodec.makeDecoder().decode(
-            [String].self,
-            from: Data(references.utf8)
-        )) ?? []
-
-        let conformancesArray: [String] = (try? JSONCodec.makeDecoder().decode(
-            [String].self,
-            from: Data(conformances.utf8)
-        )) ?? []
-
         return CodeChunk(
             id: id,
             path: path,
@@ -1159,8 +1178,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             startLine: startLine,
             endLine: endLine,
             kind: chunkKind,
-            symbols: symbolsArray,
-            references: referencesArray,
+            symbols: Self.decodeJSONArray(symbols),
+            references: Self.decodeJSONArray(references),
             fileHash: fileHash,
             createdAt: createdAt,
             docComment: docComment,
@@ -1170,7 +1189,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             language: language,
             contentHash: contentHash,
             generatedDescription: generatedDescription,
-            conformances: conformancesArray,
+            conformances: Self.decodeJSONArray(conformances),
             isTypeDeclaration: isTypeDeclaration
         )
     }
