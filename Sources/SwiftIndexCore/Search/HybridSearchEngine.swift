@@ -54,6 +54,9 @@ public actor HybridSearchEngine: SearchEngine {
     /// Shared glob pattern matcher with LRU cache.
     private let globMatcher: GlobMatcher
 
+    /// Type alias for score lookup dictionary.
+    private typealias ScoreLookup = [String: (score: Float, rank: Int)]
+
     /// Creates a new hybrid search engine.
     ///
     /// - Parameters:
@@ -124,35 +127,18 @@ public actor HybridSearchEngine: SearchEngine {
         }
 
         // Build lookup dictionaries for original scores
-        let bm25Scores = Dictionary(
-            uniqueKeysWithValues: bm25Results.enumerated().map { ($1.id, (score: $1.score, rank: $0 + 1)) }
-        )
-        let semanticScores = Dictionary(
-            uniqueKeysWithValues: semanticResults.enumerated().map { ($1.id, (score: $1.score, rank: $0 + 1)) }
-        )
+        let bm25Scores = buildScoreLookup(from: bm25Results)
+        let semanticScores = buildScoreLookup(from: semanticResults)
         let conformanceIds = Set(conformanceResults.map(\.id))
 
         // Convert fused results to SearchResults
         var results: [SearchResult] = []
 
         for fusedItem in fusedResults {
-            guard let chunk = try await chunkStore.get(id: fusedItem.id) else {
+            guard let chunk = try await chunkStore.get(id: fusedItem.id),
+                  await passesFilters(chunk, options: options)
+            else {
                 continue
-            }
-
-            // Apply path filter
-            if let pathFilter = options.pathFilter {
-                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
-                    continue
-                }
-            }
-
-            // Apply extension filter
-            if let extensionFilter = options.extensionFilter, !extensionFilter.isEmpty {
-                let ext = (chunk.path as NSString).pathExtension.lowercased()
-                guard extensionFilter.contains(ext) else {
-                    continue
-                }
             }
 
             let bm25Info = bm25Scores[fusedItem.id]
@@ -196,6 +182,35 @@ public actor HybridSearchEngine: SearchEngine {
 
         // Final sort and limit
         return Array(results.sorted { $0.score > $1.score }.prefix(options.limit))
+    }
+
+    // MARK: - Helper Methods
+
+    /// Builds a score lookup dictionary from raw search results.
+    private nonisolated func buildScoreLookup(
+        from results: [(id: String, score: Float)]
+    ) -> ScoreLookup {
+        Dictionary(uniqueKeysWithValues: results.enumerated().map { index, result in
+            (result.id, (score: result.score, rank: index + 1))
+        })
+    }
+
+    /// Checks if a chunk passes the configured filters.
+    private func passesFilters(_ chunk: CodeChunk, options: SearchOptions) async -> Bool {
+        if let pathFilter = options.pathFilter {
+            guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
+                return false
+            }
+        }
+
+        if let extensionFilter = options.extensionFilter, !extensionFilter.isEmpty {
+            let ext = (chunk.path as NSString).pathExtension.lowercased()
+            guard extensionFilter.contains(ext) else {
+                return false
+            }
+        }
+
+        return true
     }
 
     // MARK: - Ranking Boost Constants
@@ -333,38 +348,12 @@ public actor HybridSearchEngine: SearchEngine {
     /// - Parameter term: The term to check.
     /// - Returns: True if the term is a CamelCase identifier.
     private nonisolated func isCamelCaseIdentifier(_ term: String) -> Bool {
-        // Minimum 3 characters, starts with letter, no spaces
-        guard term.count >= 3,
-              term.first?.isLetter == true,
-              !term.contains(" ")
-        else {
-            return false
-        }
-        // Must contain both uppercase and lowercase letters
-        return term.contains(where: \.isUppercase) &&
+        // Minimum 3 characters, starts with letter, no spaces, mixed case
+        term.count >= 3 &&
+            term.first?.isLetter == true &&
+            !term.contains(" ") &&
+            term.contains(where: \.isUppercase) &&
             term.contains(where: \.isLowercase)
-    }
-
-    /// Legacy method for backward compatibility.
-    private func applyExactSymbolBoost(
-        baseScore: Float,
-        chunk: CodeChunk,
-        queryTerms: [String]
-    ) async throws -> (score: Float, hasExactMatch: Bool) {
-        var hasExactMatch = false
-        var boostMultiplier: Float = 1.0
-
-        for term in queryTerms {
-            if chunk.symbols.contains(term) {
-                let frequency = try await chunkStore.getTermFrequency(term: term)
-                if frequency < Self.rareTermThreshold {
-                    hasExactMatch = true
-                    boostMultiplier = max(boostMultiplier, Self.exactSymbolBoost)
-                }
-            }
-        }
-
-        return (baseScore * boostMultiplier, hasExactMatch)
     }
 
     // MARK: - Conformance Detection
@@ -673,34 +662,14 @@ public extension HybridSearchEngine {
 
         // Build results
         var results: [SearchResult] = []
-        let bm25Scores: [String: (score: Float, rank: Int)] = Dictionary(
-            uniqueKeysWithValues: bm25Results.enumerated().map { index, result in
-                (result.id, (score: result.score, rank: index + 1))
-            }
-        )
-        let semanticScores: [String: (score: Float, rank: Int)] = Dictionary(
-            uniqueKeysWithValues: semanticResults.enumerated().map { index, result in
-                (result.id, (score: result.score, rank: index + 1))
-            }
-        )
+        let bm25Scores = buildScoreLookup(from: bm25Results)
+        let semanticScores = buildScoreLookup(from: semanticResults)
 
         for fusedItem in fusedResults {
-            guard let chunk = try await chunkStore.get(id: fusedItem.id) else {
+            guard let chunk = try await chunkStore.get(id: fusedItem.id),
+                  await passesFilters(chunk, options: options)
+            else {
                 continue
-            }
-
-            // Apply filters
-            if let pathFilter = options.pathFilter {
-                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
-                    continue
-                }
-            }
-
-            if let extensionFilter = options.extensionFilter, !extensionFilter.isEmpty {
-                let ext = (chunk.path as NSString).pathExtension.lowercased()
-                guard extensionFilter.contains(ext) else {
-                    continue
-                }
             }
 
             let bm25Info = bm25Scores[fusedItem.id]
