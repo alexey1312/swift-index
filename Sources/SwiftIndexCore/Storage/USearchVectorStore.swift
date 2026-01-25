@@ -354,10 +354,17 @@ public actor USearchVectorStore: VectorStore {
     }
 
     public func clear() async throws {
+        // Clear in-memory state
         try index.clear()
         idToKey.removeAll()
         keyToId.removeAll()
         nextKey = 0
+        trackedCapacity = Self.initialCapacity
+
+        // Delete persistence files to ensure clean slate on next save
+        if let indexPath {
+            try Self.deleteIndex(at: indexPath)
+        }
     }
 
     // MARK: - Additional Methods
