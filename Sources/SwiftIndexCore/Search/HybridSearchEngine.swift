@@ -88,8 +88,9 @@ public actor HybridSearchEngine: SearchEngine {
     /// - Returns: Array of search results ranked by combined relevance.
     public func search(query: String, options: SearchOptions) async throws -> [SearchResult] {
         // Calculate search limits for each method
-        // Fetch more than needed to ensure we have enough after fusion
-        let fetchLimit = options.limit * 3
+        // Fetch more than needed to ensure we have enough after fusion and filtering
+        // Higher multiplier improves recall at the cost of processing more candidates
+        let fetchLimit = options.limit * 5
 
         // Run BM25 and semantic search in parallel
         async let bm25Task = bm25Search.searchRaw(query: query, limit: fetchLimit)

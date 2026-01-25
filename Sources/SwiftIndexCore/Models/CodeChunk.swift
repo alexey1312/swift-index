@@ -64,6 +64,14 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     /// Automatically generated during indexing when an LLM provider is available.
     public let generatedDescription: String?
 
+    /// Protocols and types this declaration conforms to or inherits from.
+    ///
+    /// For classes, structs, enums, and actors, this includes their inheritance clause.
+    /// For extensions, this includes any additional protocol conformances.
+    ///
+    /// Example: `["Codable", "Sendable", "ChunkStore"]`
+    public let conformances: [String]
+
     public init(
         id: String = UUID().uuidString,
         path: String,
@@ -81,7 +89,8 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         tokenCount: Int? = nil,
         language: String? = nil,
         contentHash: String? = nil,
-        generatedDescription: String? = nil
+        generatedDescription: String? = nil,
+        conformances: [String] = []
     ) {
         self.id = id
         self.path = path
@@ -100,6 +109,7 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         self.language = language ?? CodeChunk.detectLanguage(from: path)
         self.contentHash = contentHash ?? CodeChunk.computeContentHash(content)
         self.generatedDescription = generatedDescription
+        self.conformances = conformances
     }
 
     /// Compute SHA-256 hash of content for change detection.

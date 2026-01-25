@@ -5,16 +5,18 @@ import Foundation
 /// Reciprocal Rank Fusion algorithm for combining multiple ranked lists.
 ///
 /// RRF is a rank aggregation method that combines results from multiple search
-/// systems without requiring score normalization. The formula is:
+/// systems. The enhanced formula incorporates both rank and original scores:
 /// ```
-/// score = sum(1 / (k + rank_i))
+/// score = weight * (alpha * RRF(rank) + (1 - alpha) * normalized_score)
 /// ```
-/// where k is a constant (typically 60) that reduces the impact of high-ranking results.
+/// where:
+/// - `k` is a constant (typically 60) that reduces the impact of high-ranking results
+/// - `alpha` controls the balance between rank-based and score-based fusion
 ///
 /// ## Usage
 ///
 /// ```swift
-/// let fusion = RRFFusion(k: 60)
+/// let fusion = RRFFusion(k: 60, alpha: 0.7)
 /// let combined = fusion.fuse([bm25Results, semanticResults])
 /// ```
 ///
@@ -30,12 +32,26 @@ public struct RRFFusion: Sendable {
     /// Default is 60, as recommended in the original paper.
     public let k: Int
 
+    /// The alpha parameter controlling the balance between rank-based and score-based fusion.
+    ///
+    /// - `alpha = 1.0`: Pure RRF (only ranks matter)
+    /// - `alpha = 0.0`: Pure score-based fusion (only original scores matter)
+    /// - `alpha = 0.7`: Default, 70% RRF + 30% normalized score
+    ///
+    /// Lower alpha values make high-confidence results from either search method
+    /// more influential, which helps differentiate exact matches from approximate ones.
+    public let alpha: Float
+
     /// Creates a new RRF fusion instance.
     ///
-    /// - Parameter k: The k parameter (default: 60).
-    public init(k: Int = 60) {
+    /// - Parameters:
+    ///   - k: The k parameter (default: 60).
+    ///   - alpha: Balance between RRF and score-based fusion (default: 0.7).
+    public init(k: Int = 60, alpha: Float = 0.7) {
         precondition(k > 0, "k must be positive")
+        precondition(alpha >= 0 && alpha <= 1, "alpha must be between 0 and 1")
         self.k = k
+        self.alpha = alpha
     }
 
     /// Fuses multiple ranked lists into a single ranked result.
@@ -74,6 +90,9 @@ public struct RRFFusion: Sendable {
 
     /// Fuses multiple ranked lists with custom weights for each list.
     ///
+    /// Uses a hybrid scoring approach that combines rank-based RRF with
+    /// normalized original scores, controlled by the `alpha` parameter.
+    ///
     /// - Parameters:
     ///   - rankedLists: Array of ranked result lists.
     ///   - weights: Weight for each list (must match rankedLists count).
@@ -92,9 +111,27 @@ public struct RRFFusion: Sendable {
 
         for (listIndex, list) in rankedLists.enumerated() {
             let weight = weights[listIndex]
+
+            // Find max score in this list for normalization
+            // Use 1.0 as fallback to avoid division by zero
+            let maxScore = list.map(\.score).max() ?? 1.0
+            let normalizer = maxScore > 0 ? maxScore : 1.0
+
             for (rankIndex, item) in list.enumerated() {
                 let rank = rankIndex + 1
-                let contribution = weight / Float(k + rank)
+
+                // RRF component: rank-based score
+                let rrfScore = 1.0 / Float(k + rank)
+
+                // Score component: normalized original score (0 to 1)
+                let normalizedScore = item.score / normalizer
+
+                // Hybrid: combine RRF and normalized score using alpha
+                // alpha=1.0 → pure RRF, alpha=0.0 → pure score-based
+                let hybridScore = alpha * rrfScore + (1 - alpha) * normalizedScore
+
+                // Apply list weight
+                let contribution = weight * hybridScore
                 scores[item.id, default: 0] += contribution
 
                 if ranks[item.id] == nil {

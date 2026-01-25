@@ -73,6 +73,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerContentHashMigration(&migrator)
         registerGeneratedDescriptionMigration(&migrator)
         registerDescriptionFTSMigration(&migrator)
+        registerConformancesMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -362,6 +363,85 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
                 INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment, generated_description, path)
                 SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''),
                        COALESCE(generated_description, ''), path FROM chunks
+            """)
+        }
+    }
+
+    private nonisolated func registerConformancesMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 7: Add conformances column and include in FTS5 for protocol search
+        migrator.registerMigration("v7_conformances") { db in
+            // Add conformances column to chunks table (JSON array)
+            try db.alter(table: "chunks") { table in
+                table.add(column: "conformances", .text).notNull().defaults(to: "[]")
+            }
+
+            // Drop old FTS table and triggers
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ai")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_ad")
+            try db.execute(sql: "DROP TRIGGER IF EXISTS chunks_au")
+            try db.execute(sql: "DROP TABLE IF EXISTS chunks_fts")
+
+            // Create FTS5 with conformances included
+            // This enables "implements ChunkStore" queries to find conforming types
+            try db.execute(sql: """
+                CREATE VIRTUAL TABLE chunks_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    symbols,
+                    doc_comment,
+                    generated_description,
+                    conformances,
+                    path UNINDEXED,
+                    content='chunks',
+                    content_rowid='rowid',
+                    tokenize='porter unicode61'
+                )
+            """)
+
+            // Triggers with conformances
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ai AFTER INSERT ON chunks BEGIN
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                           generated_description, conformances, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''),
+                            COALESCE(NEW.conformances, '[]'), NEW.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_ad AFTER DELETE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, conformances, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''),
+                            COALESCE(OLD.conformances, '[]'), OLD.path);
+                END
+            """)
+
+            try db.execute(sql: """
+                CREATE TRIGGER chunks_au AFTER UPDATE ON chunks BEGIN
+                    INSERT INTO chunks_fts(chunks_fts, rowid, id, content, symbols,
+                                           doc_comment, generated_description, conformances, path)
+                    VALUES ('delete', OLD.rowid, OLD.id, OLD.content, OLD.symbols,
+                            COALESCE(OLD.doc_comment, ''), COALESCE(OLD.generated_description, ''),
+                            COALESCE(OLD.conformances, '[]'), OLD.path);
+                    INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                           generated_description, conformances, path)
+                    VALUES (NEW.rowid, NEW.id, NEW.content, NEW.symbols,
+                            COALESCE(NEW.doc_comment, ''), COALESCE(NEW.generated_description, ''),
+                            COALESCE(NEW.conformances, '[]'), NEW.path);
+                END
+            """)
+
+            // Rebuild FTS index with existing data
+            try db.execute(sql: """
+                INSERT INTO chunks_fts(rowid, id, content, symbols, doc_comment,
+                                       generated_description, conformances, path)
+                SELECT rowid, id, content, symbols, COALESCE(doc_comment, ''),
+                       COALESCE(generated_description, ''), COALESCE(conformances, '[]'), path FROM chunks
             """)
         }
     }
@@ -714,6 +794,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     let language: String
     let contentHash: String?
     let generatedDescription: String?
+    let conformances: String // JSON array
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -733,6 +814,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case language
         case contentHash = "content_hash"
         case generatedDescription = "generated_description"
+        case conformances
     }
 
     init(chunk: CodeChunk) {
@@ -755,6 +837,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         language = chunk.language
         contentHash = chunk.contentHash
         generatedDescription = chunk.generatedDescription
+        conformances = (try? JSONCodec.makeEncoder().encode(chunk.conformances))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
     }
 
     init(row: Row) {
@@ -775,6 +859,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         language = row["language"] ?? "unknown"
         contentHash = row["content_hash"]
         generatedDescription = row["generated_description"]
+        conformances = row["conformances"] ?? "[]"
     }
 
     func toCodeChunk() throws -> CodeChunk {
@@ -790,6 +875,11 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         let referencesArray: [String] = (try? JSONCodec.makeDecoder().decode(
             [String].self,
             from: Data(references.utf8)
+        )) ?? []
+
+        let conformancesArray: [String] = (try? JSONCodec.makeDecoder().decode(
+            [String].self,
+            from: Data(conformances.utf8)
         )) ?? []
 
         return CodeChunk(
@@ -809,7 +899,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             tokenCount: tokenCount,
             language: language,
             contentHash: contentHash,
-            generatedDescription: generatedDescription
+            generatedDescription: generatedDescription,
+            conformances: conformancesArray
         )
     }
 }

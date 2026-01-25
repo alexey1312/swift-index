@@ -20,7 +20,9 @@ Schema:
   - `breadcrumb TEXT` — hierarchy path (e.g., "Module > Class > Method")
   - `token_count INTEGER NOT NULL DEFAULT 0` — approximate token count
   - `language TEXT NOT NULL DEFAULT 'unknown'` — programming language
-- `chunks_fts` virtual table — FTS5 full-text search (includes `doc_comment`)
+  - `generated_description TEXT` — LLM-generated summary of the code
+  - `conformances TEXT` — JSON array of protocol/class conformances
+- `chunks_fts` virtual table — FTS5 full-text search (includes rich metadata)
 - `files` table — indexed file tracking
 - `config` table — index configuration snapshot
 
@@ -51,7 +53,11 @@ Schema:
 - **THEN** all indexed data is preserved
 - **AND** no re-indexing required
 
----
+#### Scenario: Store chunk with conformances
+
+- **WHEN** indexing `class User: Codable, Identifiable`
+- **THEN** `conformances` column contains `["Codable", "Identifiable"]`
+- **AND** conformances are searchable via FTS
 
 ### Requirement: FTS5 Full-Text Search
 
@@ -60,7 +66,7 @@ The system SHALL use SQLite FTS5 for BM25 keyword search.
 FTS5 configuration:
 
 - Tokenizer: `unicode61`
-- Indexed columns: `content`, `symbols`, `doc_comment`
+- Indexed columns: `content`, `symbols`, `doc_comment`, `generated_description`, `conformances`
 - BM25 ranking function
 
 #### Scenario: FTS5 search
@@ -87,7 +93,11 @@ FTS5 configuration:
 - **WHEN** searching `auth*`
 - **THEN** returns "authentication", "authorize", "auth"
 
----
+#### Scenario: FTS5 search in descriptions
+
+- **WHEN** searching "calculates total"
+- **AND** chunk has generated description "Calculates the total sum"
+- **THEN** chunk is returned in results
 
 ### Requirement: Vector Index Storage
 

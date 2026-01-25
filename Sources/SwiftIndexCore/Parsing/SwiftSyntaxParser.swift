@@ -59,6 +59,9 @@ private final class DeclarationVisitor: SyntaxVisitor {
     /// Stack of parent type names for nested type context.
     private var typeStack: [String] = []
 
+    /// Stack of conformances for the current type context.
+    private var conformanceStack: [[String]] = []
+
     init(content: String, path: String, fileHash: String) {
         self.content = content
         self.path = path
@@ -145,21 +148,25 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let docComment = extractDocComment(for: node)
         let signature = buildClassSignature(node)
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .class,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(name)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: ClassDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Structs
@@ -168,21 +175,25 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let docComment = extractDocComment(for: node)
         let signature = buildStructSignature(node)
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .struct,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(name)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: StructDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Enums
@@ -191,21 +202,25 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let docComment = extractDocComment(for: node)
         let signature = buildEnumSignature(node)
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .enum,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(name)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: EnumDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Protocols
@@ -214,21 +229,26 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let docComment = extractDocComment(for: node)
         let signature = buildProtocolSignature(node)
+        // Protocols can inherit from other protocols
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .protocol,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(name)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: ProtocolDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Extensions
@@ -238,21 +258,26 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = extendedType
         let docComment = extractDocComment(for: node)
         let signature = buildExtensionSignature(node)
+        // Extensions can add protocol conformances
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .extension,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(extendedType)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: ExtensionDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Actors
@@ -261,21 +286,25 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let name = node.name.text
         let docComment = extractDocComment(for: node)
         let signature = buildActorSignature(node)
+        let conformances = extractConformances(from: node.inheritanceClause)
 
         addChunk(
             node: node,
             name: name,
             kind: .actor,
             signature: signature,
-            docComment: docComment
+            docComment: docComment,
+            conformances: conformances
         )
 
         typeStack.append(name)
+        conformanceStack.append(conformances)
         return .visitChildren
     }
 
     override func visitPost(_ node: ActorDeclSyntax) {
         _ = typeStack.popLast()
+        _ = conformanceStack.popLast()
     }
 
     // MARK: - Macros
@@ -359,7 +388,8 @@ private final class DeclarationVisitor: SyntaxVisitor {
         name: String,
         kind: ChunkKind,
         signature: String,
-        docComment: String?
+        docComment: String?,
+        conformances: [String] = []
     ) {
         let locationConverter = SourceLocationConverter(
             fileName: path,
@@ -389,11 +419,14 @@ private final class DeclarationVisitor: SyntaxVisitor {
             startLine: startLine
         )
 
-        // Collect symbols
+        // Collect symbols - include conformances for searchability
         var symbols = [qualifiedName]
         if qualifiedName != name {
             symbols.append(name)
         }
+        // Add conformance names to symbols for FTS matching
+        // This helps "implements ChunkStore" find types that conform to ChunkStore
+        symbols.append(contentsOf: conformances)
 
         let chunk = CodeChunk(
             id: chunkId,
@@ -407,7 +440,8 @@ private final class DeclarationVisitor: SyntaxVisitor {
             fileHash: fileHash,
             docComment: docComment,
             signature: signature,
-            breadcrumb: breadcrumb
+            breadcrumb: breadcrumb,
+            conformances: conformances
         )
 
         chunks.append(chunk)
@@ -486,6 +520,20 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let data = Data(joined.utf8)
         let digest = SHA256.hash(data: data)
         return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - Conformance Extraction
+
+    /// Extracts protocol/type conformances from an inheritance clause.
+    ///
+    /// - Parameter inheritanceClause: The inheritance clause syntax node.
+    /// - Returns: Array of inherited type names (protocols, base classes).
+    private func extractConformances(from inheritanceClause: InheritanceClauseSyntax?) -> [String] {
+        guard let inheritanceClause else { return [] }
+        return inheritanceClause.inheritedTypes.map { inherited in
+            // Get the type name, handling generic types like "Equatable" or "Comparable"
+            inherited.type.trimmedDescription
+        }
     }
 
     // MARK: - Reference Extraction

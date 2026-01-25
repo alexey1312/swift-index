@@ -181,6 +181,11 @@ public actor DescriptionGenerator {
             prompt += "\nSignature: \(signature)"
         }
 
+        // Include conformances/inheritance for better context
+        if !chunk.conformances.isEmpty {
+            prompt += "\nImplements/Inherits: \(chunk.conformances.joined(separator: ", "))"
+        }
+
         if let breadcrumb = chunk.breadcrumb {
             prompt += "\nLocation: \(breadcrumb)"
         }
@@ -265,11 +270,15 @@ private enum SystemPrompts {
     - Use active voice (e.g., "Validates user credentials" not "User credentials are validated")
     - Don't repeat the function/class name in the description
     - Include key behaviors like error handling, caching, or async operations if relevant
+    - IMPORTANT: If the code implements protocols or inherits from base classes, mention this.
+      For example: "SQLite implementation of ChunkStore" or "Implements SearchEngine with hybrid search."
 
     Examples:
     - "Authenticates users via OAuth2 and stores refresh tokens securely."
     - "Parses JSON responses into strongly-typed models with error recovery."
     - "Manages concurrent database connections with automatic retry logic."
+    - "SQLite-based implementation of ChunkStore protocol with FTS5 full-text search."
+    - "Implements EmbeddingProvider using MLX for local Apple Silicon embeddings."
 
     Respond with ONLY the description, no additional text or formatting.
     """
