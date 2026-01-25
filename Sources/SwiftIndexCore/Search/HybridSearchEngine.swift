@@ -92,22 +92,36 @@ public actor HybridSearchEngine: SearchEngine {
         // Higher multiplier improves recall at the cost of processing more candidates
         let fetchLimit = options.limit * 5
 
+        // Extract query terms for boost calculations
+        let queryTerms = extractQueryTerms(from: query)
+
+        // Detect "implements X" pattern and get conforming types
+        let conformanceResults = try await getConformanceResults(query: query, limit: fetchLimit)
+
         // Run BM25 and semantic search in parallel
         async let bm25Task = bm25Search.searchRaw(query: query, limit: fetchLimit)
         async let semanticTask = semanticSearch.searchRaw(query: query, limit: fetchLimit)
 
         let (bm25Results, semanticResults) = try await (bm25Task, semanticTask)
 
-        // Apply weighted RRF fusion
+        // Apply weighted RRF fusion (with conformance results as third source)
         let bm25Weight = 1.0 - options.semanticWeight
         let semanticWeight = options.semanticWeight
 
-        let fusedResults = fusion.fuse(
-            bm25Results,
-            firstWeight: bm25Weight,
-            semanticResults,
-            secondWeight: semanticWeight
-        )
+        let fusedResults: [(id: String, score: Float, ranks: [Int?])] = if conformanceResults.isEmpty {
+            fusion.fuse(
+                bm25Results,
+                firstWeight: bm25Weight,
+                semanticResults,
+                secondWeight: semanticWeight
+            )
+        } else {
+            // Include conformance results with high weight (3.0x boost)
+            fusion.fuse(
+                [bm25Results, semanticResults, conformanceResults],
+                weights: [bm25Weight, semanticWeight, 3.0]
+            )
+        }
 
         // Build lookup dictionaries for original scores
         let bm25Scores = Dictionary(
@@ -116,6 +130,7 @@ public actor HybridSearchEngine: SearchEngine {
         let semanticScores = Dictionary(
             uniqueKeysWithValues: semanticResults.enumerated().map { ($1.id, (score: $1.score, rank: $0 + 1)) }
         )
+        let conformanceIds = Set(conformanceResults.map(\.id))
 
         // Convert fused results to SearchResults
         var results: [SearchResult] = []
@@ -143,19 +158,27 @@ public actor HybridSearchEngine: SearchEngine {
             let bm25Info = bm25Scores[fusedItem.id]
             let semanticInfo = semanticScores[fusedItem.id]
 
+            // Calculate exact symbol match boost
+            let (boostedScore, hasExactMatch) = try await applyExactSymbolBoost(
+                baseScore: fusedItem.score,
+                chunk: chunk,
+                queryTerms: queryTerms
+            )
+
             let result = SearchResult(
                 chunk: chunk,
-                score: fusedItem.score,
+                score: boostedScore,
                 bm25Score: bm25Info?.score,
                 semanticScore: semanticInfo?.score,
                 bm25Rank: bm25Info?.rank,
                 semanticRank: semanticInfo?.rank,
                 isMultiHop: false,
-                hopDepth: 0
+                hopDepth: 0,
+                exactSymbolMatch: hasExactMatch || conformanceIds.contains(fusedItem.id)
             )
             results.append(result)
 
-            if results.count >= options.limit {
+            if results.count >= options.limit * 2 {
                 break
             }
         }
@@ -171,7 +194,109 @@ public actor HybridSearchEngine: SearchEngine {
         }
 
         // Final sort and limit
-        return Array(results.sorted().prefix(options.limit))
+        return Array(results.sorted { $0.score > $1.score }.prefix(options.limit))
+    }
+
+    // MARK: - Exact Symbol Boost
+
+    /// Applies exact symbol boost for rare terms.
+    ///
+    /// When a query term exactly matches a chunk's symbol and the term is rare
+    /// (< 10 occurrences in the index), a 2.0x boost is applied.
+    ///
+    /// - Parameters:
+    ///   - baseScore: The original fusion score.
+    ///   - chunk: The code chunk to check.
+    ///   - queryTerms: Extracted query terms.
+    /// - Returns: Tuple of (boosted score, whether exact match was found).
+    private func applyExactSymbolBoost(
+        baseScore: Float,
+        chunk: CodeChunk,
+        queryTerms: [String]
+    ) async throws -> (score: Float, hasExactMatch: Bool) {
+        var hasExactMatch = false
+        var boostMultiplier: Float = 1.0
+
+        for term in queryTerms {
+            // Check for exact symbol match
+            if chunk.symbols.contains(term) {
+                // Check if this is a rare term (< 10 occurrences)
+                if let grdbStore = chunkStore as? GRDBChunkStore {
+                    let frequency = try await grdbStore.getTermFrequency(symbol: term)
+                    if frequency < 10 {
+                        hasExactMatch = true
+                        boostMultiplier = max(boostMultiplier, 2.0)
+                    }
+                } else {
+                    // For non-GRDB stores, apply boost conservatively
+                    hasExactMatch = true
+                    boostMultiplier = max(boostMultiplier, 1.5)
+                }
+            }
+        }
+
+        return (baseScore * boostMultiplier, hasExactMatch)
+    }
+
+    // MARK: - Conformance Detection
+
+    /// Detects "implements X" patterns and returns conforming type chunks.
+    ///
+    /// - Parameters:
+    ///   - query: The search query.
+    ///   - limit: Maximum results to return.
+    /// - Returns: Array of (id, score) pairs for conforming types.
+    private func getConformanceResults(
+        query: String,
+        limit: Int
+    ) async throws -> [(id: String, score: Float)] {
+        // Detect "implements X" or "conforms to X" patterns
+        let patterns = [
+            #/implements\s+(\w+)/#,
+            #/conforms\s+to\s+(\w+)/#,
+            #/what\s+implements\s+(\w+)/#,
+            #/types?\s+implementing\s+(\w+)/#,
+            #/classes?\s+implementing\s+(\w+)/#,
+            #/structs?\s+implementing\s+(\w+)/#,
+            #/actors?\s+implementing\s+(\w+)/#,
+        ]
+
+        for pattern in patterns {
+            if let match = try? pattern.firstMatch(in: query.lowercased()) {
+                let protocolName = String(match.1)
+                // Capitalize first letter for proper Swift naming
+                let capitalizedName = protocolName.prefix(1).uppercased() + protocolName.dropFirst()
+
+                guard let grdbStore = chunkStore as? GRDBChunkStore else {
+                    continue
+                }
+
+                let conformingTypes = try await grdbStore.findConformingTypes(protocol: capitalizedName)
+
+                // Return as ranked list with high scores
+                return conformingTypes.prefix(limit).enumerated().map { index, chunk in
+                    // Score decreases slightly by rank to maintain ordering
+                    (id: chunk.id, score: Float(limit - index))
+                }
+            }
+        }
+
+        return []
+    }
+
+    /// Extracts meaningful terms from a query for boost calculations.
+    private func extractQueryTerms(from query: String) -> [String] {
+        let stopWords: Set<String> = [
+            "the", "a", "an", "is", "are", "was", "were", "what", "how", "where",
+            "when", "why", "which", "who", "that", "this", "to", "for", "of", "in",
+            "on", "at", "by", "with", "from", "implements", "conforms", "types",
+            "type", "class", "struct", "actor", "enum", "protocol", "extension",
+        ]
+
+        return query
+            .components(separatedBy: .alphanumerics.inverted)
+            .filter { !$0.isEmpty && $0.count >= 2 }
+            .filter { !stopWords.contains($0.lowercased()) }
     }
 
     // MARK: - Multi-Hop Search

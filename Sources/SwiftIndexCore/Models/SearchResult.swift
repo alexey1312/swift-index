@@ -28,6 +28,12 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
     /// The hop depth if this is a multi-hop result.
     public let hopDepth: Int
 
+    /// Whether this result has an exact symbol match with the query.
+    ///
+    /// True when the query term exactly matches one of the chunk's symbols.
+    /// Used for boosting rare terms in search ranking.
+    public let exactSymbolMatch: Bool
+
     public init(
         chunk: CodeChunk,
         score: Float,
@@ -36,7 +42,8 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
         bm25Rank: Int? = nil,
         semanticRank: Int? = nil,
         isMultiHop: Bool = false,
-        hopDepth: Int = 0
+        hopDepth: Int = 0,
+        exactSymbolMatch: Bool = false
     ) {
         self.chunk = chunk
         self.score = score
@@ -46,6 +53,7 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
         self.semanticRank = semanticRank
         self.isMultiHop = isMultiHop
         self.hopDepth = hopDepth
+        self.exactSymbolMatch = exactSymbolMatch
     }
 
     // MARK: - Identifiable

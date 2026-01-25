@@ -74,6 +74,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerGeneratedDescriptionMigration(&migrator)
         registerDescriptionFTSMigration(&migrator)
         registerConformancesMigration(&migrator)
+        registerTypeDeclarationMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }
@@ -446,6 +447,65 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
     }
 
+    private nonisolated func registerTypeDeclarationMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        // Version 8: Type declaration flag and conformance index table
+        migrator.registerMigration("v8_type_declaration") { db in
+            // Add is_type_declaration column to chunks table
+            try db.alter(table: "chunks") { table in
+                table.add(column: "is_type_declaration", .boolean).notNull().defaults(to: false)
+            }
+
+            // Create conformance index table for fast protocol lookups
+            // This enables O(1) queries like "find all types implementing ChunkStore"
+            try db.create(table: "conformance_index") { table in
+                table.column("chunk_id", .text).notNull().indexed()
+                table.column("protocol_name", .text).notNull().indexed()
+                table.primaryKey(["chunk_id", "protocol_name"])
+                table.foreignKey(["chunk_id"], references: "chunks", columns: ["id"], onDelete: .cascade)
+            }
+
+            // Index for protocol name lookups
+            try db.create(index: "idx_conformance_protocol", on: "conformance_index", columns: ["protocol_name"])
+
+            // Populate conformance_index from existing conformances JSON
+            try db.execute(sql: """
+                INSERT INTO conformance_index (chunk_id, protocol_name)
+                SELECT c.id, json_each.value
+                FROM chunks c, json_each(c.conformances)
+                WHERE json_valid(c.conformances) AND json_each.value != ''
+            """)
+
+            // Create trigger to maintain conformance_index on insert
+            try db.execute(sql: """
+                CREATE TRIGGER conformance_index_ai AFTER INSERT ON chunks
+                WHEN json_valid(NEW.conformances)
+                BEGIN
+                    INSERT OR IGNORE INTO conformance_index (chunk_id, protocol_name)
+                    SELECT NEW.id, json_each.value
+                    FROM json_each(NEW.conformances)
+                    WHERE json_each.value != '';
+                END
+            """)
+
+            // Create trigger to maintain conformance_index on update
+            try db.execute(sql: """
+                CREATE TRIGGER conformance_index_au AFTER UPDATE ON chunks
+                WHEN json_valid(NEW.conformances)
+                BEGIN
+                    DELETE FROM conformance_index WHERE chunk_id = OLD.id;
+                    INSERT OR IGNORE INTO conformance_index (chunk_id, protocol_name)
+                    SELECT NEW.id, json_each.value
+                    FROM json_each(NEW.conformances)
+                    WHERE json_each.value != '';
+                END
+            """)
+
+            // Trigger on delete is handled by CASCADE foreign key
+        }
+    }
+
     // MARK: - ChunkStore Protocol
 
     public func insert(_ chunk: CodeChunk) async throws {
@@ -745,6 +805,49 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         }
     }
 
+    // MARK: - Conformance Queries
+
+    /// Find all type declaration chunks that conform to a protocol.
+    ///
+    /// Uses the conformance_index table for O(1) lookup.
+    ///
+    /// - Parameter protocolName: The protocol name to search for.
+    /// - Returns: Array of type declaration chunks that conform to the protocol.
+    public func findConformingTypes(protocol protocolName: String) async throws -> [CodeChunk] {
+        try await dbWriter.read { db in
+            let sql = """
+                SELECT c.* FROM chunks c
+                JOIN conformance_index ci ON c.id = ci.chunk_id
+                WHERE ci.protocol_name = ?
+                  AND c.is_type_declaration = 1
+                ORDER BY c.path, c.start_line
+            """
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: [protocolName])
+            return try rows.map { row in
+                try ChunkRecord(row: row).toCodeChunk()
+            }
+        }
+    }
+
+    /// Get term frequency for a symbol (count of chunks containing this symbol).
+    ///
+    /// Used for exact symbol boost threshold checking.
+    ///
+    /// - Parameter symbol: The symbol name to count.
+    /// - Returns: Number of chunks containing this symbol.
+    public func getTermFrequency(symbol: String) async throws -> Int {
+        try await dbWriter.read { db in
+            let sql = """
+                SELECT COUNT(*) FROM chunks
+                WHERE symbols LIKE ?
+            """
+            // Match symbol in JSON array: ["symbol"] or ["other", "symbol"] etc.
+            let pattern = "%\"\(symbol)\"%"
+            return try Int.fetchOne(db, sql: sql, arguments: [pattern]) ?? 0
+        }
+    }
+
     // MARK: - Private Helpers
 
     private nonisolated func sanitizeFTSQuery(_ query: String) -> String {
@@ -795,6 +898,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
     let contentHash: String?
     let generatedDescription: String?
     let conformances: String // JSON array
+    let isTypeDeclaration: Bool
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -815,6 +919,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case contentHash = "content_hash"
         case generatedDescription = "generated_description"
         case conformances
+        case isTypeDeclaration = "is_type_declaration"
     }
 
     init(chunk: CodeChunk) {
@@ -839,6 +944,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         generatedDescription = chunk.generatedDescription
         conformances = (try? JSONCodec.makeEncoder().encode(chunk.conformances))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+        isTypeDeclaration = chunk.isTypeDeclaration
     }
 
     init(row: Row) {
@@ -860,6 +966,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         contentHash = row["content_hash"]
         generatedDescription = row["generated_description"]
         conformances = row["conformances"] ?? "[]"
+        isTypeDeclaration = row["is_type_declaration"] ?? false
     }
 
     func toCodeChunk() throws -> CodeChunk {
@@ -900,7 +1007,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             language: language,
             contentHash: contentHash,
             generatedDescription: generatedDescription,
-            conformances: conformancesArray
+            conformances: conformancesArray,
+            isTypeDeclaration: isTypeDeclaration
         )
     }
 }

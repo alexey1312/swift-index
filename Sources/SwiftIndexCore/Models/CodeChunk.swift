@@ -72,6 +72,14 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
     /// Example: `["Codable", "Sendable", "ChunkStore"]`
     public let conformances: [String]
 
+    /// Whether this chunk represents a type declaration header.
+    ///
+    /// When `true`, this chunk is the declaration header of a type (class, struct,
+    /// actor, enum, or extension) rather than a method or property within it.
+    /// Type declaration chunks are created separately to ensure they appear in
+    /// search results for "what is X" and "implements Y" queries.
+    public let isTypeDeclaration: Bool
+
     public init(
         id: String = UUID().uuidString,
         path: String,
@@ -90,7 +98,8 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         language: String? = nil,
         contentHash: String? = nil,
         generatedDescription: String? = nil,
-        conformances: [String] = []
+        conformances: [String] = [],
+        isTypeDeclaration: Bool = false
     ) {
         self.id = id
         self.path = path
@@ -110,6 +119,7 @@ public struct CodeChunk: Sendable, Equatable, Identifiable, Codable {
         self.contentHash = contentHash ?? CodeChunk.computeContentHash(content)
         self.generatedDescription = generatedDescription
         self.conformances = conformances
+        self.isTypeDeclaration = isTypeDeclaration
     }
 
     /// Compute SHA-256 hash of content for change detection.

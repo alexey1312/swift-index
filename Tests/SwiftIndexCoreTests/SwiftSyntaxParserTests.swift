@@ -3,6 +3,7 @@
 @testable import SwiftIndexCore
 import Testing
 
+// swiftlint:disable type_body_length
 @Suite("SwiftSyntaxParser Tests")
 struct SwiftSyntaxParserTests {
     let parser = SwiftSyntaxParser()
@@ -809,5 +810,145 @@ struct SwiftSyntaxParserTests {
         }
 
         #expect(chunks.first?.language == "swift")
+    }
+
+    // MARK: - Type Declaration Chunk Tests
+
+    @Test("Create type declaration chunk for actor with conformances")
+    func createTypeDeclarationChunkForActor() {
+        let content = """
+        /// SQLite-based chunk storage.
+        public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
+            func insert(_ chunk: CodeChunk) async throws {}
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/Storage/GRDBChunkStore.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        // Should have type declaration chunk + full actor chunk + method chunk
+        let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
+        #expect(typeDeclarationChunks.count == 1, "Should have 1 type declaration chunk")
+
+        let declChunk = typeDeclarationChunks.first!
+        #expect(declChunk.kind == .actor)
+        #expect(declChunk.symbols.contains("GRDBChunkStore"))
+        #expect(declChunk.conformances.contains("ChunkStore"))
+        #expect(declChunk.conformances.contains("InfoSnippetStore"))
+        #expect(declChunk.isTypeDeclaration == true)
+        // Type declaration chunk should have signature as content
+        #expect(declChunk.content.contains("public actor GRDBChunkStore"))
+    }
+
+    @Test("Create type declaration chunk for struct with conformances")
+    func createTypeDeclarationChunkForStruct() {
+        let content = """
+        struct SearchResult: Sendable, Equatable {
+            let id: String
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
+        #expect(typeDeclarationChunks.count == 1)
+
+        let declChunk = typeDeclarationChunks.first!
+        #expect(declChunk.conformances.contains("Sendable"))
+        #expect(declChunk.conformances.contains("Equatable"))
+        #expect(declChunk.isTypeDeclaration == true)
+    }
+
+    @Test("Create type declaration chunk for extension with conformance")
+    func createTypeDeclarationChunkForExtension() {
+        let content = """
+        extension User: Sendable {
+            var displayName: String { name }
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        // Extension with conformance should get a type declaration chunk
+        let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
+        #expect(typeDeclarationChunks.count == 1)
+
+        let declChunk = typeDeclarationChunks.first!
+        #expect(declChunk.kind == .extension)
+        #expect(declChunk.conformances.contains("Sendable"))
+    }
+
+    @Test("Extension without conformance does not create type declaration chunk")
+    func extensionWithoutConformanceNoTypeDeclarationChunk() {
+        let content = """
+        extension User {
+            var displayName: String { name }
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        // Extension without conformance should NOT get a type declaration chunk
+        let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
+        #expect(typeDeclarationChunks.isEmpty)
+    }
+
+    @Test("Both type declaration and full chunk have same conformances")
+    func bothChunksHaveSameConformances() {
+        let content = """
+        class NetworkManager: NSObject, URLSessionDelegate {
+            func request() {}
+        }
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let classChunks = chunks.filter { $0.kind == .class }
+        #expect(classChunks.count == 2) // Type declaration + full chunk
+
+        let declChunk = classChunks.first { $0.isTypeDeclaration }
+        let fullChunk = classChunks.first { !$0.isTypeDeclaration }
+
+        #expect(declChunk?.conformances == fullChunk?.conformances)
+        #expect(declChunk?.conformances.contains("NSObject") == true)
+        #expect(declChunk?.conformances.contains("URLSessionDelegate") == true)
+    }
+
+    @Test("Type declaration chunks have symbols including conformances")
+    func typeDeclarationChunksIncludeConformancesInSymbols() {
+        let content = """
+        protocol ChunkStore {}
+        actor GRDBChunkStore: ChunkStore {}
+        """
+
+        let result = parser.parse(content: content, path: "/test.swift")
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        let actorDeclChunk = chunks.first { $0.kind == .actor && $0.isTypeDeclaration }
+        #expect(actorDeclChunk != nil)
+        // Symbols should include the conformance for FTS matching
+        #expect(actorDeclChunk?.symbols.contains("ChunkStore") == true)
     }
 }

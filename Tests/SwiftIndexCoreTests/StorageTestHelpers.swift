@@ -16,7 +16,9 @@ func makeChunk(
     signature: String? = nil,
     breadcrumb: String? = nil,
     language: String = "swift",
-    generatedDescription: String? = nil
+    generatedDescription: String? = nil,
+    conformances: [String] = [],
+    isTypeDeclaration: Bool = false
 ) -> CodeChunk {
     CodeChunk(
         id: id,
@@ -32,7 +34,9 @@ func makeChunk(
         signature: signature,
         breadcrumb: breadcrumb,
         language: language,
-        generatedDescription: generatedDescription
+        generatedDescription: generatedDescription,
+        conformances: conformances,
+        isTypeDeclaration: isTypeDeclaration
     )
 }
 

@@ -456,6 +456,231 @@ struct GRDBChunkStoreTests {
         #expect(chunks.count == 2)
         #expect(Set(chunks.map(\.id)) == Set(["byid-1", "byid-3"]))
     }
+
+    // MARK: - Type Declaration Tests
+
+    @Test("Store and retrieve isTypeDeclaration flag")
+    func storeAndRetrieveIsTypeDeclaration() async throws {
+        let store = try GRDBChunkStore()
+
+        // Type declaration chunk
+        let declChunk = makeChunk(
+            id: "type-decl-1",
+            kind: .actor,
+            symbols: ["GRDBChunkStore", "ChunkStore"],
+            signature: "public actor GRDBChunkStore: ChunkStore",
+            conformances: ["ChunkStore"],
+            isTypeDeclaration: true
+        )
+
+        // Regular chunk
+        let regularChunk = makeChunk(
+            id: "regular-1",
+            kind: .method,
+            symbols: ["insert"],
+            isTypeDeclaration: false
+        )
+
+        try await store.insertBatch([declChunk, regularChunk])
+
+        let retrievedDecl = try await store.get(id: "type-decl-1")
+        let retrievedRegular = try await store.get(id: "regular-1")
+
+        #expect(retrievedDecl?.isTypeDeclaration == true)
+        #expect(retrievedRegular?.isTypeDeclaration == false)
+    }
+
+    @Test("Store and retrieve conformances")
+    func storeAndRetrieveConformances() async throws {
+        let store = try GRDBChunkStore()
+
+        let chunk = makeChunk(
+            id: "conform-1",
+            kind: .actor,
+            symbols: ["GRDBChunkStore"],
+            conformances: ["ChunkStore", "InfoSnippetStore", "Sendable"]
+        )
+
+        try await store.insert(chunk)
+        let retrieved = try await store.get(id: "conform-1")
+
+        #expect(retrieved != nil)
+        #expect(retrieved?.conformances.count == 3)
+        #expect(retrieved?.conformances.contains("ChunkStore") == true)
+        #expect(retrieved?.conformances.contains("InfoSnippetStore") == true)
+        #expect(retrieved?.conformances.contains("Sendable") == true)
+    }
+
+    @Test("Find conforming types by protocol")
+    func findConformingTypesByProtocol() async throws {
+        let store = try GRDBChunkStore()
+
+        // Insert type declarations that conform to ChunkStore
+        let grdbChunk = makeChunk(
+            id: "grdb-decl",
+            kind: .actor,
+            symbols: ["GRDBChunkStore", "ChunkStore"],
+            signature: "public actor GRDBChunkStore: ChunkStore",
+            conformances: ["ChunkStore", "InfoSnippetStore"],
+            isTypeDeclaration: true
+        )
+
+        let memoryChunk = makeChunk(
+            id: "memory-decl",
+            kind: .class,
+            symbols: ["MemoryChunkStore", "ChunkStore"],
+            signature: "class MemoryChunkStore: ChunkStore",
+            conformances: ["ChunkStore"],
+            isTypeDeclaration: true
+        )
+
+        // Non-type-declaration chunk (should not be returned)
+        let methodChunk = makeChunk(
+            id: "method-1",
+            kind: .method,
+            symbols: ["insert"],
+            conformances: [], // Methods don't have conformances
+            isTypeDeclaration: false
+        )
+
+        try await store.insertBatch([grdbChunk, memoryChunk, methodChunk])
+
+        // Find all types conforming to ChunkStore
+        let conformingTypes = try await store.findConformingTypes(protocol: "ChunkStore")
+
+        #expect(conformingTypes.count == 2)
+        #expect(conformingTypes.map(\.id).contains("grdb-decl"))
+        #expect(conformingTypes.map(\.id).contains("memory-decl"))
+    }
+
+    @Test("Find conforming types returns empty for unknown protocol")
+    func findConformingTypesReturnsEmptyForUnknownProtocol() async throws {
+        let store = try GRDBChunkStore()
+
+        let chunk = makeChunk(
+            id: "chunk-1",
+            kind: .struct,
+            conformances: ["Sendable"],
+            isTypeDeclaration: true
+        )
+
+        try await store.insert(chunk)
+
+        let conformingTypes = try await store.findConformingTypes(protocol: "UnknownProtocol")
+
+        #expect(conformingTypes.isEmpty)
+    }
+
+    @Test("Get term frequency for symbol")
+    func getTermFrequencyForSymbol() async throws {
+        let store = try GRDBChunkStore()
+
+        // Insert chunks with various symbols
+        try await store.insertBatch([
+            makeChunk(id: "tf-1", symbols: ["USearchError", "VectorStore"]),
+            makeChunk(id: "tf-2", symbols: ["USearchError"]),
+            makeChunk(id: "tf-3", symbols: ["CommonSymbol", "VectorStore"]),
+            makeChunk(id: "tf-4", symbols: ["CommonSymbol"]),
+            makeChunk(id: "tf-5", symbols: ["CommonSymbol"]),
+        ])
+
+        let rareTermFreq = try await store.getTermFrequency(symbol: "USearchError")
+        let commonTermFreq = try await store.getTermFrequency(symbol: "CommonSymbol")
+
+        #expect(rareTermFreq == 2)
+        #expect(commonTermFreq == 3)
+    }
+
+    @Test("Conformance index is populated from existing data on migration")
+    func conformanceIndexPopulated() async throws {
+        let store = try GRDBChunkStore()
+
+        // Insert chunks with conformances
+        try await store.insertBatch([
+            makeChunk(
+                id: "ci-1",
+                kind: .struct,
+                conformances: ["Sendable", "Equatable"],
+                isTypeDeclaration: true
+            ),
+            makeChunk(
+                id: "ci-2",
+                kind: .class,
+                conformances: ["NSObject", "Sendable"],
+                isTypeDeclaration: true
+            ),
+        ])
+
+        // Query using the conformance index
+        let sendableTypes = try await store.findConformingTypes(protocol: "Sendable")
+
+        #expect(sendableTypes.count == 2)
+    }
+
+    @Test("Conformance index updates when chunk is updated")
+    func conformanceIndexUpdatesOnChunkUpdate() async throws {
+        let store = try GRDBChunkStore()
+
+        // Insert initial chunk
+        let originalChunk = makeChunk(
+            id: "update-ci-1",
+            kind: .struct,
+            conformances: ["Sendable"],
+            isTypeDeclaration: true
+        )
+        try await store.insert(originalChunk)
+
+        // Verify initial state
+        var sendableTypes = try await store.findConformingTypes(protocol: "Sendable")
+        #expect(sendableTypes.count == 1)
+
+        // Update chunk with different conformances
+        let updatedChunk = CodeChunk(
+            id: "update-ci-1",
+            path: originalChunk.path,
+            content: originalChunk.content,
+            startLine: originalChunk.startLine,
+            endLine: originalChunk.endLine,
+            kind: originalChunk.kind,
+            symbols: originalChunk.symbols,
+            references: [],
+            fileHash: originalChunk.fileHash,
+            conformances: ["Equatable", "Hashable"],
+            isTypeDeclaration: true
+        )
+        try await store.update(updatedChunk)
+
+        // Verify updated state
+        sendableTypes = try await store.findConformingTypes(protocol: "Sendable")
+        let equatableTypes = try await store.findConformingTypes(protocol: "Equatable")
+
+        #expect(sendableTypes.isEmpty) // No longer conforms to Sendable
+        #expect(equatableTypes.count == 1) // Now conforms to Equatable
+    }
+
+    @Test("Conformance index cleaned up when chunk is deleted")
+    func conformanceIndexCleansUpOnDelete() async throws {
+        let store = try GRDBChunkStore()
+
+        let chunk = makeChunk(
+            id: "delete-ci-1",
+            kind: .struct,
+            conformances: ["Sendable"],
+            isTypeDeclaration: true
+        )
+        try await store.insert(chunk)
+
+        // Verify chunk exists in conformance index
+        var sendableTypes = try await store.findConformingTypes(protocol: "Sendable")
+        #expect(sendableTypes.count == 1)
+
+        // Delete the chunk
+        try await store.delete(id: "delete-ci-1")
+
+        // Verify conformance index is cleaned up (CASCADE delete)
+        sendableTypes = try await store.findConformingTypes(protocol: "Sendable")
+        #expect(sendableTypes.isEmpty)
+    }
 }
 
 // MARK: - USearchVectorStore Tests

@@ -150,6 +150,16 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let signature = buildClassSignature(node)
         let conformances = extractConformances(from: node.inheritanceClause)
 
+        // Create type declaration chunk for search visibility
+        addTypeDeclarationChunk(
+            node: node,
+            name: name,
+            kind: .class,
+            signature: signature,
+            docComment: docComment,
+            conformances: conformances
+        )
+
         addChunk(
             node: node,
             name: name,
@@ -176,6 +186,16 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let docComment = extractDocComment(for: node)
         let signature = buildStructSignature(node)
         let conformances = extractConformances(from: node.inheritanceClause)
+
+        // Create type declaration chunk for search visibility
+        addTypeDeclarationChunk(
+            node: node,
+            name: name,
+            kind: .struct,
+            signature: signature,
+            docComment: docComment,
+            conformances: conformances
+        )
 
         addChunk(
             node: node,
@@ -204,6 +224,16 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let signature = buildEnumSignature(node)
         let conformances = extractConformances(from: node.inheritanceClause)
 
+        // Create type declaration chunk for search visibility
+        addTypeDeclarationChunk(
+            node: node,
+            name: name,
+            kind: .enum,
+            signature: signature,
+            docComment: docComment,
+            conformances: conformances
+        )
+
         addChunk(
             node: node,
             name: name,
@@ -231,6 +261,16 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let signature = buildProtocolSignature(node)
         // Protocols can inherit from other protocols
         let conformances = extractConformances(from: node.inheritanceClause)
+
+        // Create type declaration chunk for search visibility
+        addTypeDeclarationChunk(
+            node: node,
+            name: name,
+            kind: .protocol,
+            signature: signature,
+            docComment: docComment,
+            conformances: conformances
+        )
 
         addChunk(
             node: node,
@@ -261,6 +301,18 @@ private final class DeclarationVisitor: SyntaxVisitor {
         // Extensions can add protocol conformances
         let conformances = extractConformances(from: node.inheritanceClause)
 
+        // Create type declaration chunk for search visibility (only if adding conformances)
+        if !conformances.isEmpty {
+            addTypeDeclarationChunk(
+                node: node,
+                name: name,
+                kind: .extension,
+                signature: signature,
+                docComment: docComment,
+                conformances: conformances
+            )
+        }
+
         addChunk(
             node: node,
             name: name,
@@ -287,6 +339,16 @@ private final class DeclarationVisitor: SyntaxVisitor {
         let docComment = extractDocComment(for: node)
         let signature = buildActorSignature(node)
         let conformances = extractConformances(from: node.inheritanceClause)
+
+        // Create type declaration chunk for search visibility
+        addTypeDeclarationChunk(
+            node: node,
+            name: name,
+            kind: .actor,
+            signature: signature,
+            docComment: docComment,
+            conformances: conformances
+        )
 
         addChunk(
             node: node,
@@ -382,6 +444,72 @@ private final class DeclarationVisitor: SyntaxVisitor {
     }
 
     // MARK: - Chunk Creation
+
+    /// Adds a type declaration header chunk for improved search visibility.
+    ///
+    /// Type declaration chunks contain only the signature and conformances,
+    /// making them easier to find for "what is X" and "implements Y" queries.
+    // swiftlint:disable:next function_parameter_count
+    private func addTypeDeclarationChunk(
+        node: some SyntaxProtocol,
+        name: String,
+        kind: ChunkKind,
+        signature: String,
+        docComment: String?,
+        conformances: [String]
+    ) {
+        let locationConverter = SourceLocationConverter(
+            fileName: path,
+            tree: node.root
+        )
+
+        let startLocation = locationConverter.location(for: node.positionAfterSkippingLeadingTrivia)
+        // For type declarations, only include the first line (the declaration header)
+        let startLine = startLocation.line
+
+        // Build qualified name with parent context
+        let qualifiedName = buildQualifiedName(name)
+
+        // Build breadcrumb for hierarchy context
+        let breadcrumb = buildBreadcrumb(name)
+
+        // Generate unique chunk ID with "-decl" suffix to distinguish from full chunk
+        let chunkId = generateChunkId(
+            path: path,
+            name: qualifiedName + "-decl",
+            kind: kind,
+            startLine: startLine
+        )
+
+        // Content is just the signature for type declaration chunks
+        let content = signature
+
+        // Collect symbols - include conformances for searchability
+        var symbols = [qualifiedName]
+        if qualifiedName != name {
+            symbols.append(name)
+        }
+        symbols.append(contentsOf: conformances)
+
+        let chunk = CodeChunk(
+            id: chunkId,
+            path: path,
+            content: content,
+            startLine: startLine,
+            endLine: startLine,
+            kind: kind,
+            symbols: symbols,
+            references: [],
+            fileHash: fileHash,
+            docComment: docComment,
+            signature: signature,
+            breadcrumb: breadcrumb,
+            conformances: conformances,
+            isTypeDeclaration: true
+        )
+
+        chunks.append(chunk)
+    }
 
     private func addChunk(
         node: some SyntaxProtocol,
