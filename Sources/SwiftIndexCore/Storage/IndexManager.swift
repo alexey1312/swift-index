@@ -144,12 +144,14 @@ public actor IndexManager {
     ///
     /// - Parameters:
     ///   - path: The file path.
+    ///   - fileHash: The content hash of the file.
     ///   - parseResult: The parsed result containing chunks and snippets.
     ///   - embedder: Closure to generate embeddings for chunks that need them.
     /// - Returns: Statistics about the indexing operation.
     /// - Throws: If indexing fails.
     public func indexFile(
         path: String,
+        fileHash: String,
         parseResult: ParseResult,
         embedder: ([CodeChunk]) async throws -> [[Float]]
     ) async throws -> FileIndexResult {
@@ -166,9 +168,7 @@ public actor IndexManager {
             )
         } else {
             // Record file as indexed even if no chunks (to avoid re-processing)
-            if let firstChunk = chunks.first {
-                try await recordIndexed(fileHash: firstChunk.fileHash, path: path)
-            }
+            try await recordIndexed(fileHash: fileHash, path: path)
         }
 
         // 2. Index snippets (BM25-only)

@@ -1,6 +1,7 @@
 // MARK: - MCP Tools Tests
 
 import Foundation
+@testable import SwiftIndexCore
 @testable import SwiftIndexMCP
 import Testing
 
@@ -53,7 +54,7 @@ private func cleanupFixtures(_ dir: URL) {
 
 private func extractTaskId(from jsonString: String) -> String? {
     guard let data = jsonString.data(using: .utf8),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let json = try? JSONCodec.deserialize(data) as? [String: Any],
           let taskId = json["task_id"] as? String
     else {
         return nil
@@ -63,7 +64,7 @@ private func extractTaskId(from jsonString: String) -> String? {
 
 private func extractRetryAfterMs(from jsonString: String) -> Int? {
     guard let data = jsonString.data(using: .utf8),
-          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let json = try? JSONCodec.deserialize(data) as? [String: Any],
           let retryAfter = json["retry_after_ms"] as? Int
     else {
         return nil

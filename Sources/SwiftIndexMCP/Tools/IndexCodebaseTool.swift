@@ -446,6 +446,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         // This handles both chunks (with change detection) and snippets
         let result = try await indexManager.indexFile(
             path: path,
+            fileHash: fileHash,
             parseResult: parseResult
         ) { chunksToEmbed in
             // Generate embeddings for chunks that need them
