@@ -67,25 +67,20 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
     }
 
     public func execute(arguments: JSONValue, context: ToolExecutionContext?) async throws -> ToolCallResult {
-        // Extract query argument
-        guard let query = arguments["query"]?.stringValue else {
-            return .error("Missing required argument: query")
-        }
-
-        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return .error("Query cannot be empty")
+        guard let query = arguments["query"]?.stringValue,
+              !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return .error("Missing or empty required argument: query")
         }
 
         let path = arguments["path"]?.stringValue ?? "."
         let depth = arguments["depth"]?.intValue ?? 2
         let focus = arguments["focus"]?.stringValue
 
-        // Validate depth
-        guard depth >= 1, depth <= 5 else {
+        guard (1 ... 5).contains(depth) else {
             return .error("Depth must be between 1 and 5")
         }
 
-        // Perform research
         do {
             let result = try await performResearch(
                 query: query,
@@ -115,25 +110,18 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
 
         await context?.reportStatus("Loading configuration...")
         let config = try await mcpContext.getConfig(for: path)
-
-        // Check for cancellation
         try await context?.checkCancellation()
 
-        // Check if index exists
         guard await mcpContext.indexExists(for: path, config: config) else {
             throw MCPError.executionFailed(
                 "No index found for path: \(path). Run 'index_codebase' first."
             )
         }
 
-        // Create search engine
         await context?.reportStatus("Initializing search engine...")
         let searchEngine = try await mcpContext.createSearchEngine(for: path, config: config)
-
-        // Check for cancellation
         try await context?.checkCancellation()
 
-        // Build search options with multi-hop enabled
         let searchOptions = SearchOptions(
             limit: 20,
             semanticWeight: 0.7,
@@ -142,77 +130,65 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
             multiHopDepth: depth
         )
 
-        // Execute initial search with progress reporting
         await context?.reportProgress(current: 1, total: depth + 1, message: "Searching")
-        let initialResults = try await searchEngine.search(query: query, options: searchOptions)
-
-        // Check for cancellation
+        let results = try await searchEngine.search(query: query, options: searchOptions)
         try await context?.checkCancellation()
 
-        // Collect references from results
         await context?.reportProgress(current: depth, total: depth + 1, message: "Analyzing references")
-        var references: [CodeReference] = []
-        var seenPaths = Set<String>()
+        let references = collectReferences(from: results)
 
-        for result in initialResults {
-            if !seenPaths.contains(result.chunk.path) {
-                seenPaths.insert(result.chunk.path)
-
-                // Add main result as reference
-                for symbol in result.chunk.symbols {
-                    references.append(CodeReference(
-                        path: result.chunk.path,
-                        symbol: symbol,
-                        kind: result.chunk.kind.rawValue,
-                        relationship: result.isMultiHop ? "referenced" : "direct_match",
-                        hopLevel: result.hopDepth
-                    ))
-                }
-
-                // Add chunk's references if available
-                for ref in result.chunk.references {
-                    references.append(CodeReference(
-                        path: result.chunk.path,
-                        symbol: ref,
-                        kind: "reference",
-                        relationship: "uses",
-                        hopLevel: result.hopDepth + 1
-                    ))
-                }
-            }
-        }
-
-        // Limit references to reasonable count
-        let limitedReferences = Array(references.prefix(50))
-
-        // Generate analysis
         await context?.reportProgress(current: depth + 1, total: depth + 1, message: "Generating analysis")
-        let analysis = generateAnalysis(
-            query: query,
-            focus: focus,
-            results: initialResults,
-            references: limitedReferences
-        )
-
-        // Extract related topics from results
-        let relatedTopics = extractRelatedTopics(from: initialResults)
+        let analysis = generateAnalysis(query: query, focus: focus, results: results)
 
         return ResearchResult(
             query: query,
             depth: depth,
             focus: focus,
             analysis: analysis,
-            resultCount: initialResults.count,
-            references: limitedReferences,
-            relatedTopics: relatedTopics
+            resultCount: results.count,
+            references: references,
+            relatedTopics: extractRelatedTopics(from: results)
         )
+    }
+
+    private func collectReferences(from results: [SearchResult]) -> [CodeReference] {
+        var references: [CodeReference] = []
+        var seenPaths = Set<String>()
+
+        for result in results where seenPaths.insert(result.chunk.path).inserted {
+            let chunk = result.chunk
+            let relationship = result.isMultiHop ? "referenced" : "direct_match"
+
+            // Add symbols from this chunk
+            for symbol in chunk.symbols {
+                references.append(CodeReference(
+                    path: chunk.path,
+                    symbol: symbol,
+                    kind: chunk.kind.rawValue,
+                    relationship: relationship,
+                    hopLevel: result.hopDepth
+                ))
+            }
+
+            // Add chunk's outgoing references
+            for ref in chunk.references {
+                references.append(CodeReference(
+                    path: chunk.path,
+                    symbol: ref,
+                    kind: "reference",
+                    relationship: "uses",
+                    hopLevel: result.hopDepth + 1
+                ))
+            }
+        }
+
+        return Array(references.prefix(50))
     }
 
     private func generateAnalysis(
         query: String,
         focus: String?,
-        results: [SearchResult],
-        references: [CodeReference]
+        results: [SearchResult]
     ) -> String {
         let focusContext = focus.map { " with focus on \($0)" } ?? ""
 
@@ -220,88 +196,65 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
             return "No code found matching \"\(query)\"\(focusContext)."
         }
 
-        var analysis = "Analysis of \"\(query)\"\(focusContext):\n\n"
+        var lines: [String] = ["Analysis of \"\(query)\"\(focusContext):", ""]
 
-        // Count kinds
+        // Count by kind
         var kindCounts: [String: Int] = [:]
         for result in results {
-            let kind = result.chunk.kind.rawValue
-            kindCounts[kind, default: 0] += 1
+            kindCounts[result.chunk.kind.rawValue, default: 0] += 1
         }
 
-        analysis += "Found \(results.count) code chunks:\n"
+        lines.append("Found \(results.count) code chunks:")
         for (kind, count) in kindCounts.sorted(by: { $0.value > $1.value }) {
-            analysis += "- \(count) \(kind)(s)\n"
+            lines.append("- \(count) \(kind)(s)")
         }
 
-        // Count unique files
+        // Unique files
         let uniqueFiles = Set(results.map(\.chunk.path))
-        analysis += "\nAcross \(uniqueFiles.count) file(s):\n"
+        lines.append("")
+        lines.append("Across \(uniqueFiles.count) file(s):")
         for file in uniqueFiles.prefix(10) {
-            analysis += "- \(file)\n"
+            lines.append("- \(file)")
         }
         if uniqueFiles.count > 10 {
-            analysis += "- ... and \(uniqueFiles.count - 10) more\n"
+            lines.append("- ... and \(uniqueFiles.count - 10) more")
         }
 
         // Multi-hop stats
-        let multiHopResults = results.filter(\.isMultiHop)
-        if !multiHopResults.isEmpty {
-            analysis += "\nMulti-hop references: \(multiHopResults.count) results from following references\n"
+        let multiHopCount = results.filter(\.isMultiHop).count
+        if multiHopCount > 0 {
+            lines.append("")
+            lines.append("Multi-hop references: \(multiHopCount) results from following references")
         }
 
         // Key symbols
-        let symbols = results.flatMap(\.chunk.symbols)
+        let symbols = Set(results.flatMap(\.chunk.symbols))
         if !symbols.isEmpty {
-            let uniqueSymbols = Array(Set(symbols)).prefix(10)
-            analysis += "\nKey symbols:\n"
-            for symbol in uniqueSymbols {
-                analysis += "- \(symbol)\n"
+            lines.append("")
+            lines.append("Key symbols:")
+            for symbol in symbols.prefix(10) {
+                lines.append("- \(symbol)")
             }
         }
 
-        return analysis
+        return lines.joined(separator: "\n")
     }
 
     private func extractRelatedTopics(from results: [SearchResult]) -> [String] {
         var topics = Set<String>()
 
         for result in results {
-            // Add chunk kind as topic
             topics.insert("\(result.chunk.kind.rawValue) implementation")
-
-            // Add symbols as topics
             for symbol in result.chunk.symbols.prefix(2) {
                 topics.insert(symbol)
             }
         }
 
-        return Array(topics).sorted().prefix(10).map(\.self)
+        return Array(topics.sorted().prefix(10))
     }
 
     private func formatResult(_ result: ResearchResult) -> String {
-        var output: [String: Any] = [
-            "query": result.query,
-            "depth": result.depth,
-            "result_count": result.resultCount,
-            "analysis": result.analysis,
-            "references": result.references.map { ref in
-                [
-                    "path": ref.path,
-                    "symbol": ref.symbol,
-                    "kind": ref.kind,
-                    "relationship": ref.relationship,
-                    "hop_level": ref.hopLevel,
-                ] as [String: Any]
-            },
-            "related_topics": result.relatedTopics,
-        ]
-
-        if let focus = result.focus {
-            output["focus"] = focus
-        }
-
-        guard let data = try? JSONCodec.serialize(output, options: [.prettyPrinted, .sortedKeys]),
+        guard let data = try? JSONCodec.encodePrettySorted(result),
               let string = String(data: data, encoding: .utf8)
         else {
             return "{}"
@@ -312,7 +265,7 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
 
 // MARK: - Research Result Types
 
-private struct ResearchResult {
+private struct ResearchResult: Encodable {
     let query: String
     let depth: Int
     let focus: String?
@@ -320,12 +273,24 @@ private struct ResearchResult {
     let resultCount: Int
     let references: [CodeReference]
     let relatedTopics: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case query, depth, focus, analysis
+        case resultCount = "result_count"
+        case references
+        case relatedTopics = "related_topics"
+    }
 }
 
-private struct CodeReference {
+private struct CodeReference: Encodable {
     let path: String
     let symbol: String
     let kind: String
     let relationship: String
     let hopLevel: Int
+
+    private enum CodingKeys: String, CodingKey {
+        case path, symbol, kind, relationship
+        case hopLevel = "hop_level"
+    }
 }
