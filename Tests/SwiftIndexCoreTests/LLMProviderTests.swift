@@ -276,7 +276,7 @@ struct SearchEnhancementConfigTests {
     func defaultUtilityProvider() {
         let config = SearchEnhancementConfig.default
         #expect(config.utility.provider == "mlx")
-        #expect(config.utility.model == nil) // Uses default Qwen3-4B-4bit
+        #expect(config.utility.model == nil) // Uses default Qwen2.5-Coder-1.5B-Instruct-4bit
         #expect(config.utility.timeout == 60)
     }
 
@@ -933,6 +933,20 @@ struct MLXLLMProviderTests {
 
     @Test("Model enum has correct HuggingFace IDs")
     func modelHuggingFaceIds() {
+        // Code-specialized models
+        #expect(
+            MLXLLMProvider.Model.qwen25Coder_05b.huggingFaceId
+                == "mlx-community/Qwen2.5-Coder-0.5B-Instruct-4bit"
+        )
+        #expect(
+            MLXLLMProvider.Model.qwen25Coder_15b.huggingFaceId
+                == "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit"
+        )
+        #expect(
+            MLXLLMProvider.Model.qwen25Coder_3b.huggingFaceId
+                == "mlx-community/Qwen2.5-Coder-3B-Instruct-4bit"
+        )
+        // General-purpose models
         #expect(MLXLLMProvider.Model.qwen3_4b.huggingFaceId == "mlx-community/Qwen3-4B-4bit")
         #expect(MLXLLMProvider.Model.smolLM.huggingFaceId == "mlx-community/SmolLM-135M-Instruct-4bit")
         #expect(MLXLLMProvider.Model.llama32_1b.huggingFaceId == "mlx-community/Llama-3.2-1B-Instruct-4bit")
@@ -941,9 +955,20 @@ struct MLXLLMProviderTests {
 
     @Test("Model enum has recommended max tokens")
     func modelMaxTokens() {
+        // Smaller models get 256 tokens
         #expect(MLXLLMProvider.Model.smolLM.recommendedMaxTokens == 256)
+        #expect(MLXLLMProvider.Model.qwen25Coder_05b.recommendedMaxTokens == 256)
+        // Larger models get 512 tokens
+        #expect(MLXLLMProvider.Model.qwen25Coder_15b.recommendedMaxTokens == 512)
+        #expect(MLXLLMProvider.Model.qwen25Coder_3b.recommendedMaxTokens == 512)
         #expect(MLXLLMProvider.Model.qwen3_4b.recommendedMaxTokens == 512)
         #expect(MLXLLMProvider.Model.llama32_1b.recommendedMaxTokens == 512)
         #expect(MLXLLMProvider.Model.llama32_3b.recommendedMaxTokens == 512)
+    }
+
+    @Test("All models are enumerated in CaseIterable")
+    func allModelsEnumerated() {
+        let allModels = MLXLLMProvider.Model.allCases
+        #expect(allModels.count == 7) // 3 Qwen2.5-Coder + 4 general-purpose
     }
 }

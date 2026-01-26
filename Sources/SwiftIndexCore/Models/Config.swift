@@ -251,7 +251,7 @@ public struct LLMTierConfig: Sendable, Equatable {
     /// Uses MLX for fully local, privacy-first operation.
     public static let defaultUtility = LLMTierConfig(
         provider: "mlx",
-        model: nil, // Uses default: Qwen3-4B-4bit
+        model: nil, // Uses default: Qwen2.5-Coder-1.5B-Instruct-4bit
         timeout: 60
     )
 
@@ -259,7 +259,7 @@ public struct LLMTierConfig: Sendable, Equatable {
     /// Uses MLX for fully local, privacy-first operation.
     public static let defaultSynthesis = LLMTierConfig(
         provider: "mlx",
-        model: nil, // Uses default: Qwen3-4B-4bit
+        model: nil, // Uses default: Qwen2.5-Coder-1.5B-Instruct-4bit
         timeout: 120
     )
 }

@@ -56,13 +56,21 @@ Uses Apple MLX for fully local text generation on Apple Silicon. Best for privac
 ```toml
 [search.enhancement.utility]
 provider = "mlx"
-model = "mlx-community/Qwen3-4B-4bit"  # optional (default)
+model = "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit"  # optional (default)
 timeout = 60
 ```
 
 **Supported Models:**
 
-- `mlx-community/Qwen3-4B-4bit` - Default, good balance of quality/speed
+_Code-Specialized (Recommended for code search):_
+
+- `mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit` - Default, fast, code-specialized
+- `mlx-community/Qwen2.5-Coder-0.5B-Instruct-4bit` - Ultra-fast, code-specialized
+- `mlx-community/Qwen2.5-Coder-3B-Instruct-4bit` - Better quality, code-specialized
+
+_General-Purpose:_
+
+- `mlx-community/Qwen3-4B-4bit` - Good balance of quality/speed
 - `mlx-community/SmolLM-135M-Instruct-4bit` - Ultra-fast, basic capabilities
 - `mlx-community/Llama-3.2-1B-Instruct-4bit` - Compact, good for simple tasks
 - `mlx-community/Llama-3.2-3B-Instruct-4bit` - Larger, better quality
@@ -220,18 +228,20 @@ timeout = 30
 
 ## Provider Selection Guide
 
-| Use Case               | Recommended Provider | Model                       |
-| ---------------------- | -------------------- | --------------------------- |
-| Privacy-first (local)  | `mlx`                | `Qwen3-4B-4bit`             |
-| Offline usage          | `mlx`                | `Qwen3-4B-4bit`             |
-| Claude models (fast)   | `anthropic`          | `claude-haiku-4-5-20251001` |
-| Claude models (legacy) | `claude-code-cli`    | default                     |
-| Local server (non-M1)  | `ollama`             | `llama3.2`                  |
-| High availability      | `openai`             | `gpt-4o-mini`               |
-| Codex user             | `codex-cli`          | default                     |
+| Use Case               | Recommended Provider | Model                              |
+| ---------------------- | -------------------- | ---------------------------------- |
+| Code search (local)    | `mlx`                | `Qwen2.5-Coder-1.5B-Instruct-4bit` |
+| Privacy-first (local)  | `mlx`                | `Qwen2.5-Coder-1.5B-Instruct-4bit` |
+| Offline usage          | `mlx`                | `Qwen2.5-Coder-1.5B-Instruct-4bit` |
+| Claude models (fast)   | `anthropic`          | `claude-haiku-4-5-20251001`        |
+| Claude models (legacy) | `claude-code-cli`    | default                            |
+| Local server (non-M1)  | `ollama`             | `llama3.2`                         |
+| High availability      | `openai`             | `gpt-4o-mini`                      |
+| Codex user             | `codex-cli`          | default                            |
 
 **Notes:**
 
+- MLX with Qwen2.5-Coder is recommended for code search — these models are specifically trained on code and understand programming patterns better than general-purpose models.
 - MLX is recommended for Apple Silicon users who want fully local, private LLM operations with no cloud dependency.
 - `anthropic` is recommended over `claude-code-cli` when direct API access is acceptable, as it significantly reduces latency (5-10s vs 35-40s).
 

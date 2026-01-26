@@ -15,12 +15,15 @@ import MLXLMCommon
 ///
 /// - Apple Silicon Mac (M1 or later)
 /// - macOS 14.0+
-/// - First run downloads model from HuggingFace (~2-7GB depending on model)
+/// - First run downloads model from HuggingFace (~1-7GB depending on model)
 ///
 /// ## Models
 ///
 /// Default models (4-bit quantized for efficiency):
-/// - `mlx-community/Qwen3-4B-4bit` (default, good balance)
+/// - `mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit` (default, fast, code-specialized)
+/// - `mlx-community/Qwen2.5-Coder-0.5B-Instruct-4bit` (ultra-fast, code-specialized)
+/// - `mlx-community/Qwen2.5-Coder-3B-Instruct-4bit` (better quality, code-specialized)
+/// - `mlx-community/Qwen3-4B-4bit` (general-purpose, good balance)
 /// - `mlx-community/SmolLM-135M-Instruct-4bit` (ultra-fast, basic)
 /// - `mlx-community/Llama-3.2-1B-Instruct-4bit` (compact, capable)
 ///
@@ -41,7 +44,7 @@ import MLXLMCommon
 /// ```toml
 /// [search.enhancement.utility]
 /// provider = "mlx"
-/// model = "mlx-community/Qwen3-4B-4bit"  # optional
+/// model = "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit"  # optional (default)
 /// timeout = 60
 /// ```
 public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
@@ -58,7 +61,18 @@ public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
 
     /// Pre-configured MLX LLM models (4-bit quantized).
     public enum Model: String, Sendable, CaseIterable {
-        /// Qwen3 4B (default, good balance of quality/speed)
+        // MARK: - Code-Specialized Models (Recommended)
+
+        /// Qwen2.5-Coder 0.5B (ultra-fast, code-specialized)
+        case qwen25Coder_05b = "Qwen2.5-Coder-0.5B-Instruct-4bit"
+        /// Qwen2.5-Coder 1.5B (default, fast, code-specialized) - best for code search
+        case qwen25Coder_15b = "Qwen2.5-Coder-1.5B-Instruct-4bit"
+        /// Qwen2.5-Coder 3B (better quality, code-specialized)
+        case qwen25Coder_3b = "Qwen2.5-Coder-3B-Instruct-4bit"
+
+        // MARK: - General-Purpose Models
+
+        /// Qwen3 4B (general-purpose, good balance of quality/speed)
         case qwen3_4b = "Qwen3-4B-4bit"
         /// SmolLM 135M (ultra-fast, basic capabilities)
         case smolLM = "SmolLM-135M-Instruct-4bit"
@@ -74,9 +88,9 @@ public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
         /// Recommended max tokens for this model.
         public var recommendedMaxTokens: Int {
             switch self {
-            case .smolLM:
-                256 // Smaller model, keep responses short
-            case .qwen3_4b, .llama32_1b, .llama32_3b:
+            case .smolLM, .qwen25Coder_05b:
+                256 // Smaller models, keep responses short
+            case .qwen3_4b, .llama32_1b, .llama32_3b, .qwen25Coder_15b, .qwen25Coder_3b:
                 512
             }
         }
@@ -87,9 +101,9 @@ public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
     /// Creates an MLX LLM provider with a specific model.
     ///
     /// - Parameters:
-    ///   - model: The model to use (default: qwen3_4b).
+    ///   - model: The model to use (default: qwen25Coder_15b, code-specialized).
     ///   - maxTokens: Maximum tokens to generate (default: model's recommendation).
-    public init(model: Model = .qwen3_4b, maxTokens: Int? = nil) {
+    public init(model: Model = .qwen25Coder_15b, maxTokens: Int? = nil) {
         defaultModelId = model.huggingFaceId
         self.maxTokens = maxTokens ?? model.recommendedMaxTokens
         modelManager = MLXLLMModelManager(defaultModelId: model.huggingFaceId)

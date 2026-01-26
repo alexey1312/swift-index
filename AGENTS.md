@@ -337,7 +337,7 @@ enabled = false  # opt-in
 
 [search.enhancement.utility]
 provider = "mlx"  # mlx | anthropic | claude-code-cli | codex-cli | ollama | openai
-model = "mlx-community/Qwen3-4B-4bit"  # optional (default: Qwen3-4B-4bit)
+model = "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit"  # optional (default)
 timeout = 60
 
 [search.enhancement.synthesis]
@@ -347,7 +347,15 @@ timeout = 120
 
 **MLX LLM Models** (4-bit quantized, local-only):
 
-- `mlx-community/Qwen3-4B-4bit` — default, good balance of quality/speed
+_Code-Specialized (Recommended):_
+
+- `mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit` — default, fast, code-specialized
+- `mlx-community/Qwen2.5-Coder-0.5B-Instruct-4bit` — ultra-fast, code-specialized
+- `mlx-community/Qwen2.5-Coder-3B-Instruct-4bit` — better quality, code-specialized
+
+_General-Purpose:_
+
+- `mlx-community/Qwen3-4B-4bit` — good balance of quality/speed
 - `mlx-community/SmolLM-135M-Instruct-4bit` — ultra-fast, basic capabilities
 - `mlx-community/Llama-3.2-1B-Instruct-4bit` — compact, good for simple tasks
 - `mlx-community/Llama-3.2-3B-Instruct-4bit` — larger, better quality
