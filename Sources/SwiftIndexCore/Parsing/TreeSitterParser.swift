@@ -38,7 +38,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - Parsing
 
-    public func parse(content: String, path: String) -> ParseResult {
+    public func parse(content: String, path: String, fileHash: String) -> ParseResult {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return .failure(.emptyContent)
@@ -49,28 +49,27 @@ public struct TreeSitterParser: Parser, Sendable {
         // Route to specialized parser based on extension
         switch ext {
         case "m", "mm":
-            return parseObjectiveC(content: content, path: path)
+            return parseObjectiveC(content: content, path: path, fileHash: fileHash)
         case "h":
-            return parseHeader(content: content, path: path)
+            return parseHeader(content: content, path: path, fileHash: fileHash)
         case "c":
-            return parseC(content: content, path: path)
+            return parseC(content: content, path: path, fileHash: fileHash)
         case "cpp", "cc", "cxx", "hpp":
-            return parseCpp(content: content, path: path)
+            return parseCpp(content: content, path: path, fileHash: fileHash)
         case "json":
-            return parseJSON(content: content, path: path)
+            return parseJSON(content: content, path: path, fileHash: fileHash)
         case "yaml", "yml":
-            return parseYAML(content: content, path: path)
+            return parseYAML(content: content, path: path, fileHash: fileHash)
         case "md", "markdown":
-            return parseMarkdown(content: content, path: path)
+            return parseMarkdown(content: content, path: path, fileHash: fileHash)
         default:
-            return PlainTextParser().parse(content: content, path: path)
+            return PlainTextParser().parse(content: content, path: path, fileHash: fileHash)
         }
     }
 
     // MARK: - Objective-C Parsing
 
-    private func parseObjectiveC(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
+    private func parseObjectiveC(content: String, path: String, fileHash: String) -> ParseResult {
         var chunks: [CodeChunk] = []
 
         // Parse @implementation blocks
@@ -102,8 +101,7 @@ public struct TreeSitterParser: Parser, Sendable {
         return .success(chunks)
     }
 
-    private func parseHeader(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
+    private func parseHeader(content: String, path: String, fileHash: String) -> ParseResult {
         var chunks: [CodeChunk] = []
 
         // Parse @interface declarations
@@ -157,8 +155,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - C Parsing
 
-    private func parseC(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
+    private func parseC(content: String, path: String, fileHash: String) -> ParseResult {
         var chunks: [CodeChunk] = []
 
         // Parse function definitions
@@ -212,8 +209,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - C++ Parsing
 
-    private func parseCpp(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
+    private func parseCpp(content: String, path: String, fileHash: String) -> ParseResult {
         var chunks: [CodeChunk] = []
 
         // Parse class definitions
@@ -258,9 +254,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - JSON Parsing
 
-    private func parseJSON(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
-
+    private func parseJSON(content: String, path: String, fileHash: String) -> ParseResult {
         // For JSON, we treat the whole file as a document
         // and extract top-level keys as symbols
         var symbols: [String] = []
@@ -296,9 +290,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - YAML Parsing
 
-    private func parseYAML(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
-
+    private func parseYAML(content: String, path: String, fileHash: String) -> ParseResult {
         // Extract top-level keys from YAML
         var symbols: [String] = []
 
@@ -332,8 +324,7 @@ public struct TreeSitterParser: Parser, Sendable {
 
     // MARK: - Markdown Parsing
 
-    private func parseMarkdown(content: String, path: String) -> ParseResult {
-        let fileHash = computeHash(content)
+    private func parseMarkdown(content: String, path: String, fileHash: String) -> ParseResult {
         var chunks: [CodeChunk] = []
         var snippets: [InfoSnippet] = []
 
@@ -587,12 +578,6 @@ public struct TreeSitterParser: Parser, Sendable {
             fileHash: fileHash,
             language: detectLanguage(from: path)
         )
-    }
-
-    private func computeHash(_ content: String) -> String {
-        let data = Data(content.utf8)
-        let digest = SHA256.hash(data: data)
-        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     private func generateChunkId(path: String, content: String, startLine: Int = 1) -> String {

@@ -56,20 +56,20 @@ public struct HybridParser: Parser, Sendable {
 
     // MARK: - Parsing
 
-    public func parse(content: String, path: String) -> ParseResult {
+    public func parse(content: String, path: String, fileHash: String) -> ParseResult {
         let ext = (path as NSString).pathExtension.lowercased()
 
         // Route to appropriate parser based on extension
         if swiftParser.supportedExtensions.contains(ext) {
-            return swiftParser.parse(content: content, path: path)
+            return swiftParser.parse(content: content, path: path, fileHash: fileHash)
         }
 
         if treeSitterParser.supportedExtensions.contains(ext) {
-            return treeSitterParser.parse(content: content, path: path)
+            return treeSitterParser.parse(content: content, path: path, fileHash: fileHash)
         }
 
         // Fallback to plain text parser for unknown extensions
-        return plainTextParser.parse(content: content, path: path)
+        return plainTextParser.parse(content: content, path: path, fileHash: fileHash)
     }
 
     // MARK: - Language Detection

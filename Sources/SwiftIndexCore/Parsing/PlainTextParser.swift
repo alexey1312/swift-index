@@ -37,13 +37,12 @@ public struct PlainTextParser: Parser, Sendable {
 
     // MARK: - Parsing
 
-    public func parse(content: String, path: String) -> ParseResult {
+    public func parse(content: String, path: String, fileHash: String) -> ParseResult {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return .failure(.emptyContent)
         }
 
-        let fileHash = computeHash(content)
         let lines = content.components(separatedBy: "\n")
 
         // For small files, create a single chunk
@@ -152,12 +151,6 @@ public struct PlainTextParser: Parser, Sendable {
 
     private func countLines(in content: String) -> Int {
         content.components(separatedBy: "\n").count
-    }
-
-    private func computeHash(_ content: String) -> String {
-        let data = Data(content.utf8)
-        let digest = SHA256.hash(data: data)
-        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 
     private func generateChunkId(path: String, startLine: Int, content: String) -> String {

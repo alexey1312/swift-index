@@ -172,8 +172,11 @@ public actor IncrementalIndexer {
             return
         }
 
+        // Compute file hash
+        let fileHash = FileHasher.hash(content)
+
         // Parse file
-        let parseResult = parser.parse(content: content, path: path)
+        let parseResult = parser.parse(content: content, path: path, fileHash: fileHash)
 
         if case let .failure(error) = parseResult {
             logger.warning("Parse failed", metadata: [
@@ -237,8 +240,11 @@ public actor IncrementalIndexer {
             return
         }
 
+        // Compute file hash
+        let fileHash = FileHasher.hash(content)
+
         // Parse file
-        let parseResult = parser.parse(content: content, path: path)
+        let parseResult = parser.parse(content: content, path: path, fileHash: fileHash)
 
         if case let .failure(error) = parseResult {
             logger.warning("Parse failed", metadata: [

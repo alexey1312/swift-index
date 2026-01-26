@@ -185,7 +185,7 @@ struct E2ETests {
 
         for file in files {
             let content = try String(contentsOf: file, encoding: .utf8)
-            let result = parser.parse(content: content, path: file.path)
+            let result = parser.parse(content: content, path: file.path, fileHash: "test-hash")
             guard case let .success(chunks) = result else {
                 Issue.record("Parser should succeed for \(file.lastPathComponent)")
                 continue
@@ -248,7 +248,7 @@ struct E2ETests {
 
         for file in files {
             let content = try String(contentsOf: file, encoding: .utf8)
-            let result = parser.parse(content: content, path: file.path)
+            let result = parser.parse(content: content, path: file.path, fileHash: "test-hash")
 
             guard case let .success(chunks) = result else {
                 continue
@@ -348,7 +348,7 @@ struct E2ETests {
                 continue
             }
 
-            let result = parser.parse(content: content, path: file.path)
+            let result = parser.parse(content: content, path: file.path, fileHash: "test-hash")
             guard case let .success(chunks) = result else {
                 continue
             }
@@ -398,7 +398,7 @@ struct E2ETests {
         """
 
         let parser = HybridParser()
-        let result = parser.parse(content: code, path: "User.swift")
+        let result = parser.parse(content: code, path: "User.swift", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
@@ -424,7 +424,7 @@ struct E2ETests {
         }
         """
 
-        let result = parser.parse(content: swiftCode, path: "test.swift")
+        let result = parser.parse(content: swiftCode, path: "test.swift", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed for Swift file")
@@ -440,7 +440,7 @@ struct E2ETests {
         let parser = HybridParser()
         let content = "Some random text content"
 
-        let result = parser.parse(content: content, path: "readme.txt")
+        let result = parser.parse(content: content, path: "readme.txt", fileHash: "test-hash")
         // Should use plain text fallback which returns chunks for any text content
         switch result {
         case let .success(chunks):
@@ -787,7 +787,7 @@ struct LLMSearchEnhancementE2ETests {
 
         for file in files {
             let content = try String(contentsOf: file, encoding: .utf8)
-            let result = parser.parse(content: content, path: file.path)
+            let result = parser.parse(content: content, path: file.path, fileHash: "test-hash")
             guard case let .success(chunks) = result else { continue }
 
             for chunk in chunks {

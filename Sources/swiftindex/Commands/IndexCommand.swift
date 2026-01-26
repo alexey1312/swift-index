@@ -1,7 +1,6 @@
 // MARK: - Index Command
 
 import ArgumentParser
-import Crypto
 import Foundation
 import Logging
 import Noora
@@ -679,7 +678,7 @@ struct IndexCommand: AsyncParsableCommand {
         let content = try String(contentsOfFile: path, encoding: .utf8)
 
         // Compute file hash for incremental indexing
-        let fileHash = computeFileHash(content)
+        let fileHash = FileHasher.hash(content)
 
         // Check if file needs indexing (unless force is set)
         if !force {
@@ -691,7 +690,7 @@ struct IndexCommand: AsyncParsableCommand {
         }
 
         // Parse file
-        let parseResult = context.parser.parse(content: content, path: path)
+        let parseResult = context.parser.parse(content: content, path: path, fileHash: fileHash)
 
         if case let .failure(error) = parseResult {
             context.logger.debug("Parse failed for \(path): \(error)")
@@ -799,13 +798,6 @@ struct IndexCommand: AsyncParsableCommand {
             descriptionsGenerated: descriptionsGenerated,
             skipped: false
         )
-    }
-
-    private static func computeFileHash(_ content: String) -> String {
-        // Use SHA-256 for stable, deterministic hashing across process runs
-        let data = Data(content.utf8)
-        let digest = SHA256.hash(data: data)
-        return digest.compactMap { String(format: "%02x", $0) }.joined()
     }
 
     private static func descriptionFailureHint(for reason: String) -> String? {

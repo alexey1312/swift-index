@@ -17,7 +17,7 @@ struct SwiftSyntaxParserTests {
 
     @Test("Empty content returns failure")
     func testEmptyContent() {
-        let result = parser.parse(content: "", path: "/test.swift")
+        let result = parser.parse(content: "", path: "/test.swift", fileHash: "test-hash")
         guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")
             return
@@ -36,7 +36,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -60,7 +60,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -92,7 +92,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -129,7 +129,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -156,7 +156,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -180,7 +180,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -201,7 +201,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -231,7 +231,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -263,7 +263,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -292,7 +292,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -315,7 +315,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -335,7 +335,7 @@ struct SwiftSyntaxParserTests {
         typealias CompletionHandler = (Result<Data, Error>) -> Void
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -362,7 +362,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -382,7 +382,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -395,12 +395,28 @@ struct SwiftSyntaxParserTests {
 
     // MARK: - File Hash
 
-    @Test("Same content produces same hash")
+    @Test("Provided fileHash is stored in chunks")
+    func fileHashStoredInChunks() {
+        let content = "func test() {}"
+        let expectedHash = "abc123def456"
+
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: expectedHash)
+
+        guard case let .success(chunks) = result else {
+            Issue.record("Expected successful parse")
+            return
+        }
+
+        #expect(chunks[0].fileHash == expectedHash)
+    }
+
+    @Test("Same fileHash produces same chunk fileHash")
     func fileHashConsistency() {
         let content = "func test() {}"
+        let hash = "shared-hash"
 
-        let result1 = parser.parse(content: content, path: "/test1.swift")
-        let result2 = parser.parse(content: content, path: "/test2.swift")
+        let result1 = parser.parse(content: content, path: "/test1.swift", fileHash: hash)
+        let result2 = parser.parse(content: content, path: "/test2.swift", fileHash: hash)
 
         guard case let .success(chunks1) = result1,
               case let .success(chunks2) = result2
@@ -412,13 +428,13 @@ struct SwiftSyntaxParserTests {
         #expect(chunks1[0].fileHash == chunks2[0].fileHash)
     }
 
-    @Test("Different content produces different hash")
+    @Test("Different fileHash produces different chunk fileHash")
     func fileHashDifference() {
         let content1 = "func test1() {}"
         let content2 = "func test2() {}"
 
-        let result1 = parser.parse(content: content1, path: "/test.swift")
-        let result2 = parser.parse(content: content2, path: "/test.swift")
+        let result1 = parser.parse(content: content1, path: "/test.swift", fileHash: "hash-1")
+        let result2 = parser.parse(content: content2, path: "/test.swift", fileHash: "hash-2")
 
         guard case let .success(chunks1) = result1,
               case let .success(chunks2) = result2
@@ -436,8 +452,8 @@ struct SwiftSyntaxParserTests {
     func chunkIdDeterminism() {
         let content = "func test() {}"
 
-        let result1 = parser.parse(content: content, path: "/test.swift")
-        let result2 = parser.parse(content: content, path: "/test.swift")
+        let result1 = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
+        let result2 = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
 
         guard case let .success(chunks1) = result1,
               case let .success(chunks2) = result2
@@ -533,7 +549,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/SampleSwift.swift")
+        let result = parser.parse(content: content, path: "/SampleSwift.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -575,7 +591,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -604,7 +620,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -631,7 +647,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -657,7 +673,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -677,7 +693,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -701,7 +717,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -725,7 +741,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -747,7 +763,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -764,7 +780,7 @@ struct SwiftSyntaxParserTests {
         func topLevelFunction() {}
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -785,7 +801,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -803,7 +819,7 @@ struct SwiftSyntaxParserTests {
     func detectSwiftLanguage() {
         let content = "func test() {}"
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -823,7 +839,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/Storage/GRDBChunkStore.swift")
+        let result = parser.parse(content: content, path: "/Storage/GRDBChunkStore.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -851,7 +867,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -874,7 +890,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -897,7 +913,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -916,7 +932,7 @@ struct SwiftSyntaxParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -940,7 +956,7 @@ struct SwiftSyntaxParserTests {
         actor GRDBChunkStore: ChunkStore {}
         """
 
-        let result = parser.parse(content: content, path: "/test.swift")
+        let result = parser.parse(content: content, path: "/test.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return

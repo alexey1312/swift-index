@@ -116,7 +116,7 @@ struct PerformanceTests {
         let startTime = CFAbsoluteTimeGetCurrent()
 
         for _ in 0 ..< iterations {
-            let result = parser.parse(content: sampleCode, path: "User.swift")
+            let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
             guard case let .success(chunks) = result else {
                 Issue.record("Parser should succeed")
                 return
@@ -154,7 +154,7 @@ struct PerformanceTests {
 
         let startTime = CFAbsoluteTimeGetCurrent()
 
-        let result = parser.parse(content: largeCode, path: "LargeFile.swift")
+        let result = parser.parse(content: largeCode, path: "LargeFile.swift", fileHash: "test-hash")
 
         let elapsed = CFAbsoluteTimeGetCurrent() - startTime
 
@@ -187,7 +187,7 @@ struct PerformanceTests {
         let parser = HybridParser()
 
         // Parse sample code
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -248,7 +248,7 @@ struct PerformanceTests {
         let parser = HybridParser()
 
         // Parse sample code
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -314,7 +314,7 @@ struct PerformanceTests {
         let parser = HybridParser()
 
         // Index sample data
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -396,7 +396,7 @@ struct PerformanceTests {
         let parser = HybridParser()
 
         // Index sample data
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -510,7 +510,7 @@ struct PerformanceTests {
         let parser = HybridParser()
 
         // Parse sample code
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -675,7 +675,7 @@ struct LLMSearchEnhancementPerformanceTests {
         let parser = HybridParser()
 
         // Index test data
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return
@@ -879,7 +879,7 @@ struct LLMSearchEnhancementPerformanceTests {
         let parser = HybridParser()
 
         // Index test data
-        let result = parser.parse(content: sampleCode, path: "User.swift")
+        let result = parser.parse(content: sampleCode, path: "User.swift", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Parser should succeed")
             return

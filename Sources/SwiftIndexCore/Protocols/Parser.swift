@@ -16,8 +16,9 @@ public protocol Parser: Sendable {
     /// - Parameters:
     ///   - content: The file content as a string.
     ///   - path: The file path (used for metadata).
+    ///   - fileHash: Pre-computed SHA-256 hash of the file content (64-character hex string).
     /// - Returns: Result containing either parsed chunks or an error.
-    func parse(content: String, path: String) -> ParseResult
+    func parse(content: String, path: String, fileHash: String) -> ParseResult
 }
 
 /// Result of a parsing operation.

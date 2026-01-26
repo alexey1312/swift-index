@@ -17,7 +17,7 @@ struct TreeSitterParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "helpers.c")
+        let result = parser.parse(content: content, path: "helpers.c", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -38,7 +38,7 @@ struct TreeSitterParserTests {
         };
         """
 
-        let result = parser.parse(content: content, path: "types.c")
+        let result = parser.parse(content: content, path: "types.c", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -64,7 +64,7 @@ struct TreeSitterParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "package.json")
+        let result = parser.parse(content: content, path: "package.json", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -85,7 +85,7 @@ struct TreeSitterParserTests {
         ]
         """
 
-        let result = parser.parse(content: content, path: "items.json")
+        let result = parser.parse(content: content, path: "items.json", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -108,7 +108,7 @@ struct TreeSitterParserTests {
           timeout: 30
         """
 
-        let result = parser.parse(content: content, path: "config.yaml")
+        let result = parser.parse(content: content, path: "config.yaml", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -129,7 +129,7 @@ struct TreeSitterParserTests {
             key: value
         """
 
-        let result = parser.parse(content: content, path: "list.yml")
+        let result = parser.parse(content: content, path: "list.yml", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -158,7 +158,7 @@ struct TreeSitterParserTests {
         Run the following command.
         """
 
-        let result = parser.parse(content: content, path: "README.md")
+        let result = parser.parse(content: content, path: "README.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
@@ -180,7 +180,7 @@ struct TreeSitterParserTests {
         Some text after code.
         """
 
-        let result = parser.parse(content: content, path: "example.md")
+        let result = parser.parse(content: content, path: "example.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
@@ -203,7 +203,7 @@ struct TreeSitterParserTests {
         Run the command.
         """
 
-        let result = parser.parse(content: content, path: "README.md")
+        let result = parser.parse(content: content, path: "README.md", fileHash: "test-hash")
         let snippets = result.snippets
 
         #expect(!snippets.isEmpty)
@@ -226,7 +226,7 @@ struct TreeSitterParserTests {
         Some content here.
         """
 
-        let result = parser.parse(content: content, path: "doc.md")
+        let result = parser.parse(content: content, path: "doc.md", fileHash: "test-hash")
         let chunks = result.chunks
         let snippets = result.snippets
 
@@ -256,7 +256,7 @@ struct TreeSitterParserTests {
         @end
         """
 
-        let result = parser.parse(content: content, path: "MyClass.h")
+        let result = parser.parse(content: content, path: "MyClass.h", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -280,7 +280,7 @@ struct TreeSitterParserTests {
         @end
         """
 
-        let result = parser.parse(content: content, path: "MyClass.m")
+        let result = parser.parse(content: content, path: "MyClass.m", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -312,7 +312,7 @@ struct TreeSitterParserTests {
         @end
         """
 
-        let result = parser.parse(content: content, path: "Calculator.m")
+        let result = parser.parse(content: content, path: "Calculator.m", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -328,7 +328,7 @@ struct TreeSitterParserTests {
     @Test("Handle empty content")
     func testEmptyContent() {
         let parser = TreeSitterParser()
-        let result = parser.parse(content: "", path: "empty.c")
+        let result = parser.parse(content: "", path: "empty.c", fileHash: "test-hash")
 
         guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")
@@ -341,7 +341,7 @@ struct TreeSitterParserTests {
     @Test("Handle whitespace-only content")
     func whitespaceOnlyContent() {
         let parser = TreeSitterParser()
-        let result = parser.parse(content: "   \n\n  \t  ", path: "whitespace.c")
+        let result = parser.parse(content: "   \n\n  \t  ", path: "whitespace.c", fileHash: "test-hash")
 
         guard case let .failure(error) = result else {
             Issue.record("Expected failure for whitespace-only content")
@@ -362,7 +362,7 @@ struct TreeSitterParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "main.c")
+        let result = parser.parse(content: content, path: "main.c", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -379,7 +379,7 @@ struct TreeSitterParserTests {
         @end
         """
 
-        let result = parser.parse(content: content, path: "Test.m")
+        let result = parser.parse(content: content, path: "Test.m", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -395,7 +395,7 @@ struct TreeSitterParserTests {
         {"key": "value"}
         """
 
-        let result = parser.parse(content: content, path: "config.json")
+        let result = parser.parse(content: content, path: "config.json", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -411,7 +411,7 @@ struct TreeSitterParserTests {
         key: value
         """
 
-        let result = parser.parse(content: content, path: "config.yaml")
+        let result = parser.parse(content: content, path: "config.yaml", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -428,7 +428,7 @@ struct TreeSitterParserTests {
         Some content.
         """
 
-        let result = parser.parse(content: content, path: "README.md")
+        let result = parser.parse(content: content, path: "README.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         #expect(chunks.first?.language == "markdown")
@@ -451,7 +451,7 @@ struct TreeSitterParserTests {
         Requirements list.
         """
 
-        let result = parser.parse(content: content, path: "README.md")
+        let result = parser.parse(content: content, path: "README.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         // First section should have breadcrumb
@@ -475,7 +475,7 @@ struct TreeSitterParserTests {
         This is some content that should have tokens calculated.
         """
 
-        let result = parser.parse(content: content, path: "test.md")
+        let result = parser.parse(content: content, path: "test.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         let chunk = chunks.first
@@ -496,7 +496,7 @@ struct TreeSitterParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "math.c")
+        let result = parser.parse(content: content, path: "math.c", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -519,7 +519,7 @@ struct TreeSitterParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "math.c")
+        let result = parser.parse(content: content, path: "math.c", fileHash: "test-hash")
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
             return
@@ -545,7 +545,7 @@ struct HybridParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "test.swift")
+        let result = parser.parse(content: content, path: "test.swift", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -564,7 +564,7 @@ struct HybridParserTests {
         @end
         """
 
-        let result = parser.parse(content: content, path: "Test.h")
+        let result = parser.parse(content: content, path: "Test.h", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -582,7 +582,7 @@ struct HybridParserTests {
         in an unknown file format.
         """
 
-        let result = parser.parse(content: content, path: "unknown.xyz")
+        let result = parser.parse(content: content, path: "unknown.xyz", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse with plain text fallback")
@@ -602,7 +602,7 @@ struct HybridParserTests {
         }
         """
 
-        let result = parser.parse(content: content, path: "main.c")
+        let result = parser.parse(content: content, path: "main.c", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -619,7 +619,7 @@ struct HybridParserTests {
         {"key": "value"}
         """
 
-        let result = parser.parse(content: content, path: "config.json")
+        let result = parser.parse(content: content, path: "config.json", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -636,7 +636,7 @@ struct HybridParserTests {
         key: value
         """
 
-        let result = parser.parse(content: content, path: "config.yaml")
+        let result = parser.parse(content: content, path: "config.yaml", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -654,7 +654,7 @@ struct HybridParserTests {
         Some content.
         """
 
-        let result = parser.parse(content: content, path: "README.md")
+        let result = parser.parse(content: content, path: "README.md", fileHash: "test-hash")
         let chunks = result.chunks
 
         #expect(!chunks.isEmpty)
@@ -698,7 +698,7 @@ struct PlainTextParserTests {
         let parser = PlainTextParser()
         let content = "Small content."
 
-        let result = parser.parse(content: content, path: "test.txt")
+        let result = parser.parse(content: content, path: "test.txt", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -720,7 +720,7 @@ struct PlainTextParserTests {
         }
         let content = lines.joined(separator: "\n")
 
-        let result = parser.parse(content: content, path: "large.txt")
+        let result = parser.parse(content: content, path: "large.txt", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -744,7 +744,7 @@ struct PlainTextParserTests {
         Line 5
         """
 
-        let result = parser.parse(content: content, path: "test.txt")
+        let result = parser.parse(content: content, path: "test.txt", fileHash: "test-hash")
 
         guard case let .success(chunks) = result else {
             Issue.record("Expected successful parse")
@@ -758,7 +758,7 @@ struct PlainTextParserTests {
     @Test("Handles empty content")
     func testEmptyContent() {
         let parser = PlainTextParser()
-        let result = parser.parse(content: "", path: "empty.txt")
+        let result = parser.parse(content: "", path: "empty.txt", fileHash: "test-hash")
 
         guard case let .failure(error) = result else {
             Issue.record("Expected failure for empty content")

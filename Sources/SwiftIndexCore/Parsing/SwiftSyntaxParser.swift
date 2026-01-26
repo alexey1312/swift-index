@@ -19,12 +19,11 @@ public struct SwiftSyntaxParser: Parser, Sendable {
 
     public init() {}
 
-    public func parse(content: String, path: String) -> ParseResult {
+    public func parse(content: String, path: String, fileHash: String) -> ParseResult {
         guard !content.isEmpty else {
             return .failure(.emptyContent)
         }
 
-        let fileHash = computeHash(content)
         let sourceFile = SwiftParser.Parser.parse(source: content)
 
         let visitor = DeclarationVisitor(
@@ -35,14 +34,6 @@ public struct SwiftSyntaxParser: Parser, Sendable {
         visitor.walk(sourceFile)
 
         return .success(visitor.chunks)
-    }
-
-    // MARK: - Private Helpers
-
-    private func computeHash(_ content: String) -> String {
-        let data = Data(content.utf8)
-        let digest = SHA256.hash(data: data)
-        return digest.prefix(16).map { String(format: "%02x", $0) }.joined()
     }
 }
 
