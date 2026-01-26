@@ -29,6 +29,16 @@ actor MockChunkStore: ChunkStore {
         chunks[id]
     }
 
+    func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
+        var results: [CodeChunk] = []
+        for id in ids {
+            if let chunk = chunks[id] {
+                results.append(chunk)
+            }
+        }
+        return results
+    }
+
     func getByPath(_ path: String) async throws -> [CodeChunk] {
         chunks.values.filter { $0.path == path }
     }

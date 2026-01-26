@@ -26,6 +26,12 @@ public protocol ChunkStore: Sendable {
     /// - Returns: The chunk if found, nil otherwise.
     func get(id: String) async throws -> CodeChunk?
 
+    /// Get chunks by their IDs.
+    ///
+    /// - Parameter ids: The chunk IDs to fetch.
+    /// - Returns: Array of chunks (may be fewer than requested if some IDs not found).
+    func getByIDs(_ ids: [String]) async throws -> [CodeChunk]
+
     /// Get all chunks for a file path.
     ///
     /// - Parameter path: The file path.
@@ -100,4 +106,18 @@ public protocol ChunkStore: Sendable {
 
     /// Clear all data from the store.
     func clear() async throws
+}
+
+extension ChunkStore {
+    /// Default implementation of getByIDs that iteratively calls get(id:).
+    /// Conforming types should override this with a more efficient implementation if possible.
+    public func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
+        var results: [CodeChunk] = []
+        for id in ids {
+            if let chunk = try await get(id: id) {
+                results.append(chunk)
+            }
+        }
+        return results
+    }
 }

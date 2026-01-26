@@ -79,8 +79,14 @@ public actor SemanticSearch: SearchEngine {
         // Fetch chunks and build results
         var results: [SearchResult] = []
 
+        // Batch fetch chunks to avoid N+1 query pattern
+        // Deduplicate IDs to prevent crashes in Dictionary creation and redundant fetches
+        let chunkIds = Array(Set(vectorResults.map(\.id)))
+        let chunks = try await chunkStore.getByIDs(chunkIds)
+        let chunkMap = Dictionary(uniqueKeysWithValues: chunks.map { ($0.id, $0) })
+
         for (rank, (chunkId, similarity)) in vectorResults.enumerated() {
-            guard let chunk = try await chunkStore.get(id: chunkId) else {
+            guard let chunk = chunkMap[chunkId] else {
                 continue
             }
 
@@ -144,8 +150,14 @@ public actor SemanticSearch: SearchEngine {
         if queryAnalysis.needsReranking {
             var rankedResults: [(id: String, score: Float)] = []
 
+            // Batch fetch chunks for re-ranking
+            // Deduplicate IDs to prevent crashes in Dictionary creation and redundant fetches
+            let chunkIds = Array(Set(vectorResults.map(\.id)))
+            let chunks = try await chunkStore.getByIDs(chunkIds)
+            let chunkMap = Dictionary(uniqueKeysWithValues: chunks.map { ($0.id, $0) })
+
             for result in vectorResults {
-                guard let chunk = try await chunkStore.get(id: result.id) else {
+                guard let chunk = chunkMap[result.id] else {
                     rankedResults.append((id: result.id, score: result.similarity))
                     continue
                 }
