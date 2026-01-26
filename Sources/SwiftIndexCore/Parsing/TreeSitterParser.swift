@@ -35,31 +35,48 @@ public struct TreeSitterParser: Parser, Sendable {
     // MARK: - Regex Patterns
 
     // swiftlint:disable force_try line_length
-    private struct Patterns {
+    private enum Patterns {
         // Objective-C
         static let objcImplementation = try! NSRegularExpression(pattern: #"@implementation\s+(\w+)[\s\S]*?@end"#)
-        static let objcMethod = try! NSRegularExpression(pattern: #"^[-+]\s*\([^)]+\)\s*\w+[^{]*\{[\s\S]*?^\}"#, options: .anchorsMatchLines)
+        static let objcMethod = try! NSRegularExpression(
+            pattern: #"^[-+]\s*\([^)]+\)\s*\w+[^{]*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
 
         // Header
         static let objcInterface = try! NSRegularExpression(pattern: #"@interface\s+(\w+)[\s\S]*?@end"#)
         static let objcProtocol = try! NSRegularExpression(pattern: #"@protocol\s+(\w+)[\s\S]*?@end"#)
-        static let cFuncDecl = try! NSRegularExpression(pattern: #"^\w[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*;"#, options: .anchorsMatchLines)
-        static let cStructTypedef = try! NSRegularExpression(pattern: #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#)
+        static let cFuncDecl = try! NSRegularExpression(
+            pattern: #"^\w[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*;"#,
+            options: .anchorsMatchLines
+        )
+        static let cStructTypedef =
+            try! NSRegularExpression(pattern: #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#)
 
         // C
-        static let cFunction = try! NSRegularExpression(pattern: #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#, options: .anchorsMatchLines)
+        static let cFunction = try! NSRegularExpression(
+            pattern: #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
         static let cStruct = try! NSRegularExpression(pattern: #"struct\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
         static let cEnum = try! NSRegularExpression(pattern: #"enum\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
 
         // C++
-        static let cppClass = try! NSRegularExpression(pattern: #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#, options: .anchorsMatchLines)
-        static let cppFunction = try! NSRegularExpression(pattern: #"^[\w\s\*:&<>]+\s+(\w+::)?(\w+)\s*\([^)]*\)\s*(const)?\s*\{[\s\S]*?^\}"#, options: .anchorsMatchLines)
+        static let cppClass = try! NSRegularExpression(
+            pattern: #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#,
+            options: .anchorsMatchLines
+        )
+        static let cppFunction = try! NSRegularExpression(
+            pattern: #"^[\w\s\*:&<>]+\s+(\w+::)?(\w+)\s*\([^)]*\)\s*(const)?\s*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
         static let cppNamespace = try! NSRegularExpression(pattern: #"namespace\s+(\w+)\s*\{"#)
 
         // JSON & YAML
         static let jsonKey = try! NSRegularExpression(pattern: #"^\s*"(\w+)"\s*:"#, options: .anchorsMatchLines)
         static let yamlKey = try! NSRegularExpression(pattern: #"^(\w+):"#, options: .anchorsMatchLines)
     }
+
     // swiftlint:enable force_try line_length
 
     // MARK: - Initialization
