@@ -186,6 +186,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                 filesProcessed: result.indexedFiles,
                 totalFiles: result.totalFiles,
                 chunksIndexed: result.chunks,
+                snippetsIndexed: result.snippets,
                 errors: result.errors,
                 phase: .completed
             ))
@@ -287,6 +288,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
                 stats.filesProcessed += 1
                 stats.chunksIndexed += result.chunksIndexed
+                stats.snippetsIndexed += result.snippetsIndexed
                 stats.filesSkipped += result.skipped ? 1 : 0
             } catch {
                 stats.errors += 1
@@ -306,6 +308,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                         totalFiles: totalFiles,
                         currentFile: fileName,
                         chunksIndexed: stats.chunksIndexed,
+                        snippetsIndexed: stats.snippetsIndexed,
                         errors: stats.errors,
                         phase: .indexing
                     ))
@@ -321,6 +324,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                 filesProcessed: stats.filesProcessed,
                 totalFiles: totalFiles,
                 chunksIndexed: stats.chunksIndexed,
+                snippetsIndexed: stats.snippetsIndexed,
                 errors: stats.errors,
                 phase: .saving
             ))
@@ -334,7 +338,9 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             indexedFiles: stats.filesProcessed,
             skippedFiles: stats.filesSkipped,
             chunks: stats.chunksIndexed,
+            snippets: stats.snippetsIndexed,
             totalChunks: finalStats.chunkCount,
+            totalSnippets: finalStats.snippetCount,
             totalFiles: finalStats.fileCount,
             errors: stats.errors,
             path: path,
@@ -414,7 +420,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         parser: HybridParser,
         embeddingProvider: EmbeddingProviderChain,
         force: Bool
-    ) async throws -> FileIndexResult {
+    ) async throws -> MCPFileIndexResult {
         // Read file content
         let content = try String(contentsOfFile: path, encoding: .utf8)
 
@@ -425,7 +431,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         if !force {
             let needsIndexing = try await indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
-                return FileIndexResult(chunksIndexed: 0, skipped: true)
+                return MCPFileIndexResult(chunksIndexed: 0, snippetsIndexed: 0, skipped: true)
             }
         }
 
@@ -433,29 +439,24 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         let parseResult = parser.parse(content: content, path: path, fileHash: fileHash)
 
         if case .failure = parseResult {
-            return FileIndexResult(chunksIndexed: 0, skipped: false)
+            return MCPFileIndexResult(chunksIndexed: 0, snippetsIndexed: 0, skipped: false)
         }
 
-        let chunks = parseResult.chunks
-        guard !chunks.isEmpty else {
-            try await indexManager.recordIndexed(fileHash: fileHash, path: path)
-            return FileIndexResult(chunksIndexed: 0, skipped: false)
+        // Use unified indexFile method from IndexManager
+        // This handles both chunks (with change detection) and snippets
+        let result = try await indexManager.indexFile(
+            path: path,
+            parseResult: parseResult
+        ) { chunksToEmbed in
+            // Generate embeddings for chunks that need them
+            try await embeddingProvider.embed(chunksToEmbed.map(\.content))
         }
 
-        // Generate embeddings for all chunks
-        let contents = chunks.map(\.content)
-        let embeddings = try await embeddingProvider.embed(contents)
-
-        // Create chunk-vector pairs
-        var items: [(chunk: CodeChunk, vector: [Float])] = []
-        for (chunk, embedding) in zip(chunks, embeddings) {
-            items.append((chunk: chunk, vector: embedding))
-        }
-
-        // Re-index the file
-        try await indexManager.reindex(path: path, newChunks: items)
-
-        return FileIndexResult(chunksIndexed: chunks.count, skipped: false)
+        return MCPFileIndexResult(
+            chunksIndexed: result.chunksIndexed,
+            snippetsIndexed: result.snippetsIndexed,
+            skipped: false
+        )
     }
 
     private func formatResult(_ result: IndexingResult) -> String {
@@ -465,7 +466,9 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             "indexed_files": result.indexedFiles,
             "skipped_files": result.skippedFiles,
             "chunks_indexed": result.chunks,
+            "snippets_indexed": result.snippets,
             "total_chunks": result.totalChunks,
+            "total_snippets": result.totalSnippets,
             "total_files": result.totalFiles,
             "errors": result.errors,
         ]
@@ -485,11 +488,13 @@ private struct IndexingStats {
     var filesProcessed: Int = 0
     var filesSkipped: Int = 0
     var chunksIndexed: Int = 0
+    var snippetsIndexed: Int = 0
     var errors: Int = 0
 }
 
-private struct FileIndexResult {
+private struct MCPFileIndexResult {
     let chunksIndexed: Int
+    let snippetsIndexed: Int
     let skipped: Bool
 }
 
@@ -497,7 +502,9 @@ private struct IndexingResult {
     let indexedFiles: Int
     let skippedFiles: Int
     let chunks: Int
+    let snippets: Int
     let totalChunks: Int
+    let totalSnippets: Int
     let totalFiles: Int
     let errors: Int
     let path: String

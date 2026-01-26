@@ -92,7 +92,7 @@ struct IndexManagerTests {
     }
 
     @Test("Reindex file")
-    func testReindex() async throws {
+    func reindex() async throws {
         let manager = try await makeIndexManager()
 
         // Index original chunks
@@ -102,11 +102,19 @@ struct IndexManagerTests {
         ])
         try await manager.recordIndexed(fileHash: "old-hash", path: "/test/file.swift")
 
-        // Reindex with new chunks
-        let newChunks: [(chunk: CodeChunk, vector: [Float])] = [
-            (makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash"), [0.1, 0.2, 0.3, 0.4]),
-        ]
-        try await manager.reindex(path: "/test/file.swift", newChunks: newChunks)
+        // Reindex with new chunks using change detection
+        let newChunk = makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash")
+        let result = try await manager.reindexWithChangeDetection(
+            path: "/test/file.swift",
+            newChunks: [newChunk]
+        ) { chunks in
+            // Return embeddings for each chunk
+            chunks.map { _ in [Float](repeating: 0.1, count: 4) }
+        }
+
+        // Verify reindex result
+        #expect(result.totalChunks == 1)
+        #expect(result.embeddedChunks == 1) // New chunk required embedding
 
         // Verify old chunks removed, new chunks present
         let oldChunk1 = try await manager.getChunk(id: "old-1")

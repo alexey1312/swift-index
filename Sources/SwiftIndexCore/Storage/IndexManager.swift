@@ -136,6 +136,61 @@ public actor IndexManager {
         return snippets.count
     }
 
+    /// Index a file's chunks and snippets in one unified operation.
+    ///
+    /// This is the primary entry point for indexing a single file. It handles:
+    /// - Chunks with content-based change detection (reuses embeddings for unchanged content)
+    /// - Snippets (BM25-only, no embeddings required)
+    ///
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - parseResult: The parsed result containing chunks and snippets.
+    ///   - embedder: Closure to generate embeddings for chunks that need them.
+    /// - Returns: Statistics about the indexing operation.
+    /// - Throws: If indexing fails.
+    public func indexFile(
+        path: String,
+        parseResult: ParseResult,
+        embedder: ([CodeChunk]) async throws -> [[Float]]
+    ) async throws -> FileIndexResult {
+        let chunks = parseResult.chunks
+        let snippets = parseResult.snippets
+
+        // 1. Index chunks with change detection
+        var chunksResult = ReindexResult(totalChunks: 0, reusedChunks: 0, embeddedChunks: 0)
+        if !chunks.isEmpty {
+            chunksResult = try await reindexWithChangeDetection(
+                path: path,
+                newChunks: chunks,
+                embedder: embedder
+            )
+        } else {
+            // Record file as indexed even if no chunks (to avoid re-processing)
+            if let firstChunk = chunks.first {
+                try await recordIndexed(fileHash: firstChunk.fileHash, path: path)
+            }
+        }
+
+        // 2. Index snippets (BM25-only)
+        var snippetsIndexed = 0
+        if !snippets.isEmpty {
+            snippetsIndexed = try await reindexSnippets(path: path, snippets: snippets)
+        }
+
+        logger.debug("Indexed file", metadata: [
+            "path": "\(path)",
+            "chunks": "\(chunksResult.totalChunks)",
+            "reused": "\(chunksResult.reusedChunks)",
+            "snippets": "\(snippetsIndexed)",
+        ])
+
+        return FileIndexResult(
+            chunksIndexed: chunksResult.totalChunks,
+            chunksReused: chunksResult.reusedChunks,
+            snippetsIndexed: snippetsIndexed
+        )
+    }
+
     /// Check if a file needs reindexing based on its path and content hash.
     ///
     /// - Parameters:
@@ -156,39 +211,6 @@ public actor IndexManager {
     ///   - path: The file path.
     public func recordIndexed(fileHash hash: String, path: String) async throws {
         try await chunkStore.setFileHash(hash, forPath: path)
-    }
-
-    /// Reindex a file by removing old chunks and indexing new ones.
-    ///
-    /// - Parameters:
-    ///   - path: The file path.
-    ///   - newChunks: New chunks with their vectors.
-    /// - Throws: If reindexing fails.
-    public func reindex(
-        path: String,
-        newChunks: [(chunk: CodeChunk, vector: [Float])]
-    ) async throws {
-        // Delete old chunks
-        let oldChunks = try await chunkStore.getByPath(path)
-        for chunk in oldChunks {
-            try await vectorStore.delete(id: chunk.id)
-        }
-        try await chunkStore.deleteByPath(path)
-        try await chunkStore.deleteFileHash(path: path)
-
-        // Index new chunks
-        try await indexBatch(newChunks)
-
-        // Record file hash
-        if let firstChunk = newChunks.first?.chunk {
-            try await recordIndexed(fileHash: firstChunk.fileHash, path: path)
-        }
-
-        logger.info("Reindexed file", metadata: [
-            "path": "\(path)",
-            "oldChunks": "\(oldChunks.count)",
-            "newChunks": "\(newChunks.count)",
-        ])
     }
 
     /// Reindex a file with content-based change detection.
@@ -703,5 +725,25 @@ public struct ReindexResult: Sendable {
     public var reusePercentage: Double {
         guard totalChunks > 0 else { return 0 }
         return Double(reusedChunks) / Double(totalChunks) * 100
+    }
+}
+
+// MARK: - FileIndexResult
+
+/// Result of indexing a single file (chunks + snippets).
+public struct FileIndexResult: Sendable {
+    /// Number of chunks indexed.
+    public let chunksIndexed: Int
+
+    /// Number of chunks that reused existing embeddings.
+    public let chunksReused: Int
+
+    /// Number of documentation snippets indexed (BM25-only).
+    public let snippetsIndexed: Int
+
+    public init(chunksIndexed: Int, chunksReused: Int, snippetsIndexed: Int) {
+        self.chunksIndexed = chunksIndexed
+        self.chunksReused = chunksReused
+        self.snippetsIndexed = snippetsIndexed
     }
 }

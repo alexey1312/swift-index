@@ -232,10 +232,16 @@ struct IndexCommand: AsyncParsableCommand {
         if finalStats.chunksReused > 0 {
             print("Chunks reused (no re-embedding): \(finalStats.chunksReused)")
         }
+        if finalStats.snippetsIndexed > 0 {
+            print("Documentation snippets indexed: \(finalStats.snippetsIndexed)")
+        }
         if finalStats.descriptionsGenerated > 0 {
             print("Descriptions generated: \(finalStats.descriptionsGenerated)")
         }
         print("Total chunks in index: \(statistics.chunkCount)")
+        if statistics.snippetCount > 0 {
+            print("Total snippets in index: \(statistics.snippetCount)")
+        }
         print("Total files in index: \(statistics.fileCount)")
 
         if finalStats.errors > 0 {
@@ -428,6 +434,7 @@ struct IndexCommand: AsyncParsableCommand {
                     config.stats.incrementFilesProcessed()
                     config.stats.addChunksIndexed(result.chunksIndexed)
                     config.stats.addChunksReused(result.chunksReused)
+                    config.stats.addSnippetsIndexed(result.snippetsIndexed)
                     config.stats.addDescriptionsGenerated(result.descriptionsGenerated)
                     if result.skipped {
                         config.stats.incrementFilesSkipped()
@@ -795,6 +802,7 @@ struct IndexCommand: AsyncParsableCommand {
         return FileIndexResult(
             chunksIndexed: reindexResult.totalChunks,
             chunksReused: reindexResult.reusedChunks,
+            snippetsIndexed: snippetsIndexed,
             descriptionsGenerated: descriptionsGenerated,
             skipped: false
         )
@@ -935,6 +943,7 @@ private struct IndexingStats: Sendable {
     var filesSkipped: Int = 0
     var chunksIndexed: Int = 0
     var chunksReused: Int = 0
+    var snippetsIndexed: Int = 0
     var descriptionsGenerated: Int = 0
     var errors: Int = 0
 }
@@ -946,6 +955,7 @@ private final class AtomicIndexingStats: @unchecked Sendable {
     private var _filesSkipped: Int = 0
     private var _chunksIndexed: Int = 0
     private var _chunksReused: Int = 0
+    private var _snippetsIndexed: Int = 0
     private var _descriptionsGenerated: Int = 0
     private var _errors: Int = 0
 
@@ -971,6 +981,12 @@ private final class AtomicIndexingStats: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return _chunksReused
+    }
+
+    var snippetsIndexed: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return _snippetsIndexed
     }
 
     var descriptionsGenerated: Int {
@@ -1009,6 +1025,12 @@ private final class AtomicIndexingStats: @unchecked Sendable {
         lock.unlock()
     }
 
+    func addSnippetsIndexed(_ count: Int) {
+        lock.lock()
+        _snippetsIndexed += count
+        lock.unlock()
+    }
+
     func addDescriptionsGenerated(_ count: Int) {
         lock.lock()
         _descriptionsGenerated += count
@@ -1029,6 +1051,7 @@ private final class AtomicIndexingStats: @unchecked Sendable {
             filesSkipped: _filesSkipped,
             chunksIndexed: _chunksIndexed,
             chunksReused: _chunksReused,
+            snippetsIndexed: _snippetsIndexed,
             descriptionsGenerated: _descriptionsGenerated,
             errors: _errors
         )
@@ -1038,12 +1061,20 @@ private final class AtomicIndexingStats: @unchecked Sendable {
 private struct FileIndexResult: Sendable {
     let chunksIndexed: Int
     let chunksReused: Int
+    let snippetsIndexed: Int
     let descriptionsGenerated: Int
     let skipped: Bool
 
-    init(chunksIndexed: Int, chunksReused: Int, descriptionsGenerated: Int = 0, skipped: Bool) {
+    init(
+        chunksIndexed: Int,
+        chunksReused: Int,
+        snippetsIndexed: Int = 0,
+        descriptionsGenerated: Int = 0,
+        skipped: Bool
+    ) {
         self.chunksIndexed = chunksIndexed
         self.chunksReused = chunksReused
+        self.snippetsIndexed = snippetsIndexed
         self.descriptionsGenerated = descriptionsGenerated
         self.skipped = skipped
     }

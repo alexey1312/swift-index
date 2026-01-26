@@ -173,6 +173,7 @@ public struct IndexingProgress: Codable, Sendable {
     public var totalFiles: Int
     public var currentFile: String?
     public var chunksIndexed: Int
+    public var snippetsIndexed: Int
     public var errors: Int
     public var phase: IndexingPhase
 
@@ -181,6 +182,7 @@ public struct IndexingProgress: Codable, Sendable {
         totalFiles: Int = 0,
         currentFile: String? = nil,
         chunksIndexed: Int = 0,
+        snippetsIndexed: Int = 0,
         errors: Int = 0,
         phase: IndexingPhase = .collecting
     ) {
@@ -188,6 +190,7 @@ public struct IndexingProgress: Codable, Sendable {
         self.totalFiles = totalFiles
         self.currentFile = currentFile
         self.chunksIndexed = chunksIndexed
+        self.snippetsIndexed = snippetsIndexed
         self.errors = errors
         self.phase = phase
     }
@@ -412,7 +415,11 @@ public actor TaskManager {
         case .saving:
             return "Saving index..."
         case .completed:
-            return "Completed: \(progress.filesProcessed) files, \(progress.chunksIndexed) chunks"
+            var message = "Completed: \(progress.filesProcessed) files, \(progress.chunksIndexed) chunks"
+            if progress.snippetsIndexed > 0 {
+                message += ", \(progress.snippetsIndexed) doc snippets"
+            }
+            return message
         case .failed:
             return "Failed with \(progress.errors) errors"
         }
