@@ -234,6 +234,9 @@ public actor HybridSearchEngine: SearchEngine {
     /// Demotion multiplier for standard protocol extensions in conceptual queries.
     private static let standardProtocolDemotion: Float = 0.5
 
+    /// Demotion for BM25 results matching only part of CamelCase term.
+    private static let partialMatchDemotion: Float = 0.3
+
     /// Standard Swift protocols that often add noise to conceptual queries.
     private static let standardProtocols: Set<String> = [
         "Comparable", "Equatable", "Hashable", "Codable",
@@ -307,10 +310,15 @@ public actor HybridSearchEngine: SearchEngine {
             score *= Self.standardProtocolDemotion
         }
 
+        // 6. Partial match demotion for CamelCase queries
+        if !hasExactCamelCaseMatch(chunk: chunk, queryTerms: queryTerms) {
+            score *= Self.partialMatchDemotion
+        }
+
         return (score, hasExactMatch)
     }
 
-    /// Detects if a query is conceptual (asking "how", "what", "where").
+    /// Detects if a query is conceptual (asking "how", "what", "where", or semantic search).
     ///
     /// Conceptual queries focus on understanding rather than finding specific code,
     /// so standard protocol extensions (Comparable, Equatable, etc.) are demoted.
@@ -319,8 +327,19 @@ public actor HybridSearchEngine: SearchEngine {
     /// - Returns: True if the query is conceptual.
     private nonisolated func isConceptualQuery(_ query: String) -> Bool {
         let lowercased = query.lowercased()
-        let conceptualPatterns = ["how ", "what ", "where ", "why ", "which "]
-        return conceptualPatterns.contains { lowercased.contains($0) }
+
+        // Question patterns
+        let questionPatterns = ["how ", "what ", "where ", "why ", "which "]
+        if questionPatterns.contains(where: { lowercased.contains($0) }) {
+            return true
+        }
+
+        // Semantic search patterns
+        let semanticPatterns = [
+            "nearest neighbor", "vector search", "similarity search",
+            "semantic search", "k-nearest", "knn", "embedding search",
+        ]
+        return semanticPatterns.contains(where: { lowercased.contains($0) })
     }
 
     /// Checks if a chunk is an extension conforming to a standard protocol.
@@ -338,6 +357,33 @@ public actor HybridSearchEngine: SearchEngine {
         return chunk.conformances.contains { conformance in
             Self.standardProtocols.contains(conformance)
         }
+    }
+
+    /// Checks if a chunk contains an exact match for any CamelCase query term.
+    ///
+    /// Used to demote BM25 results that only partially match CamelCase identifiers
+    /// (e.g., "BM25Search" matching query "USearchError" via "Search" substring).
+    ///
+    /// - Parameters:
+    ///   - chunk: The code chunk to check.
+    ///   - queryTerms: Extracted query terms.
+    /// - Returns: True if exact CamelCase match exists or no CamelCase terms in query.
+    private nonisolated func hasExactCamelCaseMatch(
+        chunk: CodeChunk,
+        queryTerms: [String]
+    ) -> Bool {
+        let camelCaseTerms = queryTerms.filter { isCamelCaseIdentifier($0) }
+        guard !camelCaseTerms.isEmpty else { return true }
+
+        for term in camelCaseTerms {
+            if chunk.symbols.contains(term) ||
+                chunk.content.contains(term) ||
+                chunk.references.contains(term)
+            {
+                return true
+            }
+        }
+        return false
     }
 
     /// Detects if a term is a CamelCase identifier (e.g., USearchError, CodeChunk).

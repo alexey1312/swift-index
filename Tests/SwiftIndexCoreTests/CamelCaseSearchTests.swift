@@ -315,6 +315,212 @@ enum GRDBChunkStoreTestHelper {
     }
 }
 
+/// Helper to expose HybridSearchEngine's private hasExactCamelCaseMatch for testing.
+enum HybridSearchTestHelper {
+    static func isCamelCaseIdentifier(_ term: String) -> Bool {
+        term.count >= 3 &&
+            term.first?.isLetter == true &&
+            !term.contains(" ") &&
+            term.contains(where: \.isUppercase) &&
+            term.contains(where: \.isLowercase)
+    }
+
+    static func hasExactCamelCaseMatch(
+        chunk: CodeChunk,
+        queryTerms: [String]
+    ) -> Bool {
+        let camelCaseTerms = queryTerms.filter { isCamelCaseIdentifier($0) }
+        guard !camelCaseTerms.isEmpty else { return true }
+
+        for term in camelCaseTerms {
+            if chunk.symbols.contains(term) ||
+                chunk.content.contains(term) ||
+                chunk.references.contains(term)
+            {
+                return true
+            }
+        }
+        return false
+    }
+}
+
+// MARK: - Partial Match Demotion Tests
+
+@Suite("Partial Match Demotion Tests")
+struct PartialMatchDemotionTests {
+    @Test("hasExactCamelCaseMatch returns true for exact symbol match")
+    func exactSymbolMatch() {
+        let chunk = CodeChunk(
+            id: "1",
+            path: "Test.swift",
+            content: "func test() {}",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["USearchError"],
+            references: [],
+            fileHash: "abc"
+        )
+
+        #expect(
+            HybridSearchTestHelper.hasExactCamelCaseMatch(
+                chunk: chunk,
+                queryTerms: ["USearchError"]
+            ) == true
+        )
+    }
+
+    @Test("hasExactCamelCaseMatch returns true for exact content match")
+    func exactContentMatch() {
+        let chunk = CodeChunk(
+            id: "1",
+            path: "Test.swift",
+            content: "catch let error as USearchError { }",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["handleError"],
+            references: [],
+            fileHash: "abc"
+        )
+
+        #expect(
+            HybridSearchTestHelper.hasExactCamelCaseMatch(
+                chunk: chunk,
+                queryTerms: ["USearchError"]
+            ) == true
+        )
+    }
+
+    @Test("hasExactCamelCaseMatch returns true for exact reference match")
+    func exactReferenceMatch() {
+        let chunk = CodeChunk(
+            id: "1",
+            path: "Test.swift",
+            content: "func test() {}",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["test"],
+            references: ["USearchError"],
+            fileHash: "abc"
+        )
+
+        #expect(
+            HybridSearchTestHelper.hasExactCamelCaseMatch(
+                chunk: chunk,
+                queryTerms: ["USearchError"]
+            ) == true
+        )
+    }
+
+    @Test("hasExactCamelCaseMatch returns true for non-CamelCase query")
+    func nonCamelCaseQuery() {
+        let chunk = CodeChunk(
+            id: "1",
+            path: "Test.swift",
+            content: "func search() {}",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["search"],
+            references: [],
+            fileHash: "abc"
+        )
+
+        // Query with no CamelCase terms should always return true
+        #expect(
+            HybridSearchTestHelper.hasExactCamelCaseMatch(
+                chunk: chunk,
+                queryTerms: ["search", "query"]
+            ) == true
+        )
+    }
+
+    @Test("hasExactCamelCaseMatch returns false for partial match only")
+    func partialMatchOnly() {
+        let chunk = CodeChunk(
+            id: "1",
+            path: "Sources/Search/BM25Search.swift",
+            content: "func performSearch() { }",
+            startLine: 1,
+            endLine: 1,
+            kind: .function,
+            symbols: ["performSearch", "BM25Search"],
+            references: ["SearchEngine"],
+            fileHash: "abc"
+        )
+
+        // BM25Search contains "Search" but not "USearchError"
+        #expect(
+            HybridSearchTestHelper.hasExactCamelCaseMatch(
+                chunk: chunk,
+                queryTerms: ["USearchError"]
+            ) == false
+        )
+    }
+
+    @Test("Partial match demotion in HybridSearchEngine")
+    func partialMatchDemotionIntegration() async throws {
+        let chunkStore = try GRDBChunkStore()
+        let vectorStore = try USearchVectorStore(dimension: 384, path: nil)
+        let embeddingProvider = MockEmbeddingProviderForCamelCase()
+        let engine = HybridSearchEngine(
+            chunkStore: chunkStore,
+            vectorStore: vectorStore,
+            embeddingProvider: embeddingProvider
+        )
+
+        // Insert chunk with exact USearchError match
+        let exactChunk = CodeChunk(
+            id: "exact-usearch",
+            path: "Sources/Storage/USearchVectorStore.swift",
+            content: "catch let error as USearchError { throw error }",
+            startLine: 145,
+            endLine: 147,
+            kind: .function,
+            symbols: ["add"],
+            references: ["USearchError"],
+            fileHash: "abc123"
+        )
+        try await chunkStore.insert(exactChunk)
+        let exactVector = try await embeddingProvider.embed("usearch error handling")
+        try await vectorStore.add(id: "exact-usearch", vector: exactVector)
+
+        // Insert chunk with partial "Search" match (should be demoted)
+        let partialChunk = CodeChunk(
+            id: "partial-search",
+            path: "Sources/Search/BM25Search.swift",
+            content: "class BM25Search { func search() {} }",
+            startLine: 1,
+            endLine: 5,
+            kind: .class,
+            symbols: ["BM25Search", "search"],
+            references: ["SearchEngine"],
+            fileHash: "def456"
+        )
+        try await chunkStore.insert(partialChunk)
+        let partialVector = try await embeddingProvider.embed("bm25 search engine")
+        try await vectorStore.add(id: "partial-search", vector: partialVector)
+
+        // Search for USearchError
+        let results = try await engine.search(
+            query: "USearchError",
+            options: SearchOptions(limit: 10, semanticWeight: 0.5)
+        )
+
+        // Exact match should rank higher than partial match
+        let exactIndex = results.firstIndex(where: { $0.chunk.id == "exact-usearch" })
+        let partialIndex = results.firstIndex(where: { $0.chunk.id == "partial-search" })
+
+        #expect(exactIndex != nil, "Exact match chunk should be in results")
+
+        if let ei = exactIndex, let pi = partialIndex {
+            #expect(ei < pi, "Exact USearchError match should rank higher than partial 'Search' match")
+        }
+    }
+}
+
 /// Mock embedding provider for CamelCase tests.
 actor MockEmbeddingProviderForCamelCase: EmbeddingProvider {
     nonisolated let id = "mock-camelcase"
