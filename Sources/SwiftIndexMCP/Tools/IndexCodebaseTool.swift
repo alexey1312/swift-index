@@ -18,6 +18,10 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             Index a Swift codebase for semantic search.
             Parses Swift files, extracts code chunks (functions, types, etc.),
             generates embeddings, and stores them for later searching.
+
+            For long-running indexing operations, set async=true to run in background.
+            Returns a task_id immediately that can be used with check_indexing_status
+            to monitor progress.
             """,
             inputSchema: .object([
                 "type": "object",
@@ -30,6 +34,16 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                         "type": "boolean",
                         "description": "Force re-indexing even if files haven't changed",
                         "default": false,
+                    ]),
+                    "async": .object([
+                        "type": "boolean",
+                        "description":
+                            """
+                            Run indexing in background and return task_id immediately. \
+                            Use check_indexing_status to monitor progress. \
+                            Set to false for synchronous blocking mode.
+                            """,
+                        "default": true,
                     ]),
                 ]),
                 "required": .array([.string("path")]),
@@ -54,6 +68,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
 
         let force = arguments["force"]?.boolValue ?? false
+        let runAsync = arguments["async"]?.boolValue ?? true
 
         // Validate path exists
         let fileManager = FileManager.default
@@ -64,9 +79,14 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             return .error("Path does not exist or is not a directory: \(path)")
         }
 
-        // Perform indexing
+        // If async mode, start background task and return immediately
+        if runAsync {
+            return await startAsyncIndexing(path: path, force: force)
+        }
+
+        // Synchronous mode - perform indexing and wait for result
         do {
-            let result = try await performIndexing(path: path, force: force, context: context)
+            let result = try await performIndexing(path: path, force: force, context: context, taskId: nil)
             return .text(formatResult(result))
         } catch is CancellationError {
             return .error("Indexing was cancelled")
@@ -75,15 +95,100 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
     }
 
+    // MARK: - Async Mode
+
+    private func startAsyncIndexing(path: String, force: Bool) async -> ToolCallResult {
+        let taskManager = MCPContext.shared.taskManager
+
+        // Create task with reasonable TTL (1 hour)
+        let task = await taskManager.createTask(ttl: 3_600_000, pollInterval: 2000)
+
+        // Estimate file count for initial response
+        let estimatedFiles = await estimateFileCount(path: path)
+
+        // Initialize progress
+        await taskManager.updateIndexingProgress(task.taskId, progress: IndexingProgress(
+            totalFiles: estimatedFiles,
+            phase: .collecting
+        ))
+
+        // Start background indexing and register task for cancellation support
+        let backgroundTask = Task {
+            await performBackgroundIndexing(
+                path: path,
+                force: force,
+                taskId: task.taskId,
+                taskManager: taskManager
+            )
+        }
+        await taskManager.registerBackgroundTask(task.taskId, task: backgroundTask)
+
+        // Return immediately with task info
+        let response: [String: Any] = [
+            "task_id": task.taskId,
+            "status": "started",
+            "estimated_files": estimatedFiles,
+            "message": "Indexing started. Use check_indexing_status tool with this task_id to monitor progress.",
+        ]
+
+        guard let data = try? JSONCodec.serialize(response, options: [.prettyPrinted, .sortedKeys]),
+              let string = String(data: data, encoding: .utf8)
+        else {
+            return .text("{\"task_id\": \"\(task.taskId)\", \"status\": \"started\"}")
+        }
+        return .text(string)
+    }
+
+    private func estimateFileCount(path: String) async -> Int {
+        let mcpContext = MCPContext.shared
+        guard let config = try? await mcpContext.getConfig(for: path) else {
+            return 0
+        }
+
+        let parser = HybridParser()
+        let files = (try? collectFiles(at: path, config: config, parser: parser)) ?? []
+        return files.count
+    }
+
+    private func performBackgroundIndexing(
+        path: String,
+        force: Bool,
+        taskId: String,
+        taskManager: TaskManager
+    ) async {
+        do {
+            let result = try await performIndexing(path: path, force: force, context: nil, taskId: taskId)
+
+            // Update final progress
+            await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
+                filesProcessed: result.indexedFiles,
+                totalFiles: result.totalFiles,
+                chunksIndexed: result.chunks,
+                errors: result.errors,
+                phase: .completed
+            ))
+
+            // Store result
+            await taskManager.storeResult(taskId, result: .text(formatResult(result)))
+        } catch is CancellationError {
+            await taskManager.updateStatus(taskId, status: .cancelled, message: "Indexing was cancelled")
+        } catch {
+            await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(phase: .failed))
+            await taskManager.failTask(taskId, error: error.localizedDescription)
+        }
+    }
+
     // MARK: - Private
 
     private func performIndexing(
         path: String,
         force: Bool,
-        context: ToolExecutionContext?
+        context: ToolExecutionContext?,
+        taskId: String?
     ) async throws -> IndexingResult {
         let mcpContext = MCPContext.shared
         let config = try await mcpContext.getConfig(for: path)
+        let taskManager = mcpContext.taskManager
 
         // Report initial status
         await context?.reportStatus("Initializing...")
@@ -110,15 +215,30 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // Collect files to index
         await context?.reportStatus("Collecting files...")
+        if let taskId {
+            await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(phase: .collecting))
+        }
         let files = try collectFiles(at: path, config: config, parser: parser)
 
         // Index files
         var stats = IndexingStats()
         let totalFiles = files.count
 
+        // Update progress with total files count
+        if let taskId {
+            await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
+                totalFiles: totalFiles,
+                phase: .indexing
+            ))
+        }
+
         for (index, filePath) in files.enumerated() {
             // Check for cancellation
             try await context?.checkCancellation()
+            if let taskId {
+                let token = await taskManager.getCancellationToken(taskId)
+                try await token?.checkCancellationAsync()
+            }
 
             // Report progress
             let fileName = URL(fileURLWithPath: filePath).lastPathComponent
@@ -128,6 +248,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                 message: "Indexing: \(fileName)"
             )
 
+            // Index file first, then update progress with accurate stats
             do {
                 let result = try await indexFile(
                     at: filePath,
@@ -143,10 +264,31 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             } catch {
                 stats.errors += 1
             }
+
+            // Update indexing progress for async mode with accurate post-processing stats
+            if let taskId {
+                await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
+                    filesProcessed: stats.filesProcessed,
+                    totalFiles: totalFiles,
+                    currentFile: fileName,
+                    chunksIndexed: stats.chunksIndexed,
+                    errors: stats.errors,
+                    phase: .indexing
+                ))
+            }
         }
 
         // Save index
         await context?.reportStatus("Saving index...")
+        if let taskId {
+            await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
+                filesProcessed: stats.filesProcessed,
+                totalFiles: totalFiles,
+                chunksIndexed: stats.chunksIndexed,
+                errors: stats.errors,
+                phase: .saving
+            ))
+        }
         try await indexManager.save()
 
         // Get final statistics

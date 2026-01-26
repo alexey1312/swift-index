@@ -112,7 +112,7 @@ TOON is the default format for both CLI and MCP server.
 - `MCPTasks` — Tasks API for async long-running operations
 - `CancellationToken` — Cooperative cancellation for tool execution
 - Protocol version: `2025-11-25`
-- 5 tools: `index_codebase`, `search_code`, `search_docs`, `code_research`, `watch_codebase`
+- 5 tools: `index_codebase`, `check_indexing_status`, `search_code`, `search_docs`, `code_research`
 
 #### MCP 2025-11-25 Features
 
@@ -127,13 +127,38 @@ TOON is the default format for both CLI and MCP server.
 
 #### Tool Annotations
 
-| Tool             | Title                | readOnly | idempotent |
-| ---------------- | -------------------- | -------- | ---------- |
-| `index_codebase` | Code Indexer         | false    | true       |
-| `search_code`    | Code Search          | true     | true       |
-| `search_docs`    | Documentation Search | true     | true       |
-| `code_research`  | Code Research        | true     | true       |
-| `watch_codebase` | File Watcher         | false    | false      |
+| Tool                    | Title                | readOnly | idempotent |
+| ----------------------- | -------------------- | -------- | ---------- |
+| `index_codebase`        | Code Indexer         | false    | true       |
+| `check_indexing_status` | Indexing Status      | true     | true       |
+| `search_code`           | Code Search          | true     | true       |
+| `search_docs`           | Documentation Search | true     | true       |
+| `code_research`         | Code Research        | true     | true       |
+
+#### Async Indexing (Two-Tool Callback Pattern)
+
+Indexing runs asynchronously by default (`async=true`). Use this pattern
+to monitor progress:
+
+1. Call `index_codebase` → returns `task_id` immediately
+2. Poll `check_indexing_status` with `task_id` every 2-5 seconds
+3. Continue until status is `completed` or `failed`
+
+```
+# Start indexing (async by default)
+index_codebase(path="/project")
+→ {"task_id": "abc-123", "status": "started", "estimated_files": 150}
+
+# Check progress (repeat until done)
+check_indexing_status(task_id="abc-123")
+→ {"status": "working", "phase": "indexing", "files_processed": 45, "total_files": 150, ...}
+
+# Final result
+check_indexing_status(task_id="abc-123")
+→ {"status": "completed", "files_indexed": 150, "chunks_indexed": 1250}
+```
+
+> Set `async=false` for synchronous blocking mode.
 
 ### Module Structure (SwiftIndexCore)
 

@@ -165,6 +165,49 @@ public struct EmptyObject: Codable, Sendable {
     public init() {}
 }
 
+// MARK: - Indexing Progress
+
+/// Detailed progress information for indexing operations.
+public struct IndexingProgress: Codable, Sendable {
+    public var filesProcessed: Int
+    public var totalFiles: Int
+    public var currentFile: String?
+    public var chunksIndexed: Int
+    public var errors: Int
+    public var phase: IndexingPhase
+
+    public init(
+        filesProcessed: Int = 0,
+        totalFiles: Int = 0,
+        currentFile: String? = nil,
+        chunksIndexed: Int = 0,
+        errors: Int = 0,
+        phase: IndexingPhase = .collecting
+    ) {
+        self.filesProcessed = filesProcessed
+        self.totalFiles = totalFiles
+        self.currentFile = currentFile
+        self.chunksIndexed = chunksIndexed
+        self.errors = errors
+        self.phase = phase
+    }
+
+    /// Current completion percentage.
+    public var percentComplete: Int {
+        guard totalFiles > 0 else { return 0 }
+        return (filesProcessed * 100) / totalFiles
+    }
+}
+
+/// Phase of the indexing operation.
+public enum IndexingPhase: String, Codable, Sendable {
+    case collecting = "collecting_files"
+    case indexing
+    case saving
+    case completed
+    case failed
+}
+
 // MARK: - Task Manager
 
 /// Actor managing task state for the MCP server.
@@ -174,6 +217,7 @@ public actor TaskManager {
     private var taskContinuations: [String: CheckedContinuation<ToolCallResult, Error>] = [:]
     private var cancellationTokens: [String: CancellationToken] = [:]
     private var backgroundTasks: [String: Task<Void, Never>] = [:]
+    private var indexingProgress: [String: IndexingProgress] = [:]
 
     public init() {}
 
@@ -328,6 +372,63 @@ public actor TaskManager {
         cancellationTokens[taskId]
     }
 
+    // MARK: - Indexing Progress
+
+    /// Updates indexing progress for a task.
+    public func updateIndexingProgress(_ taskId: String, progress: IndexingProgress) {
+        indexingProgress[taskId] = progress
+
+        // Update task status message with progress summary
+        let message = formatProgressMessage(progress)
+
+        // Determine status based on phase
+        let status: TaskStatus = switch progress.phase {
+        case .collecting, .indexing, .saving:
+            .working
+        case .completed:
+            .completed
+        case .failed:
+            .failed
+        }
+        updateStatus(taskId, status: status, message: message)
+    }
+
+    /// Gets the indexing progress for a task.
+    public func getIndexingProgress(_ taskId: String) -> IndexingProgress? {
+        indexingProgress[taskId]
+    }
+
+    /// Formats progress into a human-readable message.
+    private func formatProgressMessage(_ progress: IndexingProgress) -> String {
+        switch progress.phase {
+        case .collecting:
+            return "Collecting files..."
+        case .indexing:
+            let stats = "\(progress.filesProcessed)/\(progress.totalFiles), \(progress.percentComplete)%"
+            if let file = progress.currentFile {
+                return "Indexing: \(file) (\(stats))"
+            }
+            return "Indexing: \(stats)"
+        case .saving:
+            return "Saving index..."
+        case .completed:
+            return "Completed: \(progress.filesProcessed) files, \(progress.chunksIndexed) chunks"
+        case .failed:
+            return "Failed with \(progress.errors) errors"
+        }
+    }
+
+    /// Resets all task state. For testing only.
+    @_spi(Testing)
+    public func resetForTesting() {
+        tasks.removeAll()
+        taskResults.removeAll()
+        taskContinuations.removeAll()
+        cancellationTokens.removeAll()
+        backgroundTasks.removeAll()
+        indexingProgress.removeAll()
+    }
+
     /// Cleans up completed/failed/cancelled tasks older than TTL.
     public func cleanup(olderThan age: TimeInterval = 3600) {
         let now = Date()
@@ -345,6 +446,7 @@ public actor TaskManager {
                 tasks.removeValue(forKey: taskId)
                 taskResults.removeValue(forKey: taskId)
                 cancellationTokens.removeValue(forKey: taskId)
+                indexingProgress.removeValue(forKey: taskId)
             }
         }
     }

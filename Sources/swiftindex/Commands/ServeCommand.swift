@@ -24,7 +24,6 @@ struct ServeCommand: AsyncParsableCommand {
         - index_codebase: Index a Swift project
         - search_code: Hybrid semantic search
         - code_research: Multi-hop architectural analysis
-        - watch_codebase: Watch for file changes
         """
     )
 
@@ -77,7 +76,7 @@ struct ServeCommand: AsyncParsableCommand {
         let server = MCPServer(logger: logger)
 
         // Log available tools
-        logger.info("Available tools: index_codebase, search_code, code_research, watch_codebase")
+        logger.info("Available tools: index_codebase, search_code, search_docs, code_research")
 
         // Run the server (blocks until stdin closes or error)
         await server.run()

@@ -8,8 +8,8 @@ import SwiftIndexCore
 /// Provides MCP (Model Context Protocol) tools for AI assistants:
 /// - `index_codebase` - Index a Swift project
 /// - `search_code` - Hybrid semantic search
+/// - `search_docs` - Search documentation
 /// - `code_research` - Multi-hop architectural analysis
-/// - `watch_codebase` - Watch for file changes
 ///
 /// ## Usage
 ///
@@ -81,20 +81,6 @@ import SwiftIndexCore
 ///   "arguments": {
 ///     "query": "how does the search engine work",
 ///     "depth": 2
-///   }
-/// }
-/// ```
-///
-/// ### watch_codebase
-///
-/// Watch for file changes and auto-reindex.
-///
-/// ```json
-/// {
-///   "name": "watch_codebase",
-///   "arguments": {
-///     "path": "/path/to/project",
-///     "action": "start"
 ///   }
 /// }
 /// ```

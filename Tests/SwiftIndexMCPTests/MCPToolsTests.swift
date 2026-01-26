@@ -51,6 +51,16 @@ private func cleanupFixtures(_ dir: URL) {
     try? FileManager.default.removeItem(at: dir)
 }
 
+private func extractTaskId(from jsonString: String) -> String? {
+    guard let data = jsonString.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let taskId = json["task_id"] as? String
+    else {
+        return nil
+    }
+    return taskId
+}
+
 @Suite("MCP Tools")
 struct MCPToolsTests {
     // MARK: - IndexCodebaseTool Tests
@@ -111,6 +121,122 @@ struct MCPToolsTests {
 
             if case let .text(content) = result.content.first {
                 #expect(content.text.contains("indexed_files") || content.text.contains("path"))
+            }
+        }
+
+        @Test("Tool definition includes async parameter")
+        func toolDefinitionIncludesAsyncParam() {
+            let schema = tool.definition.inputSchema
+            let properties = schema["properties"]?.objectValue
+            #expect(properties?["async"] != nil)
+        }
+
+        @Test("Execute with async=true returns task_id immediately")
+        func executeAsyncReturnsTaskId() async throws {
+            let fixtureDir = try createTestFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
+            let result = try await tool.execute(
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": true,
+                ])
+            )
+
+            #expect(result.isError != true)
+            if case let .text(content) = result.content.first {
+                #expect(content.text.contains("task_id"))
+                #expect(content.text.contains("started"))
+            }
+        }
+    }
+
+    // MARK: - CheckIndexingStatusTool Tests
+
+    @Suite("CheckIndexingStatusTool")
+    struct CheckIndexingStatusToolTests {
+        let tool = CheckIndexingStatusTool()
+
+        @Test("Tool definition has correct name")
+        func toolDefinitionName() {
+            #expect(tool.definition.name == "check_indexing_status")
+        }
+
+        @Test("Tool definition has description")
+        func toolDefinitionDescription() {
+            #expect(!tool.definition.description.isEmpty)
+            #expect(tool.definition.description.contains("status"))
+        }
+
+        @Test("Tool definition has task_id required")
+        func toolDefinitionSchema() {
+            let schema = tool.definition.inputSchema
+            #expect(schema["type"]?.stringValue == "object")
+            #expect(schema["required"]?.arrayValue?.contains(.string("task_id")) == true)
+        }
+
+        @Test("Tool has read-only annotation")
+        func toolIsReadOnly() {
+            #expect(tool.definition.annotations?.readOnlyHint == true)
+        }
+
+        @Test("Execute with missing task_id returns error")
+        func executeWithMissingTaskIdReturnsError() async throws {
+            let result = try await tool.execute(arguments: .object([:]))
+
+            if case let .text(content) = result.content.first {
+                #expect(content.text.contains("Missing") || content.text.contains("task_id"))
+            }
+        }
+
+        @Test("Execute with invalid task_id returns not found")
+        func executeWithInvalidTaskIdReturnsNotFound() async throws {
+            let result = try await tool.execute(
+                arguments: .object(["task_id": "invalid-task-id-12345"])
+            )
+
+            if case let .text(content) = result.content.first {
+                #expect(content.text.contains("not found") || content.text.contains("expired"))
+            }
+        }
+
+        @Test("Execute returns progress for valid task")
+        func executeReturnsProgressForValidTask() async throws {
+            let fixtureDir = try createTestFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
+            // Start async indexing
+            let indexTool = IndexCodebaseTool()
+            let startResult = try await indexTool.execute(
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": true,
+                ])
+            )
+
+            // Extract task_id from result
+            guard case let .text(content) = startResult.content.first,
+                  let taskId = extractTaskId(from: content.text)
+            else {
+                Issue.record("Could not extract task_id from result")
+                return
+            }
+
+            // Wait a moment for indexing to start
+            try await Task.sleep(for: .milliseconds(100))
+
+            // Check status
+            let statusResult = try await tool.execute(
+                arguments: .object(["task_id": .string(taskId)])
+            )
+
+            #expect(statusResult.isError != true)
+            if case let .text(statusContent) = statusResult.content.first {
+                #expect(
+                    statusContent.text.contains("working") ||
+                        statusContent.text.contains("completed") ||
+                        statusContent.text.contains("task_id")
+                )
             }
         }
     }
@@ -245,107 +371,6 @@ struct MCPToolsTests {
             #expect(result.isError != true)
             if case let .text(content) = result.content.first {
                 #expect(content.text.contains("analysis") || content.text.contains("references"))
-            }
-        }
-    }
-
-    // MARK: - WatchCodebaseTool Tests
-
-    @Suite("WatchCodebaseTool")
-    struct WatchCodebaseToolTests {
-        let tool = WatchCodebaseTool()
-
-        @Test("Tool definition has correct name")
-        func toolDefinitionName() {
-            #expect(tool.definition.name == "watch_codebase")
-        }
-
-        @Test("Tool definition has description")
-        func toolDefinitionDescription() {
-            #expect(!tool.definition.description.isEmpty)
-            #expect(tool.definition.description.lowercased().contains("watch"))
-        }
-
-        @Test("Tool definition has action parameter")
-        func toolDefinitionSchema() {
-            let schema = tool.definition.inputSchema
-            let properties = schema["properties"]?.objectValue
-            #expect(properties?["action"] != nil)
-            #expect(properties?["path"] != nil)
-        }
-
-        @Test("Execute with missing path returns error")
-        func executeWithMissingPathReturnsError() async throws {
-            let result = try await tool.execute(arguments: .object([:]))
-
-            if case let .text(content) = result.content.first {
-                #expect(content.text.contains("Missing") || content.text.contains("path"))
-            }
-        }
-
-        @Test("Execute with invalid action returns error")
-        func executeWithInvalidActionReturnsError() async throws {
-            let result = try await tool.execute(
-                arguments: .object([
-                    "path": "/tmp",
-                    "action": "invalid_action",
-                ])
-            )
-
-            if case let .text(content) = result.content.first {
-                #expect(content.text.contains("Invalid") || content.text.contains("action"))
-            }
-        }
-
-        @Test("Execute start action returns watching true")
-        func executeStartActionReturnsWatchingTrue() async throws {
-            let fixtureDir = try await prepareIndexedFixtures()
-            defer { cleanupFixtures(fixtureDir) }
-
-            let result = try await tool.execute(
-                arguments: .object([
-                    "path": .string(fixtureDir.path),
-                    "action": "start",
-                ])
-            )
-
-            #expect(result.isError != true)
-            if case let .text(content) = result.content.first {
-                #expect(content.text.contains("watching") || content.text.contains("start"))
-            }
-        }
-
-        @Test("Execute status action returns stats")
-        func executeStatusActionReturnsStats() async throws {
-            let testPath = FileManager.default.currentDirectoryPath
-
-            let result = try await tool.execute(
-                arguments: .object([
-                    "path": .string(testPath),
-                    "action": "status",
-                ])
-            )
-
-            #expect(result.isError != true)
-            if case let .text(content) = result.content.first {
-                #expect(content.text.contains("stats") || content.text.contains("watching"))
-            }
-        }
-
-        @Test("Execute stop action returns watching false")
-        func executeStopActionReturnsWatchingFalse() async throws {
-            let testPath = FileManager.default.currentDirectoryPath
-
-            let result = try await tool.execute(
-                arguments: .object([
-                    "path": .string(testPath),
-                    "action": "stop",
-                ])
-            )
-
-            #expect(result.isError != true)
-            if case let .text(content) = result.content.first {
-                #expect(content.text.contains("stop") || content.text.contains("watching"))
             }
         }
     }

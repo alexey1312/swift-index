@@ -548,24 +548,6 @@ Perform multi-step research over the indexed codebase.
 }
 ```
 
-### `watch_codebase`
-
-Start, stop, or check status of watch mode for a codebase.
-
-**Parameters:**
-
-- `path` (required): Absolute path to the directory to watch
-- `action` (optional): One of `start`, `stop`, or `status` (default: `start`)
-
-**Example:**
-
-```json
-{
-  "action": "start",
-  "path": "/path/to/project"
-}
-```
-
 ### Output Formats
 
 The MCP server supports three output formats via the `format` parameter:

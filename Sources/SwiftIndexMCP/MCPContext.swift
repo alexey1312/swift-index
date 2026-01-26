@@ -25,6 +25,9 @@ public actor MCPContext {
     private var followUpGenerator: FollowUpGenerator?
     private let logger = Logger(label: "MCPContext")
 
+    /// Shared task manager for async operations.
+    public nonisolated let taskManager = TaskManager()
+
     // MARK: - Initialization
 
     private init() {}
@@ -33,7 +36,7 @@ public actor MCPContext {
 
     /// Resets all cached state. For testing only.
     @_spi(Testing)
-    public func resetForTesting() {
+    public func resetForTesting() async {
         indexManagers.removeAll()
         embeddingProvider = nil
         loadedConfigs.removeAll()
@@ -41,6 +44,7 @@ public actor MCPContext {
         queryExpander = nil
         resultSynthesizer = nil
         followUpGenerator = nil
+        await taskManager.resetForTesting()
     }
 
     // MARK: - Configuration

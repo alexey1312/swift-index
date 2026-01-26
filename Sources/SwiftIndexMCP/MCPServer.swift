@@ -77,10 +77,10 @@ public actor MCPServer {
 
     private func registerDefaultTools() {
         tools["index_codebase"] = IndexCodebaseTool()
+        tools["check_indexing_status"] = CheckIndexingStatusTool()
         tools["search_code"] = SearchCodeTool()
         tools["search_docs"] = SearchDocsTool()
         tools["code_research"] = CodeResearchTool()
-        tools["watch_codebase"] = WatchCodebaseTool()
     }
 
     // MARK: - Server Loop

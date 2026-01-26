@@ -17,13 +17,109 @@ The server communicates over stdin/stdout using JSON-RPC 2.0.
 
 ## Tools
 
-| Tool             | Description                  |
-| ---------------- | ---------------------------- |
-| `index_codebase` | Index a codebase             |
-| `search_code`    | Semantic code search         |
-| `search_docs`    | Documentation search         |
-| `code_research`  | Deep analysis with multi-hop |
-| `watch_codebase` | File change monitoring       |
+| Tool                    | Description                   |
+| ----------------------- | ----------------------------- |
+| `index_codebase`        | Index a codebase              |
+| `check_indexing_status` | Check async indexing progress |
+| `search_code`           | Semantic code search          |
+| `search_docs`           | Documentation search          |
+| `code_research`         | Deep analysis with multi-hop  |
+
+## Async Indexing (Default)
+
+Indexing runs asynchronously by default (`async: true`). This is optimal for Claude Code
+and other clients that don't support MCP progress notifications.
+
+Use the **Two-Tool Callback Pattern** for progress reporting:
+
+### 1. Start Indexing
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "index_codebase",
+    "arguments": {
+      "path": "/path/to/project"
+    }
+  }
+}
+```
+
+> **Note**: Set `"async": false` for synchronous blocking mode.
+
+Response (immediate):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "{\"task_id\": \"abc-123\", \"status\": \"started\", \"estimated_files\": 150}"
+    }]
+  }
+}
+```
+
+### 2. Poll for Progress
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "method": "tools/call",
+  "params": {
+    "name": "check_indexing_status",
+    "arguments": {
+      "task_id": "abc-123"
+    }
+  }
+}
+```
+
+Response (in progress):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "{\"task_id\": \"abc-123\", \"status\": \"working\", \"phase\": \"indexing\", \"files_processed\": 45, \"total_files\": 150, \"percent_complete\": 30, \"current_file\": \"User.swift\"}"
+    }]
+  }
+}
+```
+
+Response (completed):
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [{
+      "type": "text",
+      "text": "{\"path\": \"/path/to/project\", \"indexed_files\": 150, \"chunks_indexed\": 1250, ...}"
+    }]
+  }
+}
+```
+
+### Indexing Phases
+
+| Phase              | Description                    |
+| ------------------ | ------------------------------ |
+| `collecting_files` | Scanning directory for files   |
+| `indexing`         | Processing and embedding files |
+| `saving`           | Writing index to disk          |
+| `completed`        | Done                           |
+| `failed`           | Error occurred                 |
 
 ## Background Execution with Progress
 
@@ -186,13 +282,13 @@ After task completion (`status: "completed"`):
 
 Each tool has annotations for clients:
 
-| Tool             | readOnlyHint | idempotentHint |
-| ---------------- | ------------ | -------------- |
-| `index_codebase` | false        | true           |
-| `search_code`    | true         | true           |
-| `search_docs`    | true         | true           |
-| `code_research`  | true         | true           |
-| `watch_codebase` | false        | false          |
+| Tool                    | readOnlyHint | idempotentHint |
+| ----------------------- | ------------ | -------------- |
+| `index_codebase`        | false        | true           |
+| `check_indexing_status` | true         | true           |
+| `search_code`           | true         | true           |
+| `search_docs`           | true         | true           |
+| `code_research`         | true         | true           |
 
 - `readOnlyHint: true` — tool does not modify state
 - `idempotentHint: true` — repeated calls with same parameters are safe

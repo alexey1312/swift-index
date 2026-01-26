@@ -224,47 +224,6 @@ Tool schema:
 
 ---
 
-### Requirement: watch_codebase Tool
-
-The system SHALL provide `watch_codebase` MCP tool for file watching.
-
-Tool schema:
-
-```json
-{
-  "name": "watch_codebase",
-  "description": "Watch codebase for changes and auto-update index",
-  "inputSchema": {
-    "type": "object",
-    "properties": {
-      "path": { "type": "string", "description": "Path to codebase root" },
-      "action": { "type": "string", "enum": ["start", "stop", "status"] }
-    },
-    "required": ["path", "action"]
-  }
-}
-```
-
-#### Scenario: Start watching
-
-- **WHEN** calling with `action: "start"`
-- **THEN** file watcher is started
-- **AND** returns confirmation
-
-#### Scenario: Stop watching
-
-- **WHEN** calling with `action: "stop"`
-- **THEN** file watcher is stopped
-- **AND** returns confirmation
-
-#### Scenario: Watch status
-
-- **WHEN** calling with `action: "status"`
-- **THEN** returns watcher state
-- **AND** includes files being watched
-
----
-
 ### Requirement: Error Handling
 
 The system SHALL return structured errors for tool failures using MCP ToolCallResult format.
