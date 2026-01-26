@@ -36,6 +36,7 @@ backend = "aqua:apple/pkl"
 [[tools.swift]]
 version = "6.2.3"
 backend = "core:swift"
+"platforms.linux-x64" = { checksum = "blake3:0857a2267c52dc00ff1b59b93530a4316d3f99884744f4f75661fcbbea8a414b"}
 
 [[tools.swiftformat]]
 version = "0.58.7"

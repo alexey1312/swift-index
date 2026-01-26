@@ -32,6 +32,53 @@ public struct TreeSitterParser: Parser, Sendable {
         ]
     }
 
+    // MARK: - Regex Patterns
+
+    // swiftlint:disable force_try line_length
+    private enum Patterns {
+        // Objective-C
+        static let objcImplementation = try! NSRegularExpression(pattern: #"@implementation\s+(\w+)[\s\S]*?@end"#)
+        static let objcMethod = try! NSRegularExpression(
+            pattern: #"^[-+]\s*\([^)]+\)\s*\w+[^{]*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
+
+        // Header
+        static let objcInterface = try! NSRegularExpression(pattern: #"@interface\s+(\w+)[\s\S]*?@end"#)
+        static let objcProtocol = try! NSRegularExpression(pattern: #"@protocol\s+(\w+)[\s\S]*?@end"#)
+        static let cFuncDecl = try! NSRegularExpression(
+            pattern: #"^\w[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*;"#,
+            options: .anchorsMatchLines
+        )
+        static let cStructTypedef =
+            try! NSRegularExpression(pattern: #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#)
+
+        // C
+        static let cFunction = try! NSRegularExpression(
+            pattern: #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
+        static let cStruct = try! NSRegularExpression(pattern: #"struct\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
+        static let cEnum = try! NSRegularExpression(pattern: #"enum\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
+
+        // C++
+        static let cppClass = try! NSRegularExpression(
+            pattern: #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#,
+            options: .anchorsMatchLines
+        )
+        static let cppFunction = try! NSRegularExpression(
+            pattern: #"^[\w\s\*:&<>]+\s+(\w+::)?(\w+)\s*\([^)]*\)\s*(const)?\s*\{[\s\S]*?^\}"#,
+            options: .anchorsMatchLines
+        )
+        static let cppNamespace = try! NSRegularExpression(pattern: #"namespace\s+(\w+)\s*\{"#)
+
+        // JSON & YAML
+        static let jsonKey = try! NSRegularExpression(pattern: #"^\s*"(\w+)"\s*:"#, options: .anchorsMatchLines)
+        static let yamlKey = try! NSRegularExpression(pattern: #"^(\w+):"#, options: .anchorsMatchLines)
+    }
+
+    // swiftlint:enable force_try line_length
+
     // MARK: - Initialization
 
     public init() {}
@@ -73,9 +120,8 @@ public struct TreeSitterParser: Parser, Sendable {
         var chunks: [CodeChunk] = []
 
         // Parse @implementation blocks
-        let implPattern = #"@implementation\s+(\w+)[\s\S]*?@end"#
         chunks.append(contentsOf: extractMatches(
-            pattern: implPattern,
+            regex: Patterns.objcImplementation,
             content: content,
             path: path,
             kind: .class,
@@ -83,14 +129,12 @@ public struct TreeSitterParser: Parser, Sendable {
         ))
 
         // Parse method implementations within @implementation
-        let methodPattern = #"^[-+]\s*\([^)]+\)\s*\w+[^{]*\{[\s\S]*?^\}"#
         chunks.append(contentsOf: extractMatches(
-            pattern: methodPattern,
+            regex: Patterns.objcMethod,
             content: content,
             path: path,
             kind: .method,
-            fileHash: fileHash,
-            multiline: true
+            fileHash: fileHash
         ))
 
         // If no specific patterns matched, create a document chunk
@@ -105,9 +149,8 @@ public struct TreeSitterParser: Parser, Sendable {
         var chunks: [CodeChunk] = []
 
         // Parse @interface declarations
-        let interfacePattern = #"@interface\s+(\w+)[\s\S]*?@end"#
         chunks.append(contentsOf: extractMatches(
-            pattern: interfacePattern,
+            regex: Patterns.objcInterface,
             content: content,
             path: path,
             kind: .interface,
@@ -115,9 +158,8 @@ public struct TreeSitterParser: Parser, Sendable {
         ))
 
         // Parse @protocol declarations
-        let protocolPattern = #"@protocol\s+(\w+)[\s\S]*?@end"#
         chunks.append(contentsOf: extractMatches(
-            pattern: protocolPattern,
+            regex: Patterns.objcProtocol,
             content: content,
             path: path,
             kind: .protocol,
@@ -125,20 +167,17 @@ public struct TreeSitterParser: Parser, Sendable {
         ))
 
         // Parse C function declarations
-        let funcDeclPattern = #"^\w[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*;"#
         chunks.append(contentsOf: extractMatches(
-            pattern: funcDeclPattern,
+            regex: Patterns.cFuncDecl,
             content: content,
             path: path,
             kind: .function,
-            fileHash: fileHash,
-            multiline: true
+            fileHash: fileHash
         ))
 
         // Parse struct definitions
-        let structPattern = #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#
         chunks.append(contentsOf: extractMatches(
-            pattern: structPattern,
+            regex: Patterns.cStructTypedef,
             content: content,
             path: path,
             kind: .struct,
@@ -159,20 +198,17 @@ public struct TreeSitterParser: Parser, Sendable {
         var chunks: [CodeChunk] = []
 
         // Parse function definitions
-        let funcPattern = #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#
         chunks.append(contentsOf: extractMatches(
-            pattern: funcPattern,
+            regex: Patterns.cFunction,
             content: content,
             path: path,
             kind: .function,
-            fileHash: fileHash,
-            multiline: true
+            fileHash: fileHash
         ))
 
         // Parse struct definitions
-        let structPattern = #"struct\s+(\w+)\s*\{[\s\S]*?\}\s*;"#
         chunks.append(contentsOf: extractMatches(
-            pattern: structPattern,
+            regex: Patterns.cStruct,
             content: content,
             path: path,
             kind: .struct,
@@ -180,9 +216,8 @@ public struct TreeSitterParser: Parser, Sendable {
         ))
 
         // Parse typedef structs
-        let typedefStructPattern = #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#
         chunks.append(contentsOf: extractMatches(
-            pattern: typedefStructPattern,
+            regex: Patterns.cStructTypedef,
             content: content,
             path: path,
             kind: .struct,
@@ -190,9 +225,8 @@ public struct TreeSitterParser: Parser, Sendable {
         ))
 
         // Parse enum definitions
-        let enumPattern = #"enum\s+(\w+)\s*\{[\s\S]*?\}\s*;"#
         chunks.append(contentsOf: extractMatches(
-            pattern: enumPattern,
+            regex: Patterns.cEnum,
             content: content,
             path: path,
             kind: .enum,
@@ -213,31 +247,26 @@ public struct TreeSitterParser: Parser, Sendable {
         var chunks: [CodeChunk] = []
 
         // Parse class definitions
-        let classPattern = #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#
         chunks.append(contentsOf: extractMatches(
-            pattern: classPattern,
+            regex: Patterns.cppClass,
             content: content,
             path: path,
             kind: .class,
-            fileHash: fileHash,
-            multiline: true
+            fileHash: fileHash
         ))
 
         // Parse function definitions (including member functions)
-        let funcPattern = #"^[\w\s\*:&<>]+\s+(\w+::)?(\w+)\s*\([^)]*\)\s*(const)?\s*\{[\s\S]*?^\}"#
         chunks.append(contentsOf: extractMatches(
-            pattern: funcPattern,
+            regex: Patterns.cppFunction,
             content: content,
             path: path,
             kind: .function,
-            fileHash: fileHash,
-            multiline: true
+            fileHash: fileHash
         ))
 
         // Parse namespace definitions
-        let namespacePattern = #"namespace\s+(\w+)\s*\{"#
         chunks.append(contentsOf: extractMatches(
-            pattern: namespacePattern,
+            regex: Patterns.cppNamespace,
             content: content,
             path: path,
             kind: .namespace,
@@ -260,15 +289,13 @@ public struct TreeSitterParser: Parser, Sendable {
         var symbols: [String] = []
 
         // Extract top-level keys from JSON objects
-        let keyPattern = #"^\s*"(\w+)"\s*:"#
-        if let regex = try? NSRegularExpression(pattern: keyPattern, options: .anchorsMatchLines) {
-            let range = NSRange(content.startIndex..., in: content)
-            let matches = regex.matches(in: content, options: [], range: range)
+        let regex = Patterns.jsonKey
+        let range = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, options: [], range: range)
 
-            for match in matches.prefix(20) { // Limit to first 20 keys
-                if let keyRange = Range(match.range(at: 1), in: content) {
-                    symbols.append(String(content[keyRange]))
-                }
+        for match in matches.prefix(20) { // Limit to first 20 keys
+            if let keyRange = Range(match.range(at: 1), in: content) {
+                symbols.append(String(content[keyRange]))
             }
         }
 
@@ -294,15 +321,13 @@ public struct TreeSitterParser: Parser, Sendable {
         // Extract top-level keys from YAML
         var symbols: [String] = []
 
-        let keyPattern = #"^(\w+):"#
-        if let regex = try? NSRegularExpression(pattern: keyPattern, options: .anchorsMatchLines) {
-            let range = NSRange(content.startIndex..., in: content)
-            let matches = regex.matches(in: content, options: [], range: range)
+        let regex = Patterns.yamlKey
+        let range = NSRange(content.startIndex..., in: content)
+        let matches = regex.matches(in: content, options: [], range: range)
 
-            for match in matches.prefix(20) { // Limit to first 20 keys
-                if let keyRange = Range(match.range(at: 1), in: content) {
-                    symbols.append(String(content[keyRange]))
-                }
+        for match in matches.prefix(20) { // Limit to first 20 keys
+            if let keyRange = Range(match.range(at: 1), in: content) {
+                symbols.append(String(content[keyRange]))
             }
         }
 
@@ -455,22 +480,12 @@ public struct TreeSitterParser: Parser, Sendable {
     // MARK: - Helper Methods
 
     private func extractMatches(
-        pattern: String,
+        regex: NSRegularExpression,
         content: String,
         path: String,
         kind: ChunkKind,
-        fileHash: String,
-        multiline: Bool = false
+        fileHash: String
     ) -> [CodeChunk] {
-        var options: NSRegularExpression.Options = []
-        if multiline {
-            options.insert(.anchorsMatchLines)
-        }
-
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else {
-            return []
-        }
-
         let range = NSRange(content.startIndex..., in: content)
         let matches = regex.matches(in: content, options: [], range: range)
         let language = detectLanguage(from: path)
