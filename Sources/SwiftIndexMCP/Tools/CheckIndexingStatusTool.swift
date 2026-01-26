@@ -85,6 +85,7 @@ public struct CheckIndexingStatusTool: MCPToolHandler, Sendable {
         var response: [String: Any] = [
             "task_id": task.taskId,
             "status": "working",
+            "retry_after_ms": task.pollInterval ?? 10000, // Use task's poll interval
         ]
 
         if let progress {

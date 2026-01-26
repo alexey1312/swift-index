@@ -61,6 +61,16 @@ private func extractTaskId(from jsonString: String) -> String? {
     return taskId
 }
 
+private func extractRetryAfterMs(from jsonString: String) -> Int? {
+    guard let data = jsonString.data(using: .utf8),
+          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+          let retryAfter = json["retry_after_ms"] as? Int
+    else {
+        return nil
+    }
+    return retryAfter
+}
+
 @Suite("MCP Tools")
 struct MCPToolsTests {
     // MARK: - IndexCodebaseTool Tests
@@ -148,6 +158,74 @@ struct MCPToolsTests {
                 #expect(content.text.contains("task_id"))
                 #expect(content.text.contains("started"))
             }
+        }
+
+        @Test("Tool definition includes poll_interval parameter")
+        func toolDefinitionIncludesPollIntervalParam() {
+            let schema = tool.definition.inputSchema
+            let properties = schema["properties"]?.objectValue
+            #expect(properties?["poll_interval"] != nil)
+
+            let pollIntervalSchema = properties?["poll_interval"]?.objectValue
+            #expect(pollIntervalSchema?["type"]?.stringValue == "integer")
+            #expect(pollIntervalSchema?["minimum"]?.intValue == 1000)
+            #expect(pollIntervalSchema?["maximum"]?.intValue == 300_000)
+        }
+
+        @Test("Execute with custom poll_interval sets task pollInterval")
+        func executeWithCustomPollInterval() async throws {
+            let fixtureDir = try createTestFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
+            let customInterval = 5000
+
+            let result = try await tool.execute(
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": true,
+                    "poll_interval": .int(customInterval),
+                ])
+            )
+
+            #expect(result.isError != true)
+            guard case let .text(content) = result.content.first,
+                  let taskId = extractTaskId(from: content.text)
+            else {
+                Issue.record("Could not extract task_id from result")
+                return
+            }
+
+            // Check that the task has the custom poll interval
+            let taskManager = MCPContext.shared.taskManager
+            let task = await taskManager.getTask(taskId)
+            #expect(task?.pollInterval == customInterval)
+        }
+
+        @Test("Dynamic poll interval is based on file count")
+        func dynamicPollIntervalBasedOnFileCount() async throws {
+            let fixtureDir = try createTestFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
+            // Fixture has 1 file, so dynamic interval = max(10000, 1 * 100) = 10000
+            let result = try await tool.execute(
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": true,
+                ])
+            )
+
+            #expect(result.isError != true)
+            guard case let .text(content) = result.content.first,
+                  let taskId = extractTaskId(from: content.text)
+            else {
+                Issue.record("Could not extract task_id from result")
+                return
+            }
+
+            let taskManager = MCPContext.shared.taskManager
+            let task = await taskManager.getTask(taskId)
+            // Small project should get minimum interval (10 seconds)
+            #expect(task?.pollInterval == 10000)
         }
     }
 
@@ -237,6 +315,67 @@ struct MCPToolsTests {
                         statusContent.text.contains("completed") ||
                         statusContent.text.contains("task_id")
                 )
+            }
+        }
+
+        @Test("retry_after_ms uses task pollInterval")
+        func retryAfterMsUsesTaskPollInterval() async throws {
+            let fixtureDir = try createTestFixtures()
+            defer { cleanupFixtures(fixtureDir) }
+
+            let customInterval = 15000
+
+            // Start async indexing with custom poll interval
+            let indexTool = IndexCodebaseTool()
+            let startResult = try await indexTool.execute(
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": true,
+                    "poll_interval": .int(customInterval),
+                ])
+            )
+
+            guard case let .text(content) = startResult.content.first,
+                  let taskId = extractTaskId(from: content.text)
+            else {
+                Issue.record("Could not extract task_id from result")
+                return
+            }
+
+            // Check status while task is working
+            try await Task.sleep(for: .milliseconds(50))
+
+            let statusResult = try await tool.execute(
+                arguments: .object(["task_id": .string(taskId)])
+            )
+
+            #expect(statusResult.isError != true)
+            if case let .text(statusContent) = statusResult.content.first {
+                // Should return the custom poll interval as retry_after_ms
+                if let retryAfter = extractRetryAfterMs(from: statusContent.text) {
+                    #expect(retryAfter == customInterval)
+                }
+            }
+        }
+
+        @Test("retry_after_ms defaults to 10000 when pollInterval is nil")
+        func retryAfterMsDefaultsTo10000() async throws {
+            // Create a task directly without poll interval
+            let taskManager = MCPContext.shared.taskManager
+            let task = await taskManager.createTask(ttl: 60000, pollInterval: nil)
+
+            // Update to working status
+            await taskManager.updateStatus(task.taskId, status: .working, message: nil)
+
+            let statusResult = try await tool.execute(
+                arguments: .object(["task_id": .string(task.taskId)])
+            )
+
+            #expect(statusResult.isError != true)
+            if case let .text(statusContent) = statusResult.content.first {
+                if let retryAfter = extractRetryAfterMs(from: statusContent.text) {
+                    #expect(retryAfter == 10000)
+                }
             }
         }
     }

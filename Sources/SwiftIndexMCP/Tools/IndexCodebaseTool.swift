@@ -45,6 +45,17 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                             """,
                         "default": true,
                     ]),
+                    "poll_interval": .object([
+                        "type": "integer",
+                        "description":
+                            """
+                            Polling interval in milliseconds for check_indexing_status. \
+                            If not specified, calculated dynamically based on project size \
+                            (100ms per file, clamped to 10-60 seconds).
+                            """,
+                        "minimum": 1000,
+                        "maximum": 300_000,
+                    ]),
                 ]),
                 "required": .array([.string("path")]),
             ]),
@@ -69,6 +80,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         let force = arguments["force"]?.boolValue ?? false
         let runAsync = arguments["async"]?.boolValue ?? true
+        let customPollInterval = arguments["poll_interval"]?.intValue
 
         // Validate path exists
         let fileManager = FileManager.default
@@ -81,7 +93,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // If async mode, start background task and return immediately
         if runAsync {
-            return await startAsyncIndexing(path: path, force: force)
+            return await startAsyncIndexing(path: path, force: force, customPollInterval: customPollInterval)
         }
 
         // Synchronous mode - perform indexing and wait for result
@@ -97,14 +109,24 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
     // MARK: - Async Mode
 
-    private func startAsyncIndexing(path: String, force: Bool) async -> ToolCallResult {
+    private func startAsyncIndexing(path: String, force: Bool, customPollInterval: Int?) async -> ToolCallResult {
         let taskManager = MCPContext.shared.taskManager
 
-        // Create task with reasonable TTL (1 hour)
-        let task = await taskManager.createTask(ttl: 3_600_000, pollInterval: 2000)
-
-        // Estimate file count for initial response
+        // Estimate file count first to calculate dynamic poll interval
         let estimatedFiles = await estimateFileCount(path: path)
+
+        // Use custom poll interval if provided, otherwise calculate dynamically
+        // Dynamic: 100ms per file, clamped to 10-60 seconds
+        let pollInterval: Int = if let custom = customPollInterval {
+            // Clamp custom value to 1-300 seconds
+            max(1000, min(300_000, custom))
+        } else {
+            // Dynamic calculation based on project size
+            max(10000, min(60000, estimatedFiles * 100))
+        }
+
+        // Create task with reasonable TTL (1 hour) and poll interval
+        let task = await taskManager.createTask(ttl: 3_600_000, pollInterval: pollInterval)
 
         // Initialize progress
         await taskManager.updateIndexingProgress(task.taskId, progress: IndexingProgress(
@@ -224,6 +246,11 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         var stats = IndexingStats()
         let totalFiles = files.count
 
+        // Throttling: update progress every N files or N seconds to reduce polling noise
+        let progressUpdateInterval = 5 // Update every 5 files
+        var lastProgressUpdate = ContinuousClock.now
+        let minProgressInterval: Duration = .seconds(2) // Or every 2 seconds
+
         // Update progress with total files count
         if let taskId {
             await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
@@ -265,16 +292,25 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
                 stats.errors += 1
             }
 
-            // Update indexing progress for async mode with accurate post-processing stats
+            // Update indexing progress for async mode with throttling
+            // Update every N files, every N seconds, or on the last file
             if let taskId {
-                await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
-                    filesProcessed: stats.filesProcessed,
-                    totalFiles: totalFiles,
-                    currentFile: fileName,
-                    chunksIndexed: stats.chunksIndexed,
-                    errors: stats.errors,
-                    phase: .indexing
-                ))
+                let now = ContinuousClock.now
+                let isLastFile = index == totalFiles - 1
+                let intervalReached = (index + 1) % progressUpdateInterval == 0
+                let timeElapsed = now - lastProgressUpdate >= minProgressInterval
+
+                if isLastFile || intervalReached || timeElapsed {
+                    await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(
+                        filesProcessed: stats.filesProcessed,
+                        totalFiles: totalFiles,
+                        currentFile: fileName,
+                        chunksIndexed: stats.chunksIndexed,
+                        errors: stats.errors,
+                        phase: .indexing
+                    ))
+                    lastProgressUpdate = now
+                }
             }
         }
 
