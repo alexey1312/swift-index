@@ -537,15 +537,30 @@ public struct TreeSitterParser: Parser, Sendable {
 
     private func extractDocComment(before position: String.Index, in content: String) -> String? {
         // Look backwards for doc comments (// or /* style)
-        let beforeContent = String(content[..<position])
-        let lines = beforeContent.components(separatedBy: "\n")
-
         var docLines: [String] = []
         var foundComment = false
 
-        // Scan backwards through lines
-        for line in lines.reversed() {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var currentEnd = position
+
+        // Loop to process lines backwards
+        while true {
+            var lineStart = currentEnd
+            var foundNewline = false
+
+            // Scan backwards for newline
+            while lineStart > content.startIndex {
+                let prevIndex = content.index(before: lineStart)
+                if content[prevIndex] == "\n" {
+                    foundNewline = true
+                    break
+                }
+                lineStart = prevIndex
+            }
+
+            let lineContent = content[lineStart ..< currentEnd]
+
+            // Process the line
+            let trimmed = lineContent.trimmingCharacters(in: .whitespaces)
 
             if trimmed.hasPrefix("///") {
                 docLines.insert(String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces), at: 0)
@@ -553,13 +568,24 @@ public struct TreeSitterParser: Parser, Sendable {
             } else if trimmed.hasPrefix("//") {
                 docLines.insert(String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces), at: 0)
                 foundComment = true
-            } else if trimmed.isEmpty, foundComment {
-                // Empty line after finding comments - stop collecting
-                break
-            } else if !trimmed.isEmpty {
+            } else if trimmed.isEmpty {
+                if foundComment {
+                    // Empty line after finding comments - stop collecting
+                    break
+                }
+                // If not foundComment, continue (skips blank lines before comments)
+            } else {
                 // Non-comment, non-empty line - stop
                 break
             }
+
+            if !foundNewline {
+                // We reached start of content and processed the last line
+                break
+            }
+
+            // Move currentEnd to before the newline
+            currentEnd = content.index(before: lineStart)
         }
 
         let result = docLines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
