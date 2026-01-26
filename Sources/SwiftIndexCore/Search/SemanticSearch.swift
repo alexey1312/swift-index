@@ -83,7 +83,7 @@ public actor SemanticSearch: SearchEngine {
         // Deduplicate IDs to prevent crashes in Dictionary creation and redundant fetches
         let chunkIds = Array(Set(vectorResults.map(\.id)))
         let chunks = try await chunkStore.getByIDs(chunkIds)
-        let chunkMap = Dictionary(uniqueKeysWithValues: chunks.map { ($0.id, $0) })
+        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
         for (rank, (chunkId, similarity)) in vectorResults.enumerated() {
             guard let chunk = chunkMap[chunkId] else {
@@ -154,7 +154,7 @@ public actor SemanticSearch: SearchEngine {
             // Deduplicate IDs to prevent crashes in Dictionary creation and redundant fetches
             let chunkIds = Array(Set(vectorResults.map(\.id)))
             let chunks = try await chunkStore.getByIDs(chunkIds)
-            let chunkMap = Dictionary(uniqueKeysWithValues: chunks.map { ($0.id, $0) })
+            let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
 
             for result in vectorResults {
                 guard let chunk = chunkMap[result.id] else {
