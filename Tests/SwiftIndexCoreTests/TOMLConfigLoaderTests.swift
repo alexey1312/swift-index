@@ -662,4 +662,107 @@ struct TOMLConfigLoaderTests {
             try loader.load()
         }
     }
+
+    // MARK: - Initialization Requirement Tests
+
+    @Test("loadLayered with requireInitialization throws when no config exists")
+    func loadLayeredRequiresInitThrowsWhenMissing() throws {
+        let nonExistentDir = "/nonexistent/path/\(UUID().uuidString)"
+
+        #expect(throws: ConfigError.notInitialized) {
+            try TOMLConfigLoader.loadLayered(
+                projectDirectory: nonExistentDir,
+                requireInitialization: true
+            )
+        }
+    }
+
+    @Test("loadLayered with requireInitialization succeeds when project config exists")
+    func loadLayeredRequiresInitSucceedsWithProjectConfig() throws {
+        let projectContents = """
+        [embedding]
+        provider = "mlx"
+        """
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let projectDir = tempDir.appendingPathComponent("test-project-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: projectDir) }
+
+        let configPath = projectDir.appendingPathComponent(".swiftindex.toml")
+        try projectContents.write(to: configPath, atomically: true, encoding: .utf8)
+
+        let merged = try TOMLConfigLoader.loadLayered(
+            projectDirectory: projectDir.path,
+            requireInitialization: true
+        )
+
+        #expect(merged.embeddingProvider == "mlx")
+    }
+
+    @Test("loadLayered without requireInitialization returns defaults when no config exists")
+    func loadLayeredWithoutRequireInitReturnsDefaults() throws {
+        let nonExistentDir = "/nonexistent/path/\(UUID().uuidString)"
+
+        // Should not throw
+        let config = try TOMLConfigLoader.loadLayered(
+            projectDirectory: nonExistentDir,
+            requireInitialization: false
+        )
+
+        // Returns defaults
+        #expect(config.embeddingProvider == Config.default.embeddingProvider)
+    }
+
+    @Test("isInitialized returns false when no config files exist")
+    func isInitializedReturnsFalseWhenMissing() {
+        let nonExistentDir = "/nonexistent/path/\(UUID().uuidString)"
+
+        let result = TOMLConfigLoader.isInitialized(projectDirectory: nonExistentDir)
+
+        #expect(result == false)
+    }
+
+    @Test("isInitialized returns true when project config exists")
+    func isInitializedReturnsTrueWithProjectConfig() throws {
+        let projectContents = """
+        [embedding]
+        provider = "mlx"
+        """
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let projectDir = tempDir.appendingPathComponent("test-project-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: projectDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: projectDir) }
+
+        let configPath = projectDir.appendingPathComponent(".swiftindex.toml")
+        try projectContents.write(to: configPath, atomically: true, encoding: .utf8)
+
+        let result = TOMLConfigLoader.isInitialized(projectDirectory: projectDir.path)
+
+        #expect(result == true)
+    }
+
+    @Test("isInitialized returns true when global config exists")
+    func isInitializedReturnsTrueWithGlobalConfig() throws {
+        let globalContents = """
+        [embedding]
+        provider = "swift"
+        """
+
+        let tempDir = FileManager.default.temporaryDirectory
+        let globalDir = tempDir.appendingPathComponent("test-global-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: globalDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: globalDir) }
+
+        let configPath = globalDir.appendingPathComponent("config.toml")
+        try globalContents.write(to: configPath, atomically: true, encoding: .utf8)
+
+        let result = TOMLConfigLoader.isInitialized(
+            projectDirectory: "/nonexistent/\(UUID().uuidString)",
+            globalConfigDirectory: globalDir.path
+        )
+
+        #expect(result == true)
+    }
 }

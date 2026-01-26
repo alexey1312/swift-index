@@ -77,8 +77,22 @@ struct SearchDocsCommand: AsyncParsableCommand {
         let resolvedPath = CLIUtils.resolvePath(path)
         logger.debug("Resolved path: \(resolvedPath)")
 
-        // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, projectDirectory: resolvedPath, logger: logger)
+        // Load configuration (requires initialization)
+        let configuration: Config
+        do {
+            configuration = try CLIUtils.loadConfig(
+                from: config,
+                projectDirectory: resolvedPath,
+                logger: logger,
+                requireInitialization: true
+            )
+        } catch ConfigError.notInitialized {
+            print("No configuration found.")
+            print("")
+            print("Run 'swiftindex init' first to create a configuration file,")
+            print("then 'swiftindex index' to build the index.")
+            throw ExitCode.failure
+        }
 
         // Validate limit
         guard limit > 0 else {

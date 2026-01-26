@@ -48,18 +48,22 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### CLI Commands
 
-| Command                          | Description                   |
-| -------------------------------- | ----------------------------- |
-| `swiftindex index [PATH]`        | Index a codebase              |
-| `swiftindex search <QUERY>`      | Search indexed code           |
-| `swiftindex search-docs <QUERY>` | Search documentation snippets |
-| `swiftindex watch [PATH]`        | Watch mode (incremental)      |
-| `swiftindex serve`               | Start MCP server              |
-| `swiftindex providers`           | List embedding providers      |
-| `swiftindex init`                | Initialize config             |
-| `swiftindex install-claude-code` | Configure Claude Code         |
-| `swiftindex install-cursor`      | Configure Cursor              |
-| `swiftindex install-codex`       | Configure Codex               |
+| Command                          | Description                              |
+| -------------------------------- | ---------------------------------------- |
+| `swiftindex init`                | Initialize config (required first step)  |
+| `swiftindex index [PATH]`        | Index a codebase                         |
+| `swiftindex search <QUERY>`      | Search indexed code                      |
+| `swiftindex search-docs <QUERY>` | Search documentation snippets            |
+| `swiftindex watch [PATH]`        | Watch mode (incremental)                 |
+| `swiftindex serve`               | Start MCP server                         |
+| `swiftindex providers`           | List embedding providers                 |
+| `swiftindex install-claude-code` | Configure Claude Code                    |
+| `swiftindex install-cursor`      | Configure Cursor                         |
+| `swiftindex install-codex`       | Configure Codex                          |
+
+**Getting Started**: Run `swiftindex init` first to create `.swiftindex.toml`, then
+`swiftindex index` to build the search index. If you run `index` without a config,
+it will prompt you to initialize first.
 
 ### Search Enhancement Flags
 
@@ -301,6 +305,9 @@ let object = try JSONCodec.deserialize(data)
 
 ### Init Behavior Notes
 
+- **Config required**: Most commands require a config file. Running `swiftindex index`
+  without config will prompt to run init interactively (or show an error in
+  non-interactive mode).
 - `swiftindex init` writes MLX defaults by default and includes commented examples.
 - If MetalToolchain is missing and MLX is selected, it prompts to install and can
   fall back to Swift Embeddings defaults.
@@ -339,7 +346,22 @@ git push --tags
 
 ## Configuration
 
-Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~/.config/swiftindex/config.toml` > Defaults
+### Initialization Requirement
+
+**Configuration file is required** for most commands. If no `.swiftindex.toml` exists
+(project or global), commands will prompt to run `swiftindex init` first.
+
+- `swiftindex index` — prompts to run init interactively, shows error in non-interactive mode
+- `swiftindex search`, `swiftindex watch`, `swiftindex serve` — show error with instructions
+- `swiftindex providers` — works without config (informational command)
+
+This ensures explicit configuration and avoids implicit default behavior that may be
+confusing. The config file is the single source of truth for embedding provider,
+model settings, and indexing options.
+
+### Config Priority
+
+Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~/.config/swiftindex/config.toml`
 
 ### Search Configuration Options
 
