@@ -402,14 +402,24 @@ public actor MCPServer {
         let task = await taskManager.createTask(ttl: ttl, pollInterval: pollInterval)
         logger.info("Created task \(task.taskId) for tool: \(toolName)")
 
+        // Capture taskManager for the background task
+        let taskManager = taskManager
+
         // Start background execution
         let backgroundTask = Task {
             do {
                 // Get cancellation token
                 let token = await taskManager.getCancellationToken(task.taskId)
 
-                // Execute the tool
-                let result = try await tool.execute(arguments: arguments)
+                // Create execution context for progress reporting
+                let context = ToolExecutionContext(
+                    taskId: task.taskId,
+                    taskManager: taskManager,
+                    cancellationToken: token
+                )
+
+                // Execute the tool with context
+                let result = try await tool.execute(arguments: arguments, context: context)
 
                 // Check if cancelled during execution
                 if token?.isCancelled == true {
@@ -564,6 +574,26 @@ public protocol MCPToolHandler: Sendable {
 
     /// Execute the tool with the given arguments.
     func execute(arguments: JSONValue) async throws -> ToolCallResult
+
+    /// Execute the tool with arguments and execution context.
+    ///
+    /// Override this method to support progress reporting and cancellation
+    /// for long-running operations. The context provides:
+    /// - `reportProgress(current:total:message:)` for status updates
+    /// - `checkCancellation()` for cooperative cancellation
+    ///
+    /// Default implementation calls `execute(arguments:)` for backwards compatibility.
+    func execute(arguments: JSONValue, context: ToolExecutionContext?) async throws -> ToolCallResult
+}
+
+// MARK: - MCPToolHandler Default Implementation
+
+public extension MCPToolHandler {
+    /// Default implementation calls the original execute method.
+    /// Override to add progress reporting and cancellation support.
+    func execute(arguments: JSONValue, context: ToolExecutionContext?) async throws -> ToolCallResult {
+        try await execute(arguments: arguments)
+    }
 }
 
 // MARK: - MCP Errors

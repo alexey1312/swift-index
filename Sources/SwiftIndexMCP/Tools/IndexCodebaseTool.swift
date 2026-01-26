@@ -44,6 +44,10 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
     }
 
     public func execute(arguments: JSONValue) async throws -> ToolCallResult {
+        try await execute(arguments: arguments, context: nil)
+    }
+
+    public func execute(arguments: JSONValue, context: ToolExecutionContext?) async throws -> ToolCallResult {
         // Extract path argument
         guard let path = arguments["path"]?.stringValue else {
             return .error("Missing required argument: path")
@@ -62,8 +66,10 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // Perform indexing
         do {
-            let result = try await performIndexing(path: path, force: force)
+            let result = try await performIndexing(path: path, force: force, context: context)
             return .text(formatResult(result))
+        } catch is CancellationError {
+            return .error("Indexing was cancelled")
         } catch {
             return .error("Indexing failed: \(error.localizedDescription)")
         }
@@ -71,12 +77,19 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
     // MARK: - Private
 
-    private func performIndexing(path: String, force: Bool) async throws -> IndexingResult {
-        let context = MCPContext.shared
-        let config = try await context.getConfig(for: path)
+    private func performIndexing(
+        path: String,
+        force: Bool,
+        context: ToolExecutionContext?
+    ) async throws -> IndexingResult {
+        let mcpContext = MCPContext.shared
+        let config = try await mcpContext.getConfig(for: path)
+
+        // Report initial status
+        await context?.reportStatus("Initializing...")
 
         // Create embedding provider
-        let embeddingProvider = try await context.getEmbeddingProvider(config: config)
+        let embeddingProvider = try await mcpContext.getEmbeddingProvider(config: config)
 
         // Check provider availability
         guard await embeddingProvider.isAvailable() else {
@@ -84,10 +97,11 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
 
         // Get or create index manager
-        let indexManager = try await context.getIndexManager(for: path, config: config)
+        let indexManager = try await mcpContext.getIndexManager(for: path, config: config)
 
         // Handle force re-indexing
         if force {
+            await context?.reportStatus("Clearing existing index...")
             try await indexManager.clear()
         }
 
@@ -95,12 +109,25 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         let parser = HybridParser()
 
         // Collect files to index
+        await context?.reportStatus("Collecting files...")
         let files = try collectFiles(at: path, config: config, parser: parser)
 
         // Index files
         var stats = IndexingStats()
+        let totalFiles = files.count
 
-        for filePath in files {
+        for (index, filePath) in files.enumerated() {
+            // Check for cancellation
+            try await context?.checkCancellation()
+
+            // Report progress
+            let fileName = URL(fileURLWithPath: filePath).lastPathComponent
+            await context?.reportProgress(
+                current: index + 1,
+                total: totalFiles,
+                message: "Indexing: \(fileName)"
+            )
+
             do {
                 let result = try await indexFile(
                     at: filePath,
@@ -119,6 +146,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
 
         // Save index
+        await context?.reportStatus("Saving index...")
         try await indexManager.save()
 
         // Get final statistics

@@ -63,6 +63,10 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
     }
 
     public func execute(arguments: JSONValue) async throws -> ToolCallResult {
+        try await execute(arguments: arguments, context: nil)
+    }
+
+    public func execute(arguments: JSONValue, context: ToolExecutionContext?) async throws -> ToolCallResult {
         // Extract query argument
         guard let query = arguments["query"]?.stringValue else {
             return .error("Missing required argument: query")
@@ -87,9 +91,12 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
                 query: query,
                 path: path,
                 depth: depth,
-                focus: focus
+                focus: focus,
+                context: context
             )
             return .text(formatResult(result))
+        } catch is CancellationError {
+            return .error("Research was cancelled")
         } catch {
             return .error("Research failed: \(error.localizedDescription)")
         }
@@ -101,20 +108,30 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
         query: String,
         path: String,
         depth: Int,
-        focus: String?
+        focus: String?,
+        context: ToolExecutionContext?
     ) async throws -> ResearchResult {
-        let context = MCPContext.shared
-        let config = try await context.getConfig(for: path)
+        let mcpContext = MCPContext.shared
+
+        await context?.reportStatus("Loading configuration...")
+        let config = try await mcpContext.getConfig(for: path)
+
+        // Check for cancellation
+        try await context?.checkCancellation()
 
         // Check if index exists
-        guard await context.indexExists(for: path, config: config) else {
+        guard await mcpContext.indexExists(for: path, config: config) else {
             throw MCPError.executionFailed(
                 "No index found for path: \(path). Run 'index_codebase' first."
             )
         }
 
         // Create search engine
-        let searchEngine = try await context.createSearchEngine(for: path, config: config)
+        await context?.reportStatus("Initializing search engine...")
+        let searchEngine = try await mcpContext.createSearchEngine(for: path, config: config)
+
+        // Check for cancellation
+        try await context?.checkCancellation()
 
         // Build search options with multi-hop enabled
         let searchOptions = SearchOptions(
@@ -125,10 +142,15 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
             multiHopDepth: depth
         )
 
-        // Execute initial search
+        // Execute initial search with progress reporting
+        await context?.reportProgress(current: 1, total: depth + 1, message: "Searching")
         let initialResults = try await searchEngine.search(query: query, options: searchOptions)
 
+        // Check for cancellation
+        try await context?.checkCancellation()
+
         // Collect references from results
+        await context?.reportProgress(current: depth, total: depth + 1, message: "Analyzing references")
         var references: [CodeReference] = []
         var seenPaths = Set<String>()
 
@@ -164,6 +186,7 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
         let limitedReferences = Array(references.prefix(50))
 
         // Generate analysis
+        await context?.reportProgress(current: depth + 1, total: depth + 1, message: "Generating analysis")
         let analysis = generateAnalysis(
             query: query,
             focus: focus,
