@@ -542,7 +542,7 @@ public struct TreeSitterParser: Parser, Sendable {
                 lineStart = prevIndex
             }
 
-            let lineContent = content[lineStart..<currentEnd]
+            let lineContent = content[lineStart ..< currentEnd]
 
             // Process the line
             let trimmed = lineContent.trimmingCharacters(in: .whitespaces)
