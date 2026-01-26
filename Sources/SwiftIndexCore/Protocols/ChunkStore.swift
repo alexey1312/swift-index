@@ -108,10 +108,10 @@ public protocol ChunkStore: Sendable {
     func clear() async throws
 }
 
-extension ChunkStore {
+public extension ChunkStore {
     /// Default implementation of getByIDs that iteratively calls get(id:).
     /// Conforming types should override this with a more efficient implementation if possible.
-    public func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
+    func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
         var results: [CodeChunk] = []
         for id in ids {
             if let chunk = try await get(id: id) {
