@@ -1,0 +1,35 @@
+{
+  "mcpServers": {
+    "context7": {
+      "args": [
+        "-y",
+        "@upstash/context7-mcp@latest"
+      ],
+      "command": "npx"
+    },
+    "mise": {
+      "args": [
+        "mcp"
+      ],
+      "command": "mise",
+      "env": {
+        "MISE_EXPERIMENTAL": "1"
+      }
+    },
+    "sequential-thinking": {
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ],
+      "command": "npx"
+    },
+    "sosumi": {
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://sosumi.ai/mcp"
+      ],
+      "command": "npx"
+    }
+  }
+}

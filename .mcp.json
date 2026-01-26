@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "swiftindex": {
+            "args": [
+                "serve"
+            ],
+            "command": "\/opt\/homebrew\/bin\/swiftindex",
+            "type": "stdio"
+        }
+    }
+}
