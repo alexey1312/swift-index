@@ -29,13 +29,13 @@
 
 ## 3. CLI Commands
 
-- [ ] 3.1 Создать `Sources/swiftindex/Commands/AuthCommand.swift`
-- [ ] 3.2 Реализовать `auth status` subcommand (проверка токена в Keychain + валидация)
-- [ ] 3.3 Реализовать `auth login` subcommand с флагами `--force` и `--manual`
-- [ ] 3.4 Реализовать `auth logout` subcommand (удаление токена из Keychain)
-- [ ] 3.5 Добавить `AuthCommand` в `SwiftIndexCommand.subcommands`
-- [ ] 3.6 Добавить automatic OAuth flow в `auth login` (запуск `claude setup-token`)
-- [ ] 3.7 Добавить manual token input fallback в `auth login`
+- [x] 3.1 Создать `Sources/swiftindex/Commands/AuthCommand.swift`
+- [x] 3.2 Реализовать `auth status` subcommand (проверка токена в Keychain + валидация)
+- [x] 3.3 Реализовать `auth login` subcommand с флагами `--force` и `--manual`
+- [x] 3.4 Реализовать `auth logout` subcommand (удаление токена из Keychain)
+- [x] 3.5 Добавить `AuthCommand` в `SwiftIndexCommand.subcommands`
+- [x] 3.6 Добавить automatic OAuth flow в `auth login` (запуск `claude setup-token`)
+- [x] 3.7 Добавить manual token input fallback в `auth login`
 
 ## 4. Init Wizard Enhancement
 
