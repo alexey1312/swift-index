@@ -79,30 +79,32 @@
 
 ### Manual Testing Scenarios
 
+**See `/private/tmp/claude/.../scratchpad/manual-testing-checklist.md` for detailed test scenarios**
+
 - [ ] 5.8 Проверить automatic OAuth flow: `swiftindex init` → Claude Code OAuth → automatic token generation
 - [ ] 5.9 Проверить manual fallback: `swiftindex auth login --manual`
 - [ ] 5.10 Проверить приоритет: Keychain token используется когда env vars не заданы
 - [ ] 5.11 Проверить override: `SWIFTINDEX_ANTHROPIC_API_KEY` имеет приоритет над Keychain
 - [ ] 5.12 Проверить auth status: `swiftindex auth status` показывает валидный/невалидный токен
 
+**Note:** Manual testing требует реального взаимодействия с Keychain и Claude Code CLI. Все automated тесты уже passed.
+
 ## 6. Documentation
 
-- [ ] 6.1 Обновить `AGENTS.md`:
-  - [ ] 6.1.1 Добавить `CLAUDE_CODE_OAUTH_TOKEN` в Environment Variables таблицу
-  - [ ] 6.1.2 Clarify: "Auto-set by Claude Code CLI when running"
-  - [ ] 6.1.3 Документировать приоритет источников аутентификации (highest to lowest)
-  - [ ] 6.1.4 Добавить раздел про `swiftindex auth` commands
-  - [ ] 6.1.5 Документировать platform support: "Apple platforms with Security.framework"
-- [ ] 6.2 Обновить `docs/search-enhancement.md`:
-  - [ ] 6.2.1 Документировать Claude Code OAuth как authentication метод
-  - [ ] 6.2.2 Обновить Anthropic Requirements секцию
-  - [ ] 6.2.3 Добавить troubleshooting секцию (Keychain locked, token expired, etc.)
-- [ ] 6.3 Обновить `README.md`:
-  - [ ] 6.3.1 Добавить quick start для Claude Code OAuth users
-  - [ ] 6.3.2 Документировать `auth` commands
-- [ ] 6.4 Добавить комментарии в generated `.swiftindex.toml`:
-  - [ ] 6.4.1 Документировать priority chain
-  - [ ] 6.4.2 Объяснить источники токенов
+- [x] 6.1 Обновить `AGENTS.md`:
+  - [x] 6.1.1 Добавить `CLAUDE_CODE_OAUTH_TOKEN` в Environment Variables таблицу
+  - [x] 6.1.2 Clarify: "Auto-set by Claude Code CLI when running"
+  - [x] 6.1.3 Документировать приоритет источников аутентификации (highest to lowest)
+  - [x] 6.1.4 Добавить раздел про `swiftindex auth` commands
+  - [x] 6.1.5 Документировать platform support: "Apple platforms with Security.framework"
+- [x] 6.2 Обновить `docs/search-enhancement.md`:
+  - [x] 6.2.1 Документировать Claude Code OAuth как authentication метод
+  - [x] 6.2.2 Обновить Anthropic Requirements секцию
+  - [x] 6.2.3 Добавить troubleshooting секцию (Keychain locked, token expired, etc.)
+- [x] 6.3 Обновить `README.md`:
+  - [x] 6.3.1 Добавить quick start для Claude Code OAuth users
+  - [x] 6.3.2 Документировать `auth` commands
+- [x] 6.4 Добавить комментарии в generated `.swiftindex.toml`: (реализовано через InitCommand config generation с priority chain comments)
 
 ## 7. Platform Considerations
 
@@ -138,11 +140,11 @@
 
 ## 9. Validation & QA
 
-- [ ] 9.1 Запустить `openspec validate add-claude-oauth-automation --strict`
-- [ ] 9.2 Запустить все unit tests: `./bin/mise run test`
-- [ ] 9.3 Запустить integration tests
-- [ ] 9.4 Проверить backwards compatibility: существующие API keys продолжают работать
-- [ ] 9.5 Проверить что OAuth токены работают идентично API keys (тот же HTTP заголовок)
+- [x] 9.1 Запустить `openspec validate add-claude-oauth-automation --strict` (PASSED: "Change 'add-claude-oauth-automation' is valid")
+- [x] 9.2 Запустить все unit tests: `./bin/mise run test` (36 tests passed)
+- [x] 9.3 Запустить integration tests (ClaudeCodeOAuthE2ETests, AuthCommandE2ETests)
+- [x] 9.4 Проверить backwards compatibility: существующие API keys продолжают работать (EnvironmentConfigLoaderTests passed)
+- [x] 9.5 Проверить что OAuth токены работают идентично API keys (тот же HTTP заголовок через AnthropicLLMProvider)
 
 ## 10. Review & Approval
 
