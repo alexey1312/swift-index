@@ -105,9 +105,18 @@ extension AuthCommand {
 
             // Check Keychain if no env vars
             if activeSource == nil {
-                if let keychainToken = try? KeychainManager.getClaudeCodeToken() {
+                do {
+                    let keychainToken = try KeychainManager.getClaudeCodeToken()
                     activeSource = "Keychain"
                     activeToken = keychainToken
+                } catch KeychainError.notFound {
+                    // Expected - no token stored
+                } catch KeychainError.keychainLocked {
+                    print("⚠️  Keychain Status: Locked")
+                    print("\nUnlock Keychain to check token status:")
+                    print("  security unlock-keychain ~/Library/Keychains/login.keychain-db\n")
+                } catch {
+                    print("⚠️  Failed to check Keychain: \(error.localizedDescription)\n")
                 }
             }
 
@@ -268,10 +277,29 @@ extension AuthCommand {
 
             // Save token
             do {
-                try? ClaudeCodeAuthManager.deleteToken() // Clear old token first
+                // Clear old token first (if exists)
+                do {
+                    try ClaudeCodeAuthManager.deleteToken()
+                } catch KeychainError.notFound {
+                    // Expected - no old token to delete
+                } catch KeychainError.keychainLocked {
+                    print("✗ Keychain is locked. Cannot save token.")
+                    print("\nUnlock Keychain with:")
+                    print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
+                    throw ExitCode.failure
+                } catch {
+                    // Log but continue - old token might still be overwritten
+                    logger.warning("Failed to delete old token: \(error.localizedDescription)")
+                }
+
                 try ClaudeCodeAuthManager.saveToken(finalToken)
                 print("✓ Token saved successfully")
                 print("\nAuthentication complete! You can now use search enhancement features.")
+            } catch KeychainError.keychainLocked {
+                print("✗ Keychain is locked. Cannot save token.")
+                print("\nUnlock Keychain with:")
+                print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
+                throw ExitCode.failure
             } catch {
                 print("✗ Failed to save token: \(error.localizedDescription)")
                 throw ExitCode.failure

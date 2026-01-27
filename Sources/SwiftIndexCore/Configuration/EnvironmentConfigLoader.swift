@@ -1,9 +1,12 @@
 // MARK: - EnvironmentConfigLoader
 
 import Foundation
+import Logging
 
 /// Loads configuration from environment variables.
 public struct EnvironmentConfigLoader: ConfigLoader {
+    private let logger = Logger(label: "com.swiftindex.config.environment")
+
     public init() {}
 
     public func load() throws -> PartialConfig {
@@ -60,7 +63,32 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             partial.anthropicAPIKey = anthropicKey
         } else {
             // Fallback: Check Keychain for OAuth token (only if no env vars set)
-            partial.anthropicAPIKey = try? ClaudeCodeAuthManager.getToken()
+            do {
+                partial.anthropicAPIKey = try ClaudeCodeAuthManager.getToken()
+            } catch KeychainError.notFound {
+                // Expected case - no token stored yet, not an error
+                // Don't log anything
+            } catch KeychainError.keychainLocked {
+                // Log as ERROR since this blocks auth but user can fix it
+                logger.error(
+                    "Failed to retrieve OAuth token from Keychain: Keychain is locked",
+                    metadata: [
+                        "error_id": .string("keychain_locked"),
+                        "suggestion": .string(
+                            "Unlock Keychain with: security unlock-keychain ~/Library/Keychains/login.keychain-db"
+                        ),
+                    ]
+                )
+            } catch {
+                // Log any other Keychain errors with full context
+                logger.error(
+                    "Failed to retrieve OAuth token from Keychain",
+                    metadata: [
+                        "error": .string(error.localizedDescription),
+                        "error_id": .string("keychain_read_failed"),
+                    ]
+                )
+            }
         }
 
         if let logLevel = ProcessInfo.processInfo.environment["SWIFTINDEX_LOG_LEVEL"] {

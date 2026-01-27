@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 
 /// Manages Claude Code OAuth authentication flow
 ///
@@ -23,6 +24,15 @@ import Foundation
 /// - Pattern: `sk-ant-oauth-[a-zA-Z0-9_-]{20,}`
 /// - Example: `sk-ant-oauth-abc123_xyz789-abcdefghijklmnopqrst`
 public enum ClaudeCodeAuthManager {
+    /// Logger instance for OAuth authentication operations
+    private static let logger = Logger(label: "com.swiftindex.oauth")
+
+    /// OAuth token format pattern
+    ///
+    /// Pattern: `sk-ant-oauth-` followed by 20+ alphanumeric/underscore/dash characters
+    /// Used for both parsing CLI output and validating user input
+    private static let tokenPattern = #"sk-ant-oauth-[\w-]{20,}"#
+
     // MARK: - CLI Detection
 
     /// Check if Claude Code CLI is available in PATH
@@ -44,6 +54,14 @@ public enum ClaudeCodeAuthManager {
 
                 return process.terminationStatus == 0
             } catch {
+                // Log the failure - this might indicate system issues beyond "CLI not found"
+                logger.debug(
+                    "CLI availability check failed",
+                    metadata: [
+                        "command": .string("claude"),
+                        "error": .string(error.localizedDescription),
+                    ]
+                )
                 return false
             }
         #else
@@ -64,10 +82,8 @@ public enum ClaudeCodeAuthManager {
     /// 2. Multi-line parsing (token can appear on any line)
     /// 3. If multiple matches, use first one
     /// 4. Validate extracted token before returning
-    public static func parseToken(from output: String) throws -> String {
-        // Token regex: sk-ant-oauth- followed by 20+ alphanumeric/underscore/dash
-        let pattern = #"sk-ant-oauth-[\w-]{20,}"#
-        let regex = try NSRegularExpression(pattern: pattern, options: [])
+    static func parseToken(from output: String) throws -> String {
+        let regex = try NSRegularExpression(pattern: tokenPattern, options: [])
 
         let range = NSRange(output.startIndex ..< output.endIndex, in: output)
         guard let match = regex.firstMatch(in: output, options: [], range: range) else {
@@ -111,8 +127,8 @@ public enum ClaudeCodeAuthManager {
             throw ClaudeCodeAuthError.invalidToken
         }
 
-        // Check allowed characters
-        let pattern = #"^sk-ant-oauth-[\w-]{20,}$"#
+        // Check allowed characters (with anchors for exact match)
+        let pattern = "^" + tokenPattern + "$"
         let regex = try NSRegularExpression(pattern: pattern, options: [])
         let range = NSRange(token.startIndex ..< token.endIndex, in: token)
         guard regex.firstMatch(in: token, options: [], range: range) != nil else {
@@ -176,12 +192,19 @@ public enum ClaudeCodeAuthManager {
             process.standardError = errorPipe
 
             try process.run()
-            process.waitUntilExit()
 
-            // Check exit code
-            guard process.terminationStatus == 0 else {
-                throw ClaudeCodeAuthError.cliExecutionFailed(exitCode: process.terminationStatus)
+            // Wait for process with timeout (60 seconds)
+            let timeoutSeconds: TimeInterval = 60
+            let timeoutTask = Task {
+                try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                if process.isRunning {
+                    logger.warning("OAuth flow timed out after \(timeoutSeconds) seconds, terminating process")
+                    process.terminate()
+                }
             }
+
+            process.waitUntilExit()
+            timeoutTask.cancel() // Cancel timeout if process finished
 
             // Combine stdout and stderr (token may appear in either)
             let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
@@ -190,6 +213,26 @@ public enum ClaudeCodeAuthManager {
             let output = (String(data: outputData, encoding: .utf8) ?? "") +
                 "\n" +
                 (String(data: errorData, encoding: .utf8) ?? "")
+
+            // Check exit code
+            guard process.terminationStatus == 0 else {
+                let combinedOutput = output.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                // Log the full CLI output for debugging
+                logger.error(
+                    "Claude CLI execution failed",
+                    metadata: [
+                        "exit_code": .string("\(process.terminationStatus)"),
+                        "output": .string(combinedOutput),
+                        "error_id": .string("claude_cli_failed"),
+                    ]
+                )
+
+                throw ClaudeCodeAuthError.cliExecutionFailed(
+                    exitCode: process.terminationStatus,
+                    output: combinedOutput
+                )
+            }
 
             // Parse and validate token
             return try parseToken(from: output)

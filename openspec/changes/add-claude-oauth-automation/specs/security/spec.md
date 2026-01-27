@@ -83,13 +83,14 @@ The system SHALL validate tokens before storing by checking Anthropic API availa
 - **THEN** throws `ClaudeCodeAuthError.tokenParsingFailed`
 - **AND** error message suggests manual input
 
-#### Scenario: Token validation
+#### Scenario: Token format validation
 
-- **WHEN** calling `ClaudeCodeAuthManager.validateToken(token)`
-- **THEN** creates test `AnthropicLLMProvider` with token
-- **AND** calls `isAvailable()` to check API access
-- **AND** returns true if API responds successfully
-- **OR** returns false if API returns 401/403 or times out
+- **WHEN** calling `ClaudeCodeAuthManager.validateTokenFormat(token)`
+- **THEN** validates token matches pattern: `sk-ant-oauth-[\w-]{20,}`
+- **AND** checks token has required prefix `sk-ant-oauth-`
+- **AND** checks token has minimum 20 characters after prefix
+- **AND** throws `ClaudeCodeAuthError.invalidToken` if format invalid
+- **NOTE** This is format-only validation, not API validation
 
 #### Scenario: Get stored token
 

@@ -11,7 +11,7 @@ public enum ClaudeCodeAuthError: Error, Equatable {
     case cliNotFound
 
     /// CLI execution failed (non-zero exit code)
-    case cliExecutionFailed(exitCode: Int32)
+    case cliExecutionFailed(exitCode: Int32, output: String? = nil)
 
     /// Failed to parse OAuth token from CLI output
     ///
@@ -43,8 +43,17 @@ extension ClaudeCodeAuthError: LocalizedError {
             Alternative: Use manual mode with --manual flag
             """
 
-        case let .cliExecutionFailed(exitCode):
-            "Claude CLI execution failed with exit code \(exitCode)"
+        case let .cliExecutionFailed(exitCode, output):
+            if let output, !output.isEmpty {
+                """
+                Claude CLI execution failed with exit code \(exitCode)
+
+                CLI output:
+                \(output)
+                """
+            } else {
+                "Claude CLI execution failed with exit code \(exitCode)"
+            }
 
         case .parsingFailed:
             """

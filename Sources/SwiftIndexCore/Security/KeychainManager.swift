@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import Security
 
 /// Manages secure storage of OAuth tokens in macOS Keychain
@@ -26,8 +27,9 @@ import Security
 ///
 /// Thread Safety:
 /// - Security.framework is thread-safe within single process
-/// - Cross-process atomicity NOT guaranteed
-/// - Advisory file lock used for write operations
+/// - Advisory file lock attempts to prevent concurrent writes across processes
+/// - Lock failures gracefully degrade to unlocked execution (best-effort)
+/// - Race conditions possible when lock acquisition fails
 public enum KeychainManager {
     // MARK: - Constants
 
@@ -36,6 +38,9 @@ public enum KeychainManager {
 
     /// Default account name for Claude Code OAuth token
     public static let defaultAccountName = "claude-code-oauth-token"
+
+    /// Logger instance for KeychainManager operations
+    private static let logger = Logger(label: "com.swiftindex.keychain")
 
     // MARK: - Public API
 
@@ -61,6 +66,11 @@ public enum KeychainManager {
             throw KeychainError.invalidToken
         }
 
+        // Validate UTF-8 encoding before Keychain operations
+        guard let tokenData = token.data(using: .utf8) else {
+            throw KeychainError.invalidToken
+        }
+
         // Acquire advisory lock for write operation
         try withLockFile {
             // Try to update existing item first
@@ -71,7 +81,7 @@ public enum KeychainManager {
             ]
 
             let attributes: [String: Any] = [
-                kSecValueData as String: token.data(using: .utf8)!,
+                kSecValueData as String: tokenData,
             ]
 
             let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
@@ -85,7 +95,7 @@ public enum KeychainManager {
                     kSecClass as String: kSecClassGenericPassword,
                     kSecAttrService as String: service,
                     kSecAttrAccount as String: account,
-                    kSecValueData as String: token.data(using: .utf8)!,
+                    kSecValueData as String: tokenData,
                     kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
                 ]
 
@@ -214,7 +224,15 @@ public enum KeychainManager {
     private static func withLockFile<T>(_ operation: () throws -> T) throws -> T {
         let fd = open(lockFilePath, O_CREAT | O_RDWR, 0o644)
         guard fd >= 0 else {
-            // Can't create lock file, proceed without locking
+            let errno = Darwin.errno
+            logger.warning(
+                "Failed to create lock file for Keychain operations (proceeding without lock)",
+                metadata: [
+                    "path": .string(lockFilePath),
+                    "errno": .string(String(errno)),
+                    "error": .string(String(cString: strerror(errno))),
+                ]
+            )
             return try operation()
         }
 
@@ -224,7 +242,15 @@ public enum KeychainManager {
 
         // Acquire exclusive lock (blocking)
         guard flock(fd, LOCK_EX) == 0 else {
-            // Lock failed, proceed without locking
+            let errno = Darwin.errno
+            logger.warning(
+                "Failed to acquire file lock for Keychain operations (proceeding without lock)",
+                metadata: [
+                    "path": .string(lockFilePath),
+                    "errno": .string(String(errno)),
+                    "error": .string(String(cString: strerror(errno))),
+                ]
+            )
             return try operation()
         }
 
