@@ -60,9 +60,7 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             partial.anthropicAPIKey = anthropicKey
         } else {
             // Fallback: Check Keychain for OAuth token (only if no env vars set)
-            #if canImport(Security)
-                partial.anthropicAPIKey = try? ClaudeCodeAuthManager.getToken()
-            #endif
+            partial.anthropicAPIKey = try? ClaudeCodeAuthManager.getToken()
         }
 
         if let logLevel = ProcessInfo.processInfo.environment["SWIFTINDEX_LOG_LEVEL"] {

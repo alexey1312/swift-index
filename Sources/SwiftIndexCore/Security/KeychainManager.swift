@@ -1,7 +1,5 @@
 import Foundation
-#if canImport(Security)
-    import Security
-#endif
+import Security
 
 /// Manages secure storage of OAuth tokens in macOS Keychain
 ///
@@ -58,58 +56,54 @@ public enum KeychainManager {
         service: String = defaultServiceName,
         account: String = defaultAccountName
     ) throws {
-        #if canImport(Security)
-            // Validate token
-            guard !token.isEmpty else {
-                throw KeychainError.invalidToken
-            }
+        // Validate token
+        guard !token.isEmpty else {
+            throw KeychainError.invalidToken
+        }
 
-            // Acquire advisory lock for write operation
-            try withLockFile {
-                // Try to update existing item first
-                let updateQuery: [String: Any] = [
+        // Acquire advisory lock for write operation
+        try withLockFile {
+            // Try to update existing item first
+            let updateQuery: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+            ]
+
+            let attributes: [String: Any] = [
+                kSecValueData as String: token.data(using: .utf8)!,
+            ]
+
+            let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
+
+            if updateStatus == errSecSuccess {
+                // Update successful
+                return
+            } else if updateStatus == errSecItemNotFound {
+                // Item doesn't exist, create new
+                let addQuery: [String: Any] = [
                     kSecClass as String: kSecClassGenericPassword,
                     kSecAttrService as String: service,
                     kSecAttrAccount as String: account,
-                ]
-
-                let attributes: [String: Any] = [
                     kSecValueData as String: token.data(using: .utf8)!,
+                    kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
                 ]
 
-                let updateStatus = SecItemUpdate(updateQuery as CFDictionary, attributes as CFDictionary)
+                let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
 
-                if updateStatus == errSecSuccess {
-                    // Update successful
+                if addStatus == errSecSuccess {
                     return
-                } else if updateStatus == errSecItemNotFound {
-                    // Item doesn't exist, create new
-                    let addQuery: [String: Any] = [
-                        kSecClass as String: kSecClassGenericPassword,
-                        kSecAttrService as String: service,
-                        kSecAttrAccount as String: account,
-                        kSecValueData as String: token.data(using: .utf8)!,
-                        kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlocked,
-                    ]
-
-                    let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
-
-                    if addStatus == errSecSuccess {
-                        return
-                    } else if addStatus == errSecInteractionNotAllowed {
-                        throw KeychainError.keychainLocked
-                    } else {
-                        throw KeychainError.operationFailed(addStatus)
-                    }
-                } else if updateStatus == errSecInteractionNotAllowed {
+                } else if addStatus == errSecInteractionNotAllowed {
                     throw KeychainError.keychainLocked
                 } else {
-                    throw KeychainError.operationFailed(updateStatus)
+                    throw KeychainError.operationFailed(addStatus)
                 }
+            } else if updateStatus == errSecInteractionNotAllowed {
+                throw KeychainError.keychainLocked
+            } else {
+                throw KeychainError.operationFailed(updateStatus)
             }
-        #else
-            throw KeychainError.unknown
-        #endif
+        }
     }
 
     /// Retrieve OAuth token from Keychain
@@ -123,39 +117,35 @@ public enum KeychainManager {
         service: String = defaultServiceName,
         account: String = defaultAccountName
     ) throws -> String {
-        #if canImport(Security)
-            let query: [String: Any] = [
-                kSecClass as String: kSecClassGenericPassword,
-                kSecAttrService as String: service,
-                kSecAttrAccount as String: account,
-                kSecReturnData as String: true,
-                kSecMatchLimit as String: kSecMatchLimitOne,
-            ]
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
 
-            var result: AnyObject?
-            let status = SecItemCopyMatching(query as CFDictionary, &result)
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
 
-            switch status {
-            case errSecSuccess:
-                guard let data = result as? Data,
-                      let token = String(data: data, encoding: .utf8)
-                else {
-                    throw KeychainError.unknown
-                }
-                return token
-
-            case errSecItemNotFound:
-                throw KeychainError.notFound
-
-            case errSecInteractionNotAllowed:
-                throw KeychainError.keychainLocked
-
-            default:
-                throw KeychainError.operationFailed(status)
+        switch status {
+        case errSecSuccess:
+            guard let data = result as? Data,
+                  let token = String(data: data, encoding: .utf8)
+            else {
+                throw KeychainError.unknown
             }
-        #else
+            return token
+
+        case errSecItemNotFound:
             throw KeychainError.notFound
-        #endif
+
+        case errSecInteractionNotAllowed:
+            throw KeychainError.keychainLocked
+
+        default:
+            throw KeychainError.operationFailed(status)
+        }
     }
 
     /// Delete OAuth token from Keychain
@@ -168,33 +158,29 @@ public enum KeychainManager {
         service: String = defaultServiceName,
         account: String = defaultAccountName
     ) throws {
-        #if canImport(Security)
-            try withLockFile {
-                let query: [String: Any] = [
-                    kSecClass as String: kSecClassGenericPassword,
-                    kSecAttrService as String: service,
-                    kSecAttrAccount as String: account,
-                ]
+        try withLockFile {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+            ]
 
-                let status = SecItemDelete(query as CFDictionary)
+            let status = SecItemDelete(query as CFDictionary)
 
-                switch status {
-                case errSecSuccess:
-                    return
+            switch status {
+            case errSecSuccess:
+                return
 
-                case errSecItemNotFound:
-                    throw KeychainError.notFound
+            case errSecItemNotFound:
+                throw KeychainError.notFound
 
-                case errSecInteractionNotAllowed:
-                    throw KeychainError.keychainLocked
+            case errSecInteractionNotAllowed:
+                throw KeychainError.keychainLocked
 
-                default:
-                    throw KeychainError.operationFailed(status)
-                }
+            default:
+                throw KeychainError.operationFailed(status)
             }
-        #else
-            throw KeychainError.notFound
-        #endif
+        }
     }
 
     // MARK: - Convenience Methods
@@ -216,40 +202,36 @@ public enum KeychainManager {
 
     // MARK: - Advisory File Lock
 
-    #if canImport(Security)
+    /// Lock file path for concurrent write protection
+    private static let lockFilePath = FileManager.default.temporaryDirectory
+        .appendingPathComponent("swiftindex-keychain.lock")
+        .path
 
-        /// Lock file path for concurrent write protection
-        private static let lockFilePath = FileManager.default.temporaryDirectory
-            .appendingPathComponent("swiftindex-keychain.lock")
-            .path
-
-        /// Execute closure with advisory file lock
-        ///
-        /// Prevents concurrent writes from multiple SwiftIndex processes.
-        /// Note: Advisory lock only - not enforced by OS.
-        private static func withLockFile<T>(_ operation: () throws -> T) throws -> T {
-            let fd = open(lockFilePath, O_CREAT | O_RDWR, 0o644)
-            guard fd >= 0 else {
-                // Can't create lock file, proceed without locking
-                return try operation()
-            }
-
-            defer {
-                close(fd)
-            }
-
-            // Acquire exclusive lock (blocking)
-            guard flock(fd, LOCK_EX) == 0 else {
-                // Lock failed, proceed without locking
-                return try operation()
-            }
-
-            defer {
-                flock(fd, LOCK_UN)
-            }
-
+    /// Execute closure with advisory file lock
+    ///
+    /// Prevents concurrent writes from multiple SwiftIndex processes.
+    /// Note: Advisory lock only - not enforced by OS.
+    private static func withLockFile<T>(_ operation: () throws -> T) throws -> T {
+        let fd = open(lockFilePath, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0 else {
+            // Can't create lock file, proceed without locking
             return try operation()
         }
 
-    #endif
+        defer {
+            close(fd)
+        }
+
+        // Acquire exclusive lock (blocking)
+        guard flock(fd, LOCK_EX) == 0 else {
+            // Lock failed, proceed without locking
+            return try operation()
+        }
+
+        defer {
+            flock(fd, LOCK_UN)
+        }
+
+        return try operation()
+    }
 }

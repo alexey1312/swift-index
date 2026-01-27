@@ -78,17 +78,12 @@ public enum LLMProviderFactory {
             // 3. CLAUDE_CODE_OAUTH_TOKEN (auto-set by Claude Code CLI)
             // 4. ANTHROPIC_API_KEY (standard API key)
             // 5. Keychain OAuth Token (managed via `swiftindex auth`)
+            let keychainToken = try? ClaudeCodeAuthManager.getToken()
             let key = anthropicKey
                 ?? ProcessInfo.processInfo.environment["SWIFTINDEX_ANTHROPIC_API_KEY"]
                 ?? ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"]
                 ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
-                ?? {
-                    #if canImport(Security)
-                        return try? ClaudeCodeAuthManager.getToken()
-                    #else
-                        return nil
-                    #endif
-                }()
+                ?? keychainToken
                 ?? ""
 
             return AnthropicLLMProvider(

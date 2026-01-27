@@ -65,54 +65,50 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         XCTAssertEqual(partial.anthropicAPIKey, "standard-key")
     }
 
-    #if canImport(Security)
+    func testAnthropicKey_KeychainFallback() throws {
+        // Given: No env vars, token in Keychain
+        let testToken = "sk-ant-oauth-keychain-test-12345678901234567890"
 
-        func testAnthropicKey_KeychainFallback() throws {
-            // Given: No env vars, token in Keychain
-            let testToken = "sk-ant-oauth-keychain-test-12345678901234567890"
+        // Save test token to Keychain
+        try KeychainManager.saveClaudeCodeToken(testToken)
 
-            // Save test token to Keychain
-            try KeychainManager.saveClaudeCodeToken(testToken)
+        defer {
+            try? KeychainManager.deleteClaudeCodeToken()
+        }
 
-            defer {
-                try? KeychainManager.deleteClaudeCodeToken()
-            }
+        // Ensure no env vars set
+        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
+        unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
+        unsetenv("ANTHROPIC_API_KEY")
 
-            // Ensure no env vars set
-            unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-            unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
+        // When: loading config
+        let loader = EnvironmentConfigLoader()
+        let partial = try loader.load()
+
+        // Then: Keychain token should be used
+        XCTAssertEqual(partial.anthropicAPIKey, testToken)
+    }
+
+    func testAnthropicKey_EnvVarOverridesKeychain() throws {
+        // Given: Both env var and Keychain token
+        let keychainToken = "sk-ant-oauth-keychain-12345678901234567890"
+        let envToken = "env-override-key"
+
+        try KeychainManager.saveClaudeCodeToken(keychainToken)
+        setenv("ANTHROPIC_API_KEY", envToken, 1)
+
+        defer {
+            try? KeychainManager.deleteClaudeCodeToken()
             unsetenv("ANTHROPIC_API_KEY")
-
-            // When: loading config
-            let loader = EnvironmentConfigLoader()
-            let partial = try loader.load()
-
-            // Then: Keychain token should be used
-            XCTAssertEqual(partial.anthropicAPIKey, testToken)
         }
 
-        func testAnthropicKey_EnvVarOverridesKeychain() throws {
-            // Given: Both env var and Keychain token
-            let keychainToken = "sk-ant-oauth-keychain-12345678901234567890"
-            let envToken = "env-override-key"
+        // When: loading config
+        let loader = EnvironmentConfigLoader()
+        let partial = try loader.load()
 
-            try KeychainManager.saveClaudeCodeToken(keychainToken)
-            setenv("ANTHROPIC_API_KEY", envToken, 1)
-
-            defer {
-                try? KeychainManager.deleteClaudeCodeToken()
-                unsetenv("ANTHROPIC_API_KEY")
-            }
-
-            // When: loading config
-            let loader = EnvironmentConfigLoader()
-            let partial = try loader.load()
-
-            // Then: env var should override Keychain
-            XCTAssertEqual(partial.anthropicAPIKey, envToken)
-        }
-
-    #endif
+        // Then: env var should override Keychain
+        XCTAssertEqual(partial.anthropicAPIKey, envToken)
+    }
 
     func testAnthropicKey_NoSourcesSet_ReturnsNil() throws {
         // Given: No env vars or Keychain token
@@ -120,10 +116,8 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
         unsetenv("ANTHROPIC_API_KEY")
 
-        #if canImport(Security)
-            // Ensure no Keychain token
-            try? KeychainManager.deleteClaudeCodeToken()
-        #endif
+        // Ensure no Keychain token
+        try? KeychainManager.deleteClaudeCodeToken()
 
         // When: loading config
         let loader = EnvironmentConfigLoader()
