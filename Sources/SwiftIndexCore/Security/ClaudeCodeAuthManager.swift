@@ -195,5 +195,10 @@ public enum ClaudeCodeAuthManager {
             return try parseToken(from: output)
         }
 
+        /// Alias for `runAutomaticFlow()` for backward compatibility
+        public static func setupOAuthToken() async throws -> String {
+            try await runAutomaticFlow()
+        }
+
     #endif
 }
