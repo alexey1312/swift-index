@@ -41,6 +41,10 @@ public actor SemanticSearch: SearchEngine {
     /// Shared glob pattern matcher with LRU cache.
     private let globMatcher: GlobMatcher
 
+    /// Regex for extracting PascalCase words.
+    // swiftlint:disable:next force_try
+    private static let pascalCasePattern = try! NSRegularExpression(pattern: "\\b[A-Z][a-zA-Z0-9]+\\b")
+
     /// Creates a new semantic search engine.
     ///
     /// - Parameters:
@@ -267,15 +271,13 @@ public actor SemanticSearch: SearchEngine {
         }
 
         // Extract PascalCase words as potential type names
-        let pascalCasePattern = try? NSRegularExpression(pattern: "\\b[A-Z][a-zA-Z0-9]+\\b")
-        if let regex = pascalCasePattern {
-            let matches = regex.matches(in: query, range: NSRange(query.startIndex..., in: query))
-            for match in matches {
-                if let range = Range(match.range, in: query) {
-                    let typeName = String(query[range])
-                    if !analysis.targetTypes.contains(typeName) {
-                        analysis.targetTypes.append(typeName)
-                    }
+        let regex = Self.pascalCasePattern
+        let matches = regex.matches(in: query, range: NSRange(query.startIndex..., in: query))
+        for match in matches {
+            if let range = Range(match.range, in: query) {
+                let typeName = String(query[range])
+                if !analysis.targetTypes.contains(typeName) {
+                    analysis.targetTypes.append(typeName)
                 }
             }
         }
