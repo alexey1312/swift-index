@@ -134,8 +134,13 @@ public actor HybridSearchEngine: SearchEngine {
         // Convert fused results to SearchResults
         var results: [SearchResult] = []
 
+        // Batch fetch chunks to avoid N+1 query pattern
+        let chunkIds = Array(Set(fusedResults.map(\.id)))
+        let chunks = try await chunkStore.getByIDs(chunkIds)
+        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
         for fusedItem in fusedResults {
-            guard let chunk = try await chunkStore.get(id: fusedItem.id),
+            guard let chunk = chunkMap[fusedItem.id],
                   await passesFilters(chunk, options: options)
             else {
                 continue
@@ -711,8 +716,13 @@ public extension HybridSearchEngine {
         let bm25Scores = buildScoreLookup(from: bm25Results)
         let semanticScores = buildScoreLookup(from: semanticResults)
 
+        // Batch fetch chunks to avoid N+1 query pattern
+        let chunkIds = Array(Set(fusedResults.map(\.id)))
+        let chunks = try await chunkStore.getByIDs(chunkIds)
+        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
         for fusedItem in fusedResults {
-            guard let chunk = try await chunkStore.get(id: fusedItem.id),
+            guard let chunk = chunkMap[fusedItem.id],
                   await passesFilters(chunk, options: options)
             else {
                 continue
