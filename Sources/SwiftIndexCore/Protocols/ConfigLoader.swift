@@ -161,4 +161,8 @@ public enum ConfigError: Error, Sendable, Equatable {
 
     /// A configuration value has an invalid type or format.
     case invalidValue(key: String, message: String)
+
+    /// No configuration file exists and initialization is required.
+    /// This is thrown when neither project `.swiftindex.toml` nor global config exists.
+    case notInitialized
 }

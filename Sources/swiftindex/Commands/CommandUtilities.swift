@@ -151,12 +151,15 @@ enum CLIUtils {
     ///   - configPath: Optional explicit path to a configuration file.
     ///   - projectDirectory: Directory for auto-discovering `.swiftindex.toml`.
     ///   - logger: Logger for debug output.
+    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config files exist.
     /// - Returns: The merged configuration.
-    /// - Throws: ConfigError if the explicit config file cannot be loaded.
+    /// - Throws: `ConfigError.fileNotFound` if the explicit config file cannot be loaded.
+    /// - Throws: `ConfigError.notInitialized` if `requireInitialization` is true and no config files exist.
     static func loadConfig(
         from configPath: String?,
         projectDirectory: String = FileManager.default.currentDirectoryPath,
-        logger: Logger
+        logger: Logger,
+        requireInitialization: Bool = true
     ) throws -> Config {
         let envPartial = loadEnvironmentConfig()
         if envPartial != .empty {
@@ -181,8 +184,17 @@ enum CLIUtils {
         logger.debug("Auto-discovering config from: \(projectDirectory)")
         return try TOMLConfigLoader.loadLayered(
             env: envPartial,
-            projectDirectory: projectDirectory
+            projectDirectory: projectDirectory,
+            requireInitialization: requireInitialization
         )
+    }
+
+    /// Checks if configuration has been initialized for the given project.
+    ///
+    /// - Parameter projectDirectory: Directory to check for `.swiftindex.toml`.
+    /// - Returns: True if either a project or global config file exists.
+    static func isConfigInitialized(projectDirectory: String = FileManager.default.currentDirectoryPath) -> Bool {
+        TOMLConfigLoader.isInitialized(projectDirectory: projectDirectory)
     }
 
     /// Loads configuration from environment variables.

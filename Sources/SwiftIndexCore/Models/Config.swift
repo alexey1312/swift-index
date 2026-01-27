@@ -282,7 +282,8 @@ public extension Config {
     ]
 
     /// Default configuration.
-    static let `default` = Config()
+    /// - Note: Internal to prevent accidental use without explicit config loading.
+    internal static let `default` = Config()
 
     /// Create config by merging partial configs with priority.
     ///

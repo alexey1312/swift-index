@@ -210,7 +210,16 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         taskId: String?
     ) async throws -> IndexingResult {
         let mcpContext = MCPContext.shared
-        let config = try await mcpContext.getConfig(for: path)
+        let config: Config
+        do {
+            config = try await mcpContext.getConfig(for: path)
+        } catch ConfigError.notInitialized {
+            throw MCPError.executionFailed("""
+            Project not initialized. No .swiftindex.toml found.
+
+            Run 'swiftindex init' in the project directory first.
+            """)
+        }
         let taskManager = mcpContext.taskManager
 
         // Report initial status

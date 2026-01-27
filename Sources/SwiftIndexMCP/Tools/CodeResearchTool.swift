@@ -109,7 +109,16 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
         let mcpContext = MCPContext.shared
 
         await context?.reportStatus("Loading configuration...")
-        let config = try await mcpContext.getConfig(for: path)
+        let config: Config
+        do {
+            config = try await mcpContext.getConfig(for: path)
+        } catch ConfigError.notInitialized {
+            throw MCPError.executionFailed("""
+            Project not initialized. No .swiftindex.toml found.
+
+            Run 'swiftindex init' in the project directory first.
+            """)
+        }
         try await context?.checkCancellation()
 
         guard await mcpContext.indexExists(for: path, config: config) else {

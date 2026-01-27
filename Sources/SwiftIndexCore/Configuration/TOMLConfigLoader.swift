@@ -308,20 +308,25 @@ public extension TOMLConfigLoader {
     ///   - envConfig: Configuration from environment variables.
     ///   - projectDirectory: Path to the project root directory.
     ///   - globalConfigDirectory: Optional global config directory path. If nil, uses `~/.config/swiftindex`.
+    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config files exist.
     /// - Returns: Complete merged configuration.
+    /// - Throws: `ConfigError.notInitialized` if `requireInitialization` is true and no config files exist.
     static func loadLayered(
         cli cliConfig: PartialConfig = .empty,
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
-        globalConfigDirectory: String? = nil
+        globalConfigDirectory: String? = nil,
+        requireInitialization: Bool = true
     ) throws -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
+        var hasConfigFile = false
 
         // Try loading project config
         let projectLoader = TOMLConfigLoader.forProject(at: projectDirectory)
         if FileManager.default.fileExists(atPath: projectLoader.filePath) {
             let projectConfig = try projectLoader.load()
             partials.append(projectConfig)
+            hasConfigFile = true
         }
 
         // Try loading global config
@@ -329,8 +334,35 @@ public extension TOMLConfigLoader {
         if FileManager.default.fileExists(atPath: globalLoader.filePath) {
             let globalConfig = try globalLoader.load()
             partials.append(globalConfig)
+            hasConfigFile = true
+        }
+
+        // Check if initialization is required but no config files exist
+        if requireInitialization, !hasConfigFile {
+            throw ConfigError.notInitialized
         }
 
         return Config.merge(partials)
+    }
+
+    /// Checks if configuration has been initialized for the given project.
+    ///
+    /// Returns true if either a project `.swiftindex.toml` or global config exists.
+    ///
+    /// - Parameters:
+    ///   - projectDirectory: Path to the project root directory.
+    ///   - globalConfigDirectory: Optional global config directory path. If nil, uses `~/.config/swiftindex`.
+    /// - Returns: True if at least one config file exists.
+    static func isInitialized(
+        projectDirectory: String,
+        globalConfigDirectory: String? = nil
+    ) -> Bool {
+        let projectLoader = TOMLConfigLoader.forProject(at: projectDirectory)
+        if FileManager.default.fileExists(atPath: projectLoader.filePath) {
+            return true
+        }
+
+        let globalLoader = TOMLConfigLoader.forGlobal(configDirectory: globalConfigDirectory)
+        return FileManager.default.fileExists(atPath: globalLoader.filePath)
     }
 }

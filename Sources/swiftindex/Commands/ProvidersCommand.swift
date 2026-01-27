@@ -45,7 +45,11 @@ struct ProvidersCommand: AsyncParsableCommand {
         logger.info("Listing embedding providers")
 
         // Load configuration
-        let configuration = try CLIUtils.loadConfig(from: config, logger: logger)
+        let configuration = try CLIUtils.loadConfig(
+            from: config,
+            logger: logger,
+            requireInitialization: false
+        )
 
         print("Embedding Providers")
         print("===================")

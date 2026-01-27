@@ -74,7 +74,7 @@ public actor IncrementalIndexer {
         indexManager: IndexManager,
         parser: HybridParser = HybridParser(),
         embeddingProvider: EmbeddingProviderChain = .default,
-        config: Config = .default,
+        config: Config,
         logger: Logger = Logger(label: "IncrementalIndexer")
     ) {
         self.indexManager = indexManager
