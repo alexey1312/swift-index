@@ -638,7 +638,8 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
     public func insert(_ chunk: CodeChunk) async throws {
         try await dbWriter.write { db in
-            try ChunkRecord(chunk: chunk).insert(db)
+            let encoder = JSONCodec.makeEncoder()
+            try ChunkRecord(chunk: chunk, encoder: encoder).insert(db)
         }
         invalidateTermFrequencyCache()
     }
@@ -647,8 +648,9 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         guard !chunks.isEmpty else { return }
 
         try await dbWriter.write { db in
+            let encoder = JSONCodec.makeEncoder()
             for chunk in chunks {
-                try ChunkRecord(chunk: chunk).insert(db)
+                try ChunkRecord(chunk: chunk, encoder: encoder).insert(db)
             }
         }
         invalidateTermFrequencyCache()
@@ -656,28 +658,27 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
     public func get(id: String) async throws -> CodeChunk? {
         try await dbWriter.read { db in
-            let decoder = JSONCodec.makeDecoder()
-            return try ChunkRecord
+            try ChunkRecord
                 .filter(Column("id") == id)
                 .fetchOne(db)?
-                .toCodeChunk(decoder: decoder)
+                .toCodeChunk()
         }
     }
 
     public func getByPath(_ path: String) async throws -> [CodeChunk] {
         try await dbWriter.read { db in
-            let decoder = JSONCodec.makeDecoder()
-            return try ChunkRecord
+            try ChunkRecord
                 .filter(Column("path") == path)
                 .order(Column("start_line"))
                 .fetchAll(db)
-                .map { try $0.toCodeChunk(decoder: decoder) }
+                .map { try $0.toCodeChunk() }
         }
     }
 
     public func update(_ chunk: CodeChunk) async throws {
         try await dbWriter.write { db in
-            try ChunkRecord(chunk: chunk).update(db)
+            let encoder = JSONCodec.makeEncoder()
+            try ChunkRecord(chunk: chunk, encoder: encoder).update(db)
         }
         invalidateTermFrequencyCache()
     }
@@ -719,10 +720,9 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: [sanitizedQuery, limit])
 
-            let decoder = JSONCodec.makeDecoder()
             return try rows.map { row in
                 let record = ChunkRecord(row: row)
-                let chunk = try record.toCodeChunk(decoder: decoder)
+                let chunk = try record.toCodeChunk()
                 // BM25 returns negative scores (more negative = better match)
                 // Convert to positive scores where higher is better
                 let score = -(row["score"] as Double? ?? 0.0)
@@ -764,7 +764,6 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
 
         return try await dbWriter.read { db in
             var result: [String: CodeChunk] = [:]
-            let decoder = JSONCodec.makeDecoder()
 
             // Query in batches to avoid SQLite variable limit
             let hashArray = Array(hashes)
@@ -777,7 +776,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
                 for row in rows {
                     let record = ChunkRecord(row: row)
                     if let contentHash = record.contentHash {
-                        result[contentHash] = try record.toCodeChunk(decoder: decoder)
+                        result[contentHash] = try record.toCodeChunk()
                     }
                 }
             }
@@ -935,12 +934,11 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     public func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
         guard !ids.isEmpty else { return [] }
 
-        return try await dbWriter.read { db in
-            let decoder = JSONCodec.makeDecoder()
-            return try ChunkRecord
+        try await dbWriter.read { db in
+            try ChunkRecord
                 .filter(ids.contains(Column("id")))
                 .fetchAll(db)
-                .map { try $0.toCodeChunk(decoder: decoder) }
+                .map { try $0.toCodeChunk() }
         }
     }
 
@@ -963,9 +961,8 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
             """
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: [protocolName])
-            let decoder = JSONCodec.makeDecoder()
             return try rows.map { row in
-                try ChunkRecord(row: row).toCodeChunk(decoder: decoder)
+                try ChunkRecord(row: row).toCodeChunk()
             }
         }
     }
@@ -1118,15 +1115,18 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         case isTypeDeclaration = "is_type_declaration"
     }
 
-    init(chunk: CodeChunk) {
+    init(chunk: CodeChunk, encoder: YYJSONEncoder? = nil) {
         id = chunk.id
         path = chunk.path
         content = chunk.content
         startLine = chunk.startLine
         endLine = chunk.endLine
         kind = chunk.kind.rawValue
-        symbols = Self.encodeJSONArray(chunk.symbols)
-        references = Self.encodeJSONArray(chunk.references)
+
+        let encoderToUse = encoder ?? JSONCodec.makeEncoder()
+
+        symbols = Self.encodeJSONArray(chunk.symbols, encoder: encoderToUse)
+        references = Self.encodeJSONArray(chunk.references, encoder: encoderToUse)
         fileHash = chunk.fileHash
         createdAt = chunk.createdAt
         docComment = chunk.docComment
@@ -1136,19 +1136,22 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         language = chunk.language
         contentHash = chunk.contentHash
         generatedDescription = chunk.generatedDescription
-        conformances = Self.encodeJSONArray(chunk.conformances)
+        conformances = Self.encodeJSONArray(chunk.conformances, encoder: encoderToUse)
         isTypeDeclaration = chunk.isTypeDeclaration
     }
 
-    private static func encodeJSONArray(_ array: [String]) -> String {
-        guard let data = try? JSONCodec.makeEncoder().encode(array),
+    private static func encodeJSONArray(_ array: [String], encoder: YYJSONEncoder) -> String {
+        guard let data = try? encoder.encode(array),
               let string = String(data: data, encoding: .utf8)
         else { return "[]" }
         return string
     }
 
-    private static func decodeJSONArray(_ json: String, decoder: YYJSONDecoder) -> [String] {
-        (try? decoder.decode([String].self, from: Data(json.utf8))) ?? []
+    private static func decodeJSONArray(_ json: String) -> [String] {
+        guard let data = json.data(using: .utf8),
+              let array = try? JSONCodec.deserialize(data) as? [String]
+        else { return [] }
+        return array
     }
 
     init(row: Row) {
@@ -1173,12 +1176,10 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
         isTypeDeclaration = row["is_type_declaration"] ?? false
     }
 
-    func toCodeChunk(decoder: YYJSONDecoder? = nil) throws -> CodeChunk {
+    func toCodeChunk() throws -> CodeChunk {
         guard let chunkKind = ChunkKind(rawValue: kind) else {
             throw ChunkStoreError.invalidKind(kind)
         }
-
-        let decoderToUse = decoder ?? JSONCodec.makeDecoder()
 
         return CodeChunk(
             id: id,
@@ -1187,8 +1188,8 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             startLine: startLine,
             endLine: endLine,
             kind: chunkKind,
-            symbols: Self.decodeJSONArray(symbols, decoder: decoderToUse),
-            references: Self.decodeJSONArray(references, decoder: decoderToUse),
+            symbols: Self.decodeJSONArray(symbols),
+            references: Self.decodeJSONArray(references),
             fileHash: fileHash,
             createdAt: createdAt,
             docComment: docComment,
@@ -1198,7 +1199,7 @@ private struct ChunkRecord: Codable, PersistableRecord, FetchableRecord {
             language: language,
             contentHash: contentHash,
             generatedDescription: generatedDescription,
-            conformances: Self.decodeJSONArray(conformances, decoder: decoderToUse),
+            conformances: Self.decodeJSONArray(conformances),
             isTypeDeclaration: isTypeDeclaration
         )
     }
