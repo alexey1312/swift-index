@@ -65,7 +65,7 @@ The system SHALL use SQLite FTS5 for BM25 keyword search.
 
 FTS5 configuration:
 
-- Tokenizer: `unicode61`
+- Tokenizer: `unicode61` **(MODIFIED)**
 - Indexed columns: `content`, `symbols`, `doc_comment`, `generated_description`, `conformances`
 - BM25 ranking function
 
@@ -342,3 +342,28 @@ Optimization flow:
 - **WHEN** reindexing file with 100 chunks
 - **THEN** vector retrieval uses 1 batch call (not 100 sequential)
 - **AND** retrieval time reduced by 5-10x compared to sequential
+
+### Requirement: Optimized FTS5 Tokenizer
+
+The system SHALL use the `unicode61` tokenizer for FTS5 full-text search. This tokenizer splits text on whitespace and punctuation, preserving CamelCase terms as single tokens (e.g., `USearchError` remains `usearcherror`). This improves exact term matching accuracy for code identifiers, as opposed to `porter` stemmer which can mangle such terms.
+
+#### Scenario: Exact identifier search
+
+- **WHEN** searching for `USearchError`
+- **AND** FTS5 index contains `usearcherror` token from `USearchError`
+- **THEN** `USearchError` is found as an exact match
+- **AND** scores higher than partial matches like `Search`
+
+#### Scenario: CamelCase splitting
+
+- **WHEN** indexing `MyAwesomeClass`
+- **AND** FTS5 tokenizer is `unicode61`
+- **THEN** `myawesomeclass` is indexed as a single token
+- **AND** searching `myawesomeclass` matches it directly
+
+#### Scenario: Standard code terms
+
+- **WHEN** indexing `func processRequest()`
+- **AND** FTS5 tokenizer is `unicode61`
+- **THEN** `func`, `process`, `request` are indexed as separate tokens
+- **AND** search for `process` finds it
