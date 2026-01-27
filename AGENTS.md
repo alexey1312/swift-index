@@ -48,18 +48,18 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 ### CLI Commands
 
-| Command                          | Description                              |
-| -------------------------------- | ---------------------------------------- |
-| `swiftindex init`                | Initialize config (required first step)  |
-| `swiftindex index [PATH]`        | Index a codebase                         |
-| `swiftindex search <QUERY>`      | Search indexed code                      |
-| `swiftindex search-docs <QUERY>` | Search documentation snippets            |
-| `swiftindex watch [PATH]`        | Watch mode (incremental)                 |
-| `swiftindex serve`               | Start MCP server                         |
-| `swiftindex providers`           | List embedding providers                 |
-| `swiftindex install-claude-code` | Configure Claude Code                    |
-| `swiftindex install-cursor`      | Configure Cursor                         |
-| `swiftindex install-codex`       | Configure Codex                          |
+| Command                          | Description                             |
+| -------------------------------- | --------------------------------------- |
+| `swiftindex init`                | Initialize config (required first step) |
+| `swiftindex index [PATH]`        | Index a codebase                        |
+| `swiftindex search <QUERY>`      | Search indexed code                     |
+| `swiftindex search-docs <QUERY>` | Search documentation snippets           |
+| `swiftindex watch [PATH]`        | Watch mode (incremental)                |
+| `swiftindex serve`               | Start MCP server                        |
+| `swiftindex providers`           | List embedding providers                |
+| `swiftindex install-claude-code` | Configure Claude Code                   |
+| `swiftindex install-cursor`      | Configure Cursor                        |
+| `swiftindex install-codex`       | Configure Codex                         |
 
 **Getting Started**: Run `swiftindex init` first to create `.swiftindex.toml`, then
 `swiftindex index` to build the search index. If you run `index` without a config,
