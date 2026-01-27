@@ -659,9 +659,8 @@ private struct InitWizard {
         print("───────────────────────\\n")
 
         // Check for existing token
-        if let existingToken = try? ClaudeCodeAuthManager.getToken() {
+        if (try? ClaudeCodeAuthManager.getToken()) != nil {
             print("✓ Already authenticated (token found in Keychain)")
-            print("  Token: \\(tokenPreview(existingToken))\\n")
             return
         }
 

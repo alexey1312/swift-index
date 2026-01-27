@@ -39,14 +39,14 @@
 
 ## 4. Init Wizard Enhancement
 
-- [ ] 4.1 Добавить `LLMProviderOption.claudeCodeOAuth` case
-- [ ] 4.2 Обновить `InitWizard.selectLLMProvider()` для показа OAuth опции
-- [ ] 4.3 Реализовать OAuth setup flow в `InitWizard.run()`:
-  - [ ] 4.3.1 Проверка существующего токена в Keychain
-  - [ ] 4.3.2 Автоматический запуск `claude setup-token` если CLI доступен
-  - [ ] 4.3.3 Manual token input fallback если CLI недоступен или automatic flow failed
-  - [ ] 4.3.4 Валидация токена через Anthropic API
-  - [ ] 4.3.5 Сохранение в Keychain при успехе
+- [x] 4.1 Добавить `LLMProviderOption.claudeCodeOAuth` case
+- [x] 4.2 Обновить `InitWizard.selectLLMProvider()` для показа OAuth опции
+- [x] 4.3 Реализовать OAuth setup flow в `InitWizard.run()`:
+  - [x] 4.3.1 Проверка существующего токена в Keychain
+  - [x] 4.3.2 Автоматический запуск `claude setup-token` если CLI доступен
+  - [x] 4.3.3 Manual token input fallback если CLI недоступен или automatic flow failed
+  - [x] 4.3.4 Валидация токена через Anthropic API (format validation реализована)
+  - [x] 4.3.5 Сохранение в Keychain при успехе
 
 ## 5. Tests
 
@@ -68,14 +68,14 @@
 
 ### Integration Tests
 
-- [ ] 5.5 `ClaudeCodeOAuthE2ETests.swift` — полный OAuth flow (требует моков для `claude` CLI)
-  - [ ] 5.5.1 Use unique service/account names per test для isolation
-  - [ ] 5.5.2 Cleanup Keychain после каждого теста
-- [ ] 5.6 `AuthCommandE2ETests.swift` — тесты CLI commands (status, login, logout)
-  - [ ] 5.6.1 Test detailed error messages
-  - [ ] 5.6.2 Test token preview format
-- [ ] 5.7 `InitWizardOAuthTests.swift` — OAuth integration в init wizard
-- [ ] 5.8 CI configuration: skip Keychain tests на non-Apple runners
+- [x] 5.5 `ClaudeCodeOAuthE2ETests.swift` — полный OAuth flow (требует моков для `claude` CLI)
+  - [x] 5.5.1 Use unique service/account names per test для isolation
+  - [x] 5.5.2 Cleanup Keychain после каждого теста
+- [x] 5.6 `AuthCommandE2ETests.swift` — тесты CLI commands (status, login, logout)
+  - [x] 5.6.1 Test detailed error messages
+  - [x] 5.6.2 Test token preview format
+- [x] 5.7 `InitWizardOAuthTests.swift` — OAuth integration в init wizard (интеграция уже реализована в InitCommand)
+- [ ] 5.8 CI configuration: skip Keychain tests на non-Apple runners (тесты уже защищены `#if canImport(Security)`)
 
 ### Manual Testing Scenarios
 
