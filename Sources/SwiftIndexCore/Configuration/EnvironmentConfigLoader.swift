@@ -47,14 +47,22 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             partial.geminiAPIKey = geminiKey
         }
 
+        // Anthropic API key / OAuth token priority chain:
+        // 1. SWIFTINDEX_ANTHROPIC_API_KEY (project-specific override)
+        // 2. CLAUDE_CODE_OAUTH_TOKEN (auto-set by Claude Code CLI)
+        // 3. ANTHROPIC_API_KEY (standard API key)
+        // 4. Keychain OAuth Token (managed via `swiftindex auth`)
         if let anthropicKey = ProcessInfo.processInfo.environment["SWIFTINDEX_ANTHROPIC_API_KEY"] {
             partial.anthropicAPIKey = anthropicKey
-        }
-
-        if partial.anthropicAPIKey == nil,
-           let anthropicKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
-        {
+        } else if let oauthToken = ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"] {
+            partial.anthropicAPIKey = oauthToken
+        } else if let anthropicKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] {
             partial.anthropicAPIKey = anthropicKey
+        } else {
+            // Fallback: Check Keychain for OAuth token (only if no env vars set)
+            #if canImport(Security)
+                partial.anthropicAPIKey = try? ClaudeCodeAuthManager.getToken()
+            #endif
         }
 
         if let logLevel = ProcessInfo.processInfo.environment["SWIFTINDEX_LOG_LEVEL"] {
