@@ -477,7 +477,8 @@ struct TOMLConfigLoaderTests {
 
         let merged = try TOMLConfigLoader.loadLayered(
             cli: cliConfig,
-            projectDirectory: "/nonexistent/path"
+            projectDirectory: "/nonexistent/path",
+            requireInitialization: false
         )
 
         #expect(merged.embeddingProvider == "voyage")
@@ -487,14 +488,16 @@ struct TOMLConfigLoaderTests {
 
     @Test("loadLayered uses defaults for empty configs")
     func loadLayeredDefaults() throws {
-        let merged = try TOMLConfigLoader.loadLayered(projectDirectory: "/nonexistent/path")
+        let merged = try TOMLConfigLoader.loadLayered(
+            projectDirectory: "/nonexistent/path",
+            requireInitialization: false
+        )
 
-        // Should match Config.default
-        let defaults = Config.default
-        #expect(merged.embeddingProvider == defaults.embeddingProvider)
-        #expect(merged.semanticWeight == defaults.semanticWeight)
-        #expect(merged.rrfK == defaults.rrfK)
-        #expect(merged.chunkSize == defaults.chunkSize)
+        // Should match Config() defaults
+        #expect(merged.embeddingProvider == "auto")
+        #expect(merged.semanticWeight == 0.7)
+        #expect(merged.rrfK == 60)
+        #expect(merged.chunkSize == 1500)
     }
 
     // MARK: - Edge Cases

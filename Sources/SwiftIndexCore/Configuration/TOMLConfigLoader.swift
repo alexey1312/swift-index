@@ -316,7 +316,7 @@ public extension TOMLConfigLoader {
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
         globalConfigDirectory: String? = nil,
-        requireInitialization: Bool = false
+        requireInitialization: Bool = true
     ) throws -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
         var hasConfigFile = false

@@ -38,8 +38,8 @@ actor BenchmarkMockVectorStore: VectorStore {
         }
 
         var results: [(id: String, similarity: Float)] = []
-        for (id, storedVector) in vectors {
-            let similarity = 0.8 // Dummy similarity
+        for (id, _) in vectors {
+            let similarity: Float = 0.8 // Dummy similarity
             results.append((id: id, similarity: similarity))
         }
         return results.prefix(limit).map(\.self)
@@ -122,7 +122,5 @@ struct PerformanceBenchmarkTests {
 // Helper to define benchmark tag if not exists
 extension Tag {
     @available(macOS 13.0, *)
-    static var benchmark: Self {
-        .init("benchmark")
-    }
+    @Tag static var benchmark: Tag
 }

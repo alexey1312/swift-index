@@ -159,7 +159,7 @@ enum CLIUtils {
         from configPath: String?,
         projectDirectory: String = FileManager.default.currentDirectoryPath,
         logger: Logger,
-        requireInitialization: Bool = false
+        requireInitialization: Bool = true
     ) throws -> Config {
         let envPartial = loadEnvironmentConfig()
         if envPartial != .empty {

@@ -934,7 +934,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     public func getByIDs(_ ids: [String]) async throws -> [CodeChunk] {
         guard !ids.isEmpty else { return [] }
 
-        try await dbWriter.read { db in
+        return try await dbWriter.read { db in
             try ChunkRecord
                 .filter(ids.contains(Column("id")))
                 .fetchAll(db)

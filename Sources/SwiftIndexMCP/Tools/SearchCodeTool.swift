@@ -109,7 +109,16 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         do {
             // Get context and configuration
             let context = MCPContext.shared
-            let config = try await context.getConfig(for: path)
+            let config: Config
+            do {
+                config = try await context.getConfig(for: path)
+            } catch ConfigError.notInitialized {
+                return .error("""
+                Project not initialized. No .swiftindex.toml found.
+
+                Run 'swiftindex init' in the project directory first.
+                """)
+            }
 
             // Check if index exists
             guard await context.indexExists(for: path, config: config) else {
