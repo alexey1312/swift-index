@@ -99,6 +99,8 @@ swiftindex init
 
 This creates a `.swiftindex.toml` configuration file.
 
+**For Claude Code Pro/Max users**: Select "Claude Code OAuth (Pro/Max)" during init wizard to automatically set up secure OAuth authentication via Keychain.
+
 ### 2. Index the Codebase
 
 ```bash
@@ -110,6 +112,24 @@ swiftindex index .
 ```bash
 swiftindex search "user authentication flow"
 ```
+
+### OAuth Authentication (Claude Code Pro/Max)
+
+For convenient, secure authentication with Claude Code:
+
+```bash
+# Set up OAuth token (automatic or manual)
+swiftindex auth login              # Runs 'claude setup-token' automatically
+swiftindex auth login --manual     # Manual token input fallback
+
+# Check authentication status
+swiftindex auth status              # Shows token source (Keychain vs env var)
+
+# Remove OAuth token
+swiftindex auth logout
+```
+
+OAuth tokens are stored securely in macOS Keychain and work alongside environment variables (env vars take priority for testing/CI/CD).
 
 ## CLI Commands
 
@@ -174,6 +194,37 @@ swiftindex search --synthesize "authentication flow"   # Generate summary and fo
 | `--synthesize`   | Generate AI summary of results with follow-up suggestions  |
 
 Both flags require `[search.enhancement]` configuration. See [Search Enhancement](#search-enhancement).
+
+### `swiftindex auth <subcommand>`
+
+Manage Claude Code OAuth authentication (Apple platforms only).
+
+```bash
+# Check authentication status
+swiftindex auth status
+
+# Set up OAuth token
+swiftindex auth login              # Automatic: runs 'claude setup-token'
+swiftindex auth login --manual     # Manual: paste token directly
+swiftindex auth login --force      # Overwrite existing token
+
+# Remove OAuth token
+swiftindex auth logout
+```
+
+**OAuth Benefits:**
+
+- **Secure Storage**: Tokens stored in macOS Keychain (encrypted by system)
+- **Automatic**: Init wizard can set up OAuth during initial configuration
+- **Priority**: Environment variables override Keychain for testing/CI/CD
+- **Platform**: Available on macOS, iOS, tvOS, watchOS with Security.framework
+
+**Authentication Priority** (highest to lowest):
+
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` — Project-specific override
+2. `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token from environment (auto-set by Claude Code CLI)
+3. `ANTHROPIC_API_KEY` — Standard API key
+4. **Keychain OAuth Token** — Managed via `swiftindex auth`
 
 ### `swiftindex init`
 

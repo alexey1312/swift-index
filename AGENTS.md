@@ -57,6 +57,9 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 | `swiftindex watch [PATH]`        | Watch mode (incremental)                |
 | `swiftindex serve`               | Start MCP server                        |
 | `swiftindex providers`           | List embedding providers                |
+| `swiftindex auth status`         | Check OAuth token status                |
+| `swiftindex auth login`          | Set up Claude Code OAuth token          |
+| `swiftindex auth logout`         | Remove OAuth token from Keychain        |
 | `swiftindex install-claude-code` | Configure Claude Code                   |
 | `swiftindex install-cursor`      | Configure Cursor                        |
 | `swiftindex install-codex`       | Configure Codex                         |
@@ -64,6 +67,39 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 **Getting Started**: Run `swiftindex init` first to create `.swiftindex.toml`, then
 `swiftindex index` to build the search index. If you run `index` without a config,
 it will prompt you to initialize first.
+
+### Authentication Commands
+
+SwiftIndex supports Claude Code OAuth for secure, automatic token management:
+
+```bash
+# Check authentication status
+swiftindex auth status
+
+# Set up OAuth token (automatic or manual)
+swiftindex auth login            # Automatic: runs 'claude setup-token'
+swiftindex auth login --manual   # Manual: paste token directly
+swiftindex auth login --force    # Overwrite existing token
+
+# Remove OAuth token
+swiftindex auth logout
+```
+
+**OAuth Token Management:**
+
+- **Automatic Setup**: `swiftindex auth login` runs `claude setup-token` and stores the token in macOS Keychain
+- **Manual Fallback**: If CLI unavailable, use `--manual` to paste token directly
+- **Secure Storage**: Tokens stored in system Keychain (Apple platforms only)
+- **Priority Chain**: Environment variables override Keychain (see Environment Variables section)
+
+**Init Wizard Integration:**
+
+When selecting "Claude Code OAuth (Pro/Max)" as LLM provider during `swiftindex init`, the wizard:
+
+1. Checks for existing token in Keychain
+2. Runs automatic OAuth flow if `claude` CLI available
+3. Falls back to manual input if automatic flow fails
+4. Validates and saves token securely
 
 ### Search Enhancement Flags
 
@@ -411,14 +447,24 @@ First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~
 
 ### Environment Variables
 
-| Variable                        | Description                  |
-| ------------------------------- | ---------------------------- |
-| `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai  |
-| `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (priority) |
-| `ANTHROPIC_API_KEY`             | Anthropic API key (fallback) |
-| `SWIFTINDEX_VOYAGE_API_KEY`     | Voyage AI key (priority)     |
-| `VOYAGE_API_KEY`                | Voyage AI key (fallback)     |
-| `SWIFTINDEX_OPENAI_API_KEY`     | OpenAI key (priority)        |
-| `OPENAI_API_KEY`                | OpenAI key (fallback)        |
-| `SWIFTINDEX_GEMINI_API_KEY`     | Gemini API key (priority)    |
-| `GEMINI_API_KEY`                | Gemini API key (fallback)    |
+| Variable                        | Description                               |
+| ------------------------------- | ----------------------------------------- |
+| `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai               |
+| `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (highest priority)      |
+| `CLAUDE_CODE_OAUTH_TOKEN`       | OAuth token (auto-set by Claude Code CLI) |
+| `ANTHROPIC_API_KEY`             | Anthropic API key (fallback)              |
+| `SWIFTINDEX_VOYAGE_API_KEY`     | Voyage AI key (priority)                  |
+| `VOYAGE_API_KEY`                | Voyage AI key (fallback)                  |
+| `SWIFTINDEX_OPENAI_API_KEY`     | OpenAI key (priority)                     |
+| `OPENAI_API_KEY`                | OpenAI key (fallback)                     |
+| `SWIFTINDEX_GEMINI_API_KEY`     | Gemini API key (priority)                 |
+| `GEMINI_API_KEY`                | Gemini API key (fallback)                 |
+
+**Anthropic Authentication Priority** (highest to lowest):
+
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` — Project-specific override (explicit configuration)
+2. `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token from environment (auto-set by Claude Code CLI)
+3. `ANTHROPIC_API_KEY` — Standard API key
+4. **Keychain OAuth Token** — Managed via `swiftindex auth` (fallback for users without env vars)
+
+**Platform Support**: Keychain authentication is available on Apple platforms (macOS, iOS, tvOS, watchOS) with Security.framework. Other platforms use environment variables only.
