@@ -173,7 +173,30 @@ Uses the Anthropic Messages API directly for fast, low-latency operations. **Muc
 
 **Requirements:**
 
-- `ANTHROPIC_API_KEY` environment variable set
+- API key or OAuth token (see Authentication section below)
+
+**Authentication** (priority order, highest to lowest):
+
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` — Project-specific override
+2. `CLAUDE_CODE_OAUTH_TOKEN` — OAuth token (auto-set by Claude Code CLI)
+3. `ANTHROPIC_API_KEY` — Standard API key
+4. **Keychain OAuth Token** — Managed via `swiftindex auth` (Apple platforms only)
+
+**OAuth Token Setup:**
+
+```bash
+# Automatic setup (Claude Code Pro/Max)
+swiftindex auth login              # Runs 'claude setup-token' automatically
+swiftindex auth login --manual     # Manual token input fallback
+
+# Check status
+swiftindex auth status              # Shows source: Keychain vs env var
+
+# Remove token
+swiftindex auth logout
+```
+
+OAuth tokens are stored securely in macOS Keychain and automatically used when no environment variable is set. This provides convenient, secure authentication for Claude Code Pro/Max users.
 
 **Configuration:**
 
@@ -373,9 +396,37 @@ The MCP response includes additional fields:
 # For OpenAI provider
 export OPENAI_API_KEY=sk-...
 
-# For Anthropic provider
-export ANTHROPIC_API_KEY=sk-ant-...
+# For Anthropic provider (multiple options)
+export ANTHROPIC_API_KEY=sk-ant-...         # Standard API key
+export CLAUDE_CODE_OAUTH_TOKEN=sk-ant-...   # OAuth token (auto-set by Claude Code CLI)
+export SWIFTINDEX_ANTHROPIC_API_KEY=sk-...  # Project-specific override
+
+# Or use OAuth token management (Apple platforms)
+swiftindex auth login                        # Set up via Keychain
+swiftindex auth status                       # Check current token
 ```
+
+### Keychain OAuth Errors
+
+**Error:** `Keychain locked` or `Keychain access denied`
+
+**Solutions:**
+
+1. Unlock Keychain: `security unlock-keychain`
+2. Use environment variable instead: `export ANTHROPIC_API_KEY=sk-ant-...`
+3. Re-login: `swiftindex auth login --force`
+
+**Error:** `OAuth token validation failed` (HTTP 401)
+
+**Solutions:**
+
+1. Token expired - re-authenticate: `swiftindex auth login --force`
+2. Check token format: `swiftindex auth status`
+3. Regenerate token: `claude setup-token`
+
+**Platform Limitations:**
+
+Keychain OAuth is only available on Apple platforms (macOS, iOS, tvOS, watchOS). On Linux/Windows, use environment variables for authentication.
 
 ## Disabling Enhancement
 

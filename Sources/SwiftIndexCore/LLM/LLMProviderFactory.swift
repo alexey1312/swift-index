@@ -72,7 +72,20 @@ public enum LLMProviderFactory {
     ) -> any LLMProvider {
         switch id {
         case .anthropic:
-            let key = anthropicKey ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] ?? ""
+            // Priority chain for Anthropic authentication:
+            // 1. Explicit anthropicKey parameter (from config/CLI)
+            // 2. SWIFTINDEX_ANTHROPIC_API_KEY (project-specific)
+            // 3. CLAUDE_CODE_OAUTH_TOKEN (auto-set by Claude Code CLI)
+            // 4. ANTHROPIC_API_KEY (standard API key)
+            // 5. Keychain OAuth Token (managed via `swiftindex auth`)
+            let keychainToken = try? ClaudeCodeAuthManager.getToken()
+            let key = anthropicKey
+                ?? ProcessInfo.processInfo.environment["SWIFTINDEX_ANTHROPIC_API_KEY"]
+                ?? ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"]
+                ?? ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"]
+                ?? keychainToken
+                ?? ""
+
             return AnthropicLLMProvider(
                 apiKey: key,
                 defaultModel: .haiku

@@ -16,10 +16,15 @@ struct SwiftIndex: AsyncParsableCommand {
         using local embedding models.
 
         Quick start:
+          swiftindex init            Initialize configuration
           swiftindex index           Index current directory
           swiftindex search "query"  Search the index
           swiftindex search-docs "q" Search documentation
           swiftindex watch           Watch for changes
+
+        Authentication (for search enhancement):
+          swiftindex auth status     Check authentication status
+          swiftindex auth login      Authenticate with Claude Code OAuth
 
         For AI assistant integration:
           swiftindex install-claude-code  Configure for Claude Code
@@ -28,6 +33,7 @@ struct SwiftIndex: AsyncParsableCommand {
         version: "VERSION_PLACEHOLDER",
         subcommands: [
             InitCommand.self,
+            AuthCommand.self,
             ConfigCommand.self,
             FmtCommand.self,
             IndexCommand.self,

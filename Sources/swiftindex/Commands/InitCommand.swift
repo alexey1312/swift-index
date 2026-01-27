@@ -90,7 +90,7 @@ struct InitCommand: AsyncParsableCommand {
         let projectInfo = detectProjectInfo()
         logger.debug("Detected project info: \(projectInfo)")
 
-        let selections = InitWizard(
+        let selections = await InitWizard(
             ui: ui,
             logger: logger,
             providerFlag: provider,
@@ -378,7 +378,7 @@ private struct InitWizard {
     let modelFlag: String?
     let interactiveTerminal: Bool
 
-    func run() -> InitSelections {
+    func run() async -> InitSelections {
         if !interactiveTerminal {
             return resolveDefaults()
         }
@@ -398,6 +398,11 @@ private struct InitWizard {
         provider = validateEmbeddingProvider(provider)
         let model = selectEmbeddingModel(for: provider)
         let llmProvider = selectLLMProvider()
+
+        // Setup OAuth token if Claude Code OAuth was selected
+        if llmProvider == .claudeCodeOAuth {
+            await setupClaudeCodeOAuth()
+        }
 
         return InitSelections(
             embeddingProvider: provider,
@@ -613,6 +618,9 @@ private struct InitWizard {
         case .mlx:
             // MLX is always available on Apple Silicon (this product is arm64-only)
             true
+        case .claudeCodeOAuth:
+            // OAuth is always available on Apple platforms
+            true
         case .claudeCodeCLI:
             isCommandAvailable("claude")
         case .codexCLI:
@@ -645,381 +653,94 @@ private struct InitWizard {
             return false
         }
     }
-}
 
-// MARK: - Supporting Types
+    private func setupClaudeCodeOAuth() async {
+        print("\nClaude Code OAuth Setup")
+        print("───────────────────────\n")
 
-private struct InitSelections {
-    let embeddingProvider: EmbeddingProviderOption
-    let embeddingModel: String?
-    let llmProvider: LLMProviderOption?
-}
-
-private struct ProjectInfo {
-    var isSPM: Bool = false
-    var hasXcodeProject: Bool = false
-    var hasXcodeWorkspace: Bool = false
-    var hasCocoaPods: Bool = false
-    var hasCarthage: Bool = false
-}
-
-// MARK: - Init Wizard Enums
-
-enum InitMode: CaseIterable, CustomStringConvertible {
-    case interactive
-    case defaults
-
-    var description: String {
-        switch self {
-        case .interactive:
-            "Configure interactively"
-        case .defaults:
-            "Use defaults (MLX + MLX LLM enhancement)"
+        // Check for existing token
+        if (try? ClaudeCodeAuthManager.getToken()) != nil {
+            print("✓ Already authenticated (token found in Keychain)")
+            return
         }
-    }
-}
 
-enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
-    case mlx
-    case swift
-    case ollama
-    case voyage
-    case openai
-    case gemini
+        // Try automatic flow first
+        if await ClaudeCodeAuthManager.isCLIAvailable() {
+            print("Running automatic OAuth flow...")
+            print("A browser window will open for authentication.\n")
 
-    var description: String {
-        switch self {
-        case .mlx:
-            "MLX (Apple Silicon, fastest)"
-        case .swift:
-            "Swift Embeddings (CPU, no Metal required)"
-        case .ollama:
-            "Ollama (local server)"
-        case .voyage:
-            "Voyage (cloud API)"
-        case .openai:
-            "OpenAI (cloud API)"
-        case .gemini:
-            "Gemini (Google AI API)"
+            do {
+                let token = try await ClaudeCodeAuthManager.setupOAuthToken()
+                try ClaudeCodeAuthManager.saveToken(token)
+                print("✓ OAuth token saved successfully\n")
+            } catch let ClaudeCodeAuthError.cliExecutionFailed(exitCode, _) {
+                logger.error("Automatic OAuth flow failed: CLI returned exit code \(exitCode)")
+                await manualOAuthFallback()
+            } catch ClaudeCodeAuthError.parsingFailed {
+                logger.error("Failed to parse OAuth token from CLI output")
+                print("⚠️  Unable to extract token from CLI output. Try manual mode.\n")
+                await manualOAuthFallback()
+            } catch KeychainError.keychainLocked {
+                print("✗ Keychain is locked. Cannot save OAuth token.")
+                print("\nUnlock Keychain with:")
+                print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
+                print("\nYou can set up OAuth later with:")
+                print("  swiftindex auth login\n")
+                // Don't fallback - Keychain needs to be unlocked first
+            } catch {
+                logger.error("Automatic OAuth flow failed: \(error.localizedDescription)")
+                await manualOAuthFallback()
+            }
+        } else {
+            print("⚠️  'claude' CLI not found")
+            print("\nTo install Claude Code CLI:")
+            print("  npm install -g @anthropic-ai/claude-code\n")
+            await manualOAuthFallback()
         }
     }
 
-    var configValue: String {
-        switch self {
-        case .mlx:
-            "mlx"
-        case .swift:
-            "swift"
-        case .ollama:
-            "ollama"
-        case .voyage:
-            "voyage"
-        case .openai:
-            "openai"
-        case .gemini:
-            "gemini"
+    private func manualOAuthFallback() async {
+        let tryManual = ui.yesOrNoChoicePrompt(
+            question: "Try manual token input?",
+            defaultAnswer: true,
+            description: "Run 'claude setup-token' and paste the generated token."
+        )
+
+        guard tryManual else {
+            print("\nSkipping OAuth setup. You can set it up later with:")
+            print("  swiftindex auth login\n")
+            return
+        }
+
+        print("\nManual Token Input")
+        print("──────────────────")
+        print("1. Run: claude setup-token")
+        print("2. Copy the generated OAuth token")
+        print("3. Paste it below\n")
+
+        let token = ui.textPrompt(
+            title: nil,
+            prompt: "OAuth Token",
+            description: "Paste your Claude Code OAuth token",
+            collapseOnAnswer: true,
+            renderer: Renderer(),
+            validationRules: []
+        )
+
+        // Validate and save
+        do {
+            try ClaudeCodeAuthManager.validateTokenFormat(token)
+            try ClaudeCodeAuthManager.saveToken(token)
+            print("✓ OAuth token saved successfully\n")
+        } catch {
+            print("✗ Failed to save token: \(error.localizedDescription)")
+            print("\nYou can set it up later with:")
+            print("  swiftindex auth login\n")
         }
     }
 
-    static func fromFlag(_ value: String?) -> EmbeddingProviderOption? {
-        guard let value = value?.lowercased() else {
-            return nil
-        }
-        switch value {
-        case "mlx":
-            return .mlx
-        case "swift", "swift-embeddings", "swiftembeddings":
-            return .swift
-        case "ollama":
-            return .ollama
-        case "voyage":
-            return .voyage
-        case "openai":
-            return .openai
-        case "gemini":
-            return .gemini
-        default:
-            return nil
-        }
+    private func tokenPreview(_ token: String) -> String {
+        let prefixLength = min(10, token.count)
+        return String(token.prefix(prefixLength)) + "***"
     }
-}
-
-enum LLMProviderOption: CaseIterable, CustomStringConvertible, Equatable {
-    case mlx
-    case claudeCodeCLI
-    case codexCLI
-    case ollama
-    case openai
-    case gemini
-    case geminiCLI
-
-    var description: String {
-        switch self {
-        case .mlx:
-            "MLX (Apple Silicon, fully local)"
-        case .claudeCodeCLI:
-            "Claude Code (claude CLI)"
-        case .codexCLI:
-            "Codex CLI (codex)"
-        case .ollama:
-            "Ollama (local server)"
-        case .openai:
-            "OpenAI (cloud API)"
-        case .gemini:
-            "Gemini API (Google AI)"
-        case .geminiCLI:
-            "Gemini CLI (gemini command)"
-        }
-    }
-
-    var configValue: String {
-        switch self {
-        case .mlx:
-            "mlx"
-        case .claudeCodeCLI:
-            "claude-code-cli"
-        case .codexCLI:
-            "codex-cli"
-        case .ollama:
-            "ollama"
-        case .openai:
-            "openai"
-        case .gemini:
-            "gemini"
-        case .geminiCLI:
-            "gemini-cli"
-        }
-    }
-}
-
-enum MLXModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case qwenSmall
-    case qwenMedium
-    case qwenLarge
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .qwenSmall:
-            "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
-        case .qwenMedium:
-            "mlx-community/Qwen3-Embedding-4B-4bit-DWQ"
-        case .qwenLarge:
-            "mlx-community/Qwen3-Embedding-8B-4bit-DWQ"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .qwenSmall:
-            "Qwen3 0.6B (4-bit)"
-        case .qwenMedium:
-            "Qwen3 4B (4-bit)"
-        case .qwenLarge:
-            "Qwen3 8B (4-bit)"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-enum SwiftModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case miniLM
-    case bgeSmall
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .miniLM:
-            "all-MiniLM-L6-v2"
-        case .bgeSmall:
-            "bge-small-en-v1.5"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .miniLM:
-            "all-MiniLM-L6-v2"
-        case .bgeSmall:
-            "bge-small-en-v1.5"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-enum OllamaModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case nomic
-    case bgeSmall
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .nomic:
-            "nomic-embed-text"
-        case .bgeSmall:
-            "bge-small"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .nomic:
-            "nomic-embed-text"
-        case .bgeSmall:
-            "bge-small"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-enum VoyageModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case large
-    case standard
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .large:
-            "voyage-large-2"
-        case .standard:
-            "voyage-2"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .large:
-            "voyage-large-2"
-        case .standard:
-            "voyage-2"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-enum OpenAIModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case small
-    case large
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .small:
-            "text-embedding-3-small"
-        case .large:
-            "text-embedding-3-large"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .small:
-            "text-embedding-3-small"
-        case .large:
-            "text-embedding-3-large"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-enum GeminiModelOption: CaseIterable, CustomStringConvertible, Equatable {
-    case embedding004
-    case custom
-
-    var modelName: String? {
-        switch self {
-        case .embedding004:
-            "text-embedding-004"
-        case .custom:
-            nil
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .embedding004:
-            "text-embedding-004"
-        case .custom:
-            "Custom..."
-        }
-    }
-}
-
-// MARK: - Helper Functions
-
-private func orderedOptions<T: Equatable>(_ options: [T], preselected: T?) -> [T] {
-    guard let preselected else {
-        return options
-    }
-    var ordered = options.filter { $0 != preselected }
-    ordered.insert(preselected, at: 0)
-    return ordered
-}
-
-private func defaultModel(for provider: String) -> String? {
-    switch provider.lowercased() {
-    case "mlx":
-        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
-    case "swift", "swift-embeddings", "swiftembeddings":
-        "all-MiniLM-L6-v2"
-    default:
-        nil
-    }
-}
-
-private func isMetalToolchainAvailable() -> Bool {
-    if let override = ProcessInfo.processInfo.environment["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE"]?.lowercased() {
-        switch override {
-        case "present":
-            return true
-        case "missing":
-            return false
-        default:
-            break
-        }
-    }
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-    process.arguments = ["--find", "metal"]
-    process.standardOutput = Pipe()
-    process.standardError = Pipe()
-
-    do {
-        try process.run()
-        process.waitUntilExit()
-        return process.terminationStatus == 0
-    } catch {
-        return false
-    }
-}
-
-private func isInteractiveTerminal() -> Bool {
-    if let override = ProcessInfo.processInfo.environment["SWIFTINDEX_TTY_OVERRIDE"]?.lowercased() {
-        switch override {
-        case "interactive":
-            return true
-        case "noninteractive":
-            return false
-        default:
-            break
-        }
-    }
-
-    return isatty(STDIN_FILENO) == 1
 }
