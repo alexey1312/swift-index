@@ -23,12 +23,14 @@ Claude Code Pro/Max пользователи могут генерировать
 
 Приоритет источников аутентификации (от высшего к низшему):
 
-1. Keychain OAuth Token (macOS Keychain) — новое
-2. `SWIFTINDEX_ANTHROPIC_API_KEY` — проект-специфичный override
-3. `CLAUDE_CODE_OAUTH_TOKEN` — OAuth токен из environment
-4. `ANTHROPIC_API_KEY` — стандартный API ключ
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` — проект-специфичный override (explicit configuration)
+2. `CLAUDE_CODE_OAUTH_TOKEN` — OAuth токен из environment (автоматически устанавливается Claude Code CLI при запуске)
+3. `ANTHROPIC_API_KEY` — стандартный API ключ
+4. Keychain OAuth Token — управляется через `swiftindex auth` (fallback для обычных пользователей)
 
-**Platform Support**: macOS only в initial release (использует Security.framework). Linux/Windows продолжают использовать environment variables.
+**Rationale:** Environment variables имеют приоритет над Keychain для поддержки testing, CI/CD, и project-specific overrides. Keychain используется как managed fallback для пользователей без explicit env vars.
+
+**Platform Support**: Platforms with Security.framework (macOS, iOS) в initial release. Linux/Windows продолжают использовать environment variables.
 
 ## Impact
 

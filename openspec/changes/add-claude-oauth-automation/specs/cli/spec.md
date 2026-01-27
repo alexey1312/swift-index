@@ -17,7 +17,7 @@ The command SHALL have subcommands:
 - **THEN** displays:
   - "✓ Token found in Keychain"
   - "✓ Token is valid"
-  - Token preview (first 10 characters)
+  - Token preview: `sk-ant-oau*** (first 10 chars)` (masked format)
 
 #### Scenario: Auth status with invalid token
 
@@ -84,8 +84,11 @@ The command SHALL have subcommands:
 #### Scenario: Auth login validation failure
 
 - **WHEN** running `swiftindex auth login`
-- **AND** token validation fails
-- **THEN** displays "✗ Token validation failed"
+- **AND** token validation fails (HTTP 401)
+- **THEN** displays detailed error:
+  - "✗ Token validation failed: Invalid credentials (HTTP 401)"
+  - "The token may have expired or been revoked."
+  - "Run 'swiftindex auth login --force' to re-authenticate."
 - **AND** token is NOT saved to Keychain
 - **AND** exits with error code
 

@@ -19,10 +19,12 @@ Supported environment variables:
 
 **Anthropic Authentication Priority (highest to lowest):**
 
-1. `SWIFTINDEX_ANTHROPIC_API_KEY` (project-specific override)
-2. `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token from environment)
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` (project-specific override, explicit configuration)
+2. `CLAUDE_CODE_OAUTH_TOKEN` (OAuth token from environment, auto-set by Claude Code CLI)
 3. `ANTHROPIC_API_KEY` (standard API key)
-4. Keychain OAuth Token (via `KeychainManager.getClaudeCodeToken()` - macOS only)
+4. Keychain OAuth Token (via `KeychainManager.getClaudeCodeToken()` - managed by SwiftIndex, Apple platforms only)
+
+**Rationale:** Environment variables have priority over Keychain to support testing, CI/CD, and project-specific overrides. Keychain serves as a managed fallback for users without explicit env vars.
 
 #### Scenario: Environment overrides config
 
@@ -37,10 +39,10 @@ Supported environment variables:
 
 #### Scenario: OAuth token environment variable
 
-- **WHEN** `CLAUDE_CODE_OAUTH_TOKEN=oauth-env-token` is set
+- **WHEN** `CLAUDE_CODE_OAUTH_TOKEN=oauth-env-token` is set (auto-exported by Claude Code CLI)
 - **AND** `ANTHROPIC_API_KEY=api-key` is set
 - **AND** Keychain contains token "keychain-token"
-- **THEN** system uses "oauth-env-token" (env var has priority over Keychain)
+- **THEN** system uses "oauth-env-token" (OAuth env var has priority over generic API key and Keychain)
 
 #### Scenario: Project-specific key overrides OAuth
 
@@ -53,7 +55,7 @@ Supported environment variables:
 
 - **WHEN** all Anthropic environment variables are unset
 - **AND** Keychain contains OAuth token "keychain-token"
-- **AND** running on macOS
+- **AND** running on platform with Security.framework (macOS, iOS, etc.)
 - **THEN** system uses "keychain-token" from Keychain
 
 #### Scenario: Standard API key fallback

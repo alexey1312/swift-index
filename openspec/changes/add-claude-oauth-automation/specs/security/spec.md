@@ -2,7 +2,7 @@
 
 ### Requirement: Keychain Credential Storage
 
-The system SHALL provide secure storage for OAuth tokens using macOS Keychain through Security.framework.
+The system SHALL provide secure storage for OAuth tokens using Keychain through Security.framework on Apple platforms.
 
 The system SHALL use the following Keychain attributes:
 
@@ -16,7 +16,7 @@ The system SHALL provide operations for:
 - Retrieve token from Keychain
 - Delete token from Keychain
 
-**Platform Support:** macOS only. On non-macOS platforms, the system SHALL gracefully skip Keychain operations and rely on environment variables.
+**Platform Support:** Apple platforms with Security.framework (macOS, iOS, tvOS, watchOS). Detection via `#if canImport(Security)`. On other platforms (Linux, Windows), the system SHALL gracefully skip Keychain operations and rely on environment variables.
 
 #### Scenario: Save OAuth token
 
@@ -42,11 +42,12 @@ The system SHALL provide operations for:
 - **THEN** operation throws `KeychainError` with descriptive message
 - **AND** error includes instructions to unlock Keychain
 
-#### Scenario: Non-macOS platform
+#### Scenario: Non-Apple platform
 
-- **WHEN** running on Linux or Windows
-- **THEN** Keychain operations are skipped
+- **WHEN** running on platform without Security.framework (Linux, Windows)
+- **THEN** Keychain operations are skipped (compile-time check: `#if canImport(Security)`)
 - **AND** system falls back to environment variables
+- **AND** `auth` commands show platform-specific help messages
 
 ---
 
@@ -107,43 +108,53 @@ The system SHALL validate tokens before storing by checking Anthropic API availa
 
 The system SHALL check authentication sources in the following priority order (highest to lowest):
 
-1. Keychain OAuth Token (via `KeychainManager.getClaudeCodeToken()`)
-2. `SWIFTINDEX_ANTHROPIC_API_KEY` environment variable
-3. `CLAUDE_CODE_OAUTH_TOKEN` environment variable
-4. `ANTHROPIC_API_KEY` environment variable
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` environment variable (explicit project override)
+2. `CLAUDE_CODE_OAUTH_TOKEN` environment variable (auto-set by Claude Code CLI)
+3. `ANTHROPIC_API_KEY` environment variable (standard API key)
+4. Keychain OAuth Token (via `KeychainManager.getClaudeCodeToken()` - managed by SwiftIndex)
 
 The system SHALL use the first available token from the priority chain.
 
-#### Scenario: Keychain token available
+**Rationale:** Environment variables have priority over Keychain to support testing, CI/CD, and project-specific overrides. Keychain serves as a managed fallback for users without explicit env vars.
 
-- **GIVEN** Keychain contains OAuth token
+#### Scenario: Keychain token available (lowest priority)
+
+- **GIVEN** Keychain contains OAuth token "keychain-token"
 - **AND** no environment variables are set
 - **WHEN** creating Anthropic LLM provider
-- **THEN** uses Keychain token
+- **THEN** uses "keychain-token" from Keychain (fallback)
 
 #### Scenario: Environment variable overrides Keychain
 
 - **GIVEN** Keychain contains OAuth token "keychain-token"
 - **AND** `SWIFTINDEX_ANTHROPIC_API_KEY=override-key` is set
 - **WHEN** creating Anthropic LLM provider
-- **THEN** uses "override-key" instead of Keychain token
+- **THEN** uses "override-key" (env var has priority over Keychain)
 
 #### Scenario: OAuth env var priority
 
-- **GIVEN** Keychain is empty
-- **AND** `CLAUDE_CODE_OAUTH_TOKEN=oauth-env-token` is set
+- **GIVEN** Keychain contains OAuth token "keychain-token"
+- **AND** `CLAUDE_CODE_OAUTH_TOKEN=oauth-env-token` is set (auto-exported by Claude Code CLI)
 - **AND** `ANTHROPIC_API_KEY=api-key` is set
-- **WHEN** creating Anthropic LLM provider
-- **THEN** uses "oauth-env-token" (higher priority than ANTHROPIC_API_KEY)
-
-#### Scenario: Fallback chain
-
-- **GIVEN** Keychain is empty
 - **AND** `SWIFTINDEX_ANTHROPIC_API_KEY` is not set
-- **AND** `CLAUDE_CODE_OAUTH_TOKEN` is not set
-- **AND** `ANTHROPIC_API_KEY=fallback-key` is set
 - **WHEN** creating Anthropic LLM provider
-- **THEN** uses "fallback-key"
+- **THEN** uses "oauth-env-token" (higher priority than generic API key and Keychain)
+
+#### Scenario: Standard API key priority
+
+- **GIVEN** Keychain contains OAuth token "keychain-token"
+- **AND** `ANTHROPIC_API_KEY=api-key` is set
+- **AND** `CLAUDE_CODE_OAUTH_TOKEN` is not set
+- **AND** `SWIFTINDEX_ANTHROPIC_API_KEY` is not set
+- **WHEN** creating Anthropic LLM provider
+- **THEN** uses "api-key" (env var has priority over Keychain)
+
+#### Scenario: Fallback to Keychain
+
+- **GIVEN** Keychain contains OAuth token "keychain-token"
+- **AND** all environment variables are not set
+- **WHEN** creating Anthropic LLM provider
+- **THEN** uses "keychain-token" (managed fallback)
 
 #### Scenario: No token available
 

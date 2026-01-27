@@ -8,6 +8,7 @@ Claude Code Pro/Max пользователи могут генерировать
 - Автоматически обновляются Claude Code CLI
 - Передаются через тот же HTTP заголовок `x-api-key` что и обычные API keys
 - Более безопасны для временного доступа
+- **Автоматически экспортируются** в `CLAUDE_CODE_OAUTH_TOKEN` environment variable когда Claude Code CLI запущен в shell session
 
 SwiftIndex уже использует Anthropic API через `AnthropicLLMProvider` для search enhancement (query expansion, result synthesis). Текущая имплементация требует API key через environment variables, что создаёт трение для Claude Code пользователей и риск утечки токенов.
 
@@ -73,23 +74,26 @@ SwiftIndex уже использует Anthropic API через `AnthropicLLMPro
 
 **What:** Приоритет (highest to lowest):
 
-1. Keychain OAuth Token (macOS Keychain)
-2. `SWIFTINDEX_ANTHROPIC_API_KEY` (env var)
-3. `CLAUDE_CODE_OAUTH_TOKEN` (env var)
-4. `ANTHROPIC_API_KEY` (env var)
+1. `SWIFTINDEX_ANTHROPIC_API_KEY` (env var)
+2. `CLAUDE_CODE_OAUTH_TOKEN` (env var)
+3. `ANTHROPIC_API_KEY` (env var)
+4. Keychain OAuth Token (Security.framework)
 
 **Why:**
 
-- Keychain — наиболее безопасный и управляемый SwiftIndex способ
-- `SWIFTINDEX_*` prefix — проект-специфичный override (существующее поведение)
-- `CLAUDE_CODE_OAUTH_TOKEN` — OAuth-специфичная env var для CI/CD compatibility
-- `ANTHROPIC_API_KEY` — universal fallback (обратная совместимость)
+- Environment variables имеют приоритет — позволяет explicit overrides для testing, CI/CD, project-specific configs
+- `SWIFTINDEX_*` prefix — highest priority для project-specific overrides (существующее поведение)
+- `CLAUDE_CODE_OAUTH_TOKEN` — автоматически устанавливается Claude Code CLI при запуске, higher priority чем generic `ANTHROPIC_API_KEY`
+- `ANTHROPIC_API_KEY` — standard API key fallback (обратная совместимость)
+- Keychain — lowest priority, managed fallback для пользователей без explicit env vars
 
 **Trade-offs:**
 
-- ✅ Keychain lowest priority позволяет easy override через env vars
+- ✅ Environment variables имеют приоритет — упрощает testing и overrides
 - ✅ Не ломает существующие workflows
-- ❌ Может быть неочевидно для пользователей (митигация: документация + `auth status`)
+- ✅ Explicit configuration beats implicit (env vars > Keychain)
+- ✅ Keychain как managed fallback — good UX для обычных пользователей
+- ⚠️ Может быть неочевидно для пользователей (митигация: документация + `auth status` показывает source)
 
 ### Decision 3: Reuse AnthropicLLMProvider
 
@@ -271,8 +275,12 @@ User runs: swiftindex auth login --manual
 **Validation:**
 
 - All tokens validated before storage (prevents broken state)
-- Timeout on validation (60s default) to handle network issues
+- Timeout on validation:
+  - **15 seconds** для interactive flows (wizard, `auth login`) — better UX
+  - **3 retries** с exponential backoff (1s, 2s, 4s delays)
+  - Progress indicator показывается во время validation
 - Graceful handling of 401/403 responses (invalid token)
+- Clear error messages с recovery instructions
 
 ## Risks / Trade-offs
 
@@ -310,31 +318,73 @@ User runs: swiftindex auth login --manual
 
 **Risk:** `claude setup-token` output format changes, parsing breaks.
 
+**Token Format:**
+
+- Expected pattern: `sk-ant-oauth-[a-zA-Z0-9_-]+`
+- Regex: `sk-ant-oauth-[\w-]{20,}`
+- Extraction strategy:
+  1. Try regex match in stdout/stderr
+  2. If multiple matches found, use first one
+  3. If no match, show full output and prompt manual input
+  4. Validate extracted token before accepting
+
 **Mitigation:**
 
-- Robust regex pattern for token extraction
+- Robust regex pattern for token extraction (see above)
+- Multi-line parsing (token может быть на любой строке output)
 - Fallback на manual input if parsing fails
-- Log warning for debugging
+- Log full `claude setup-token` output в debug mode
+- Unit tests с примерами реального output
 
 ### Risk 5: Platform Limitations
 
-**Risk:** Linux/Windows users can't use Keychain.
+**Risk:** Platforms without Security.framework (Linux/Windows) can't use Keychain.
+
+**Platform Detection:**
+
+```swift
+#if canImport(Security)
+  // Keychain operations available
+  // Works on: macOS, iOS, tvOS, watchOS
+#else
+  // Fallback to environment variables only
+  // Platforms: Linux, Windows
+#endif
+```
 
 **Mitigation:**
 
-- Document macOS-only limitation
-- Continue supporting environment variables (cross-platform)
+- Compile-time platform check через `canImport(Security)`
+- Document platform support: "Keychain available on Apple platforms (macOS, iOS, etc.)"
+- Continue supporting environment variables (cross-platform fallback)
 - Future work: Linux libsecret, Windows Credential Manager
+- CLI shows platform-specific help messages
 
 ### Risk 6: Concurrent Keychain Access
 
-**Risk:** Multiple processes access Keychain simultaneously.
+**Risk:** Multiple SwiftIndex processes access Keychain simultaneously (read/write/delete conflicts).
+
+**Analysis:**
+
+- Security.framework is thread-safe within single process
+- Cross-process atomicity NOT guaranteed by Keychain
+- Scenarios:
+  - Process A reads token while Process B deletes → read may return stale/nil
+  - Process A saves token while Process B saves → last write wins
+  - Multiple parallel `auth login` calls → race condition
 
 **Mitigation:**
 
-- Security.framework is thread-safe
-- Tests isolate Keychain operations
-- Use unique service/account names to avoid collisions
+- **Documented limitation**: "Keychain operations are not atomic across multiple SwiftIndex processes"
+- **Advisory file lock** для write operations:
+  ```swift
+  let lockFile = FileManager.default.temporaryDirectory
+    .appendingPathComponent("swiftindex-keychain.lock")
+  // Use flock() for advisory locking
+  ```
+- **Idempotent operations**: save/delete are safe to retry
+- **Tests**: integration tests проверяют concurrent scenarios
+- **Error handling**: retry logic с exponential backoff for transient failures
 
 ## Migration Plan
 
@@ -368,19 +418,25 @@ If issues arise:
 ## Open Questions
 
 1. **Q:** Should we support multiple OAuth tokens (multi-account)?
-   **A:** No for initial release. Single token per system simplifies implementation. Can add later if needed.
+   **A:** No for initial release. Single token per system simplifies implementation. Future enhancement: project-specific tokens через account name suffix `claude-code-oauth-token:project-hash`.
 
 2. **Q:** Should we cache token validity checks?
    **A:** No. Validation is fast (~1-2s) and infrequent (only during setup/status). Cache adds complexity without significant benefit.
 
 3. **Q:** Should we show token preview in `auth status`?
-   **A:** Yes, first 10 characters. Helps users identify which token is stored without exposing full credential.
+   **A:** Yes, first 10 characters + masking. Example: `sk-ant-oau*** (first 10 chars)`. Helps users identify which token is stored without exposing full credential.
 
 4. **Q:** Should we support token rotation (store old + new tokens)?
    **A:** No for initial release. Claude Code CLI handles token refresh automatically. We just store the current token.
 
 5. **Q:** Should we encrypt tokens in Keychain?
    **A:** No additional encryption needed. Keychain already encrypts items at rest. Our responsibility is access control (kSecAttrAccessibleWhenUnlocked).
+
+6. **Q:** What is the source of `CLAUDE_CODE_OAUTH_TOKEN` environment variable?
+   **A:** Automatically exported by Claude Code CLI when running in shell session. Users don't need to set it manually. SwiftIndex checks this env var to support seamless integration with Claude Code workflows.
+
+7. **Q:** Should we proactively check token expiration before search/index operations?
+   **A:** Initial release: reactive (handle 401 errors). Future enhancement: proactive validation + timestamp tracking to warn users before expiration.
 
 ## Success Metrics
 
