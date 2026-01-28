@@ -61,8 +61,9 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             partial.anthropicAPIKey = oauthToken
         } else if let anthropicKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] {
             partial.anthropicAPIKey = anthropicKey
-        } else {
+        } else if ProcessInfo.processInfo.environment["SWIFTINDEX_SKIP_KEYCHAIN"] == nil {
             // Fallback: Check Keychain for OAuth token (only if no env vars set)
+            // Set SWIFTINDEX_SKIP_KEYCHAIN=1 to disable Keychain access (for testing)
             do {
                 partial.anthropicAPIKey = try ClaudeCodeAuthManager.getToken()
             } catch KeychainError.notFound {

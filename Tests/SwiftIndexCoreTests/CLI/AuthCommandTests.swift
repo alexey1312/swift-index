@@ -4,12 +4,18 @@
 import XCTest
 
 /// Tests for AuthCommand CLI commands (status, login, logout)
+///
+/// Uses test-specific Keychain service/account to avoid interactive prompts in CI.
 final class AuthCommandTests: XCTestCase {
+    // Test-specific service/account to avoid Keychain prompts
+    let testService = "com.swiftindex.oauth.test"
+    let testAccount = "claude-code-oauth-token-test"
+
     // MARK: - Test Setup
 
     override func tearDown() async throws {
-        // Cleanup Keychain after each test
-        try? KeychainManager.deleteClaudeCodeToken()
+        // Cleanup test Keychain item after each test
+        try? KeychainManager.deleteToken(service: testService, account: testAccount)
         try await super.tearDown()
     }
 
@@ -17,19 +23,25 @@ final class AuthCommandTests: XCTestCase {
 
     func testAuthStatusNoToken() throws {
         // Given: No token in Keychain
-        XCTAssertThrowsError(try KeychainManager.getClaudeCodeToken())
-
-        // When/Then: status should show "No token found"
-        // (This will be implemented in AuthCommand)
+        XCTAssertThrowsError(
+            try KeychainManager.getToken(service: testService, account: testAccount)
+        ) { error in
+            guard case KeychainError.notFound = error else {
+                XCTFail("Expected .notFound, got \(error)")
+                return
+            }
+        }
     }
 
     func testAuthStatusWithValidToken() throws {
         // Given: Valid token in Keychain
-        let token = "sk-ant-oauth-test-token-12345"
-        try KeychainManager.saveClaudeCodeToken(token)
+        let token = "sk-ant-oauth-test-token-123456789012345"
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
 
-        // When/Then: status should show token preview
-        let storedToken = try KeychainManager.getClaudeCodeToken()
+        // When: Retrieve token
+        let storedToken = try KeychainManager.getToken(service: testService, account: testAccount)
+
+        // Then: Token matches
         XCTAssertEqual(storedToken, token)
 
         // Token preview format: first 10 chars + masking
@@ -37,73 +49,68 @@ final class AuthCommandTests: XCTestCase {
         XCTAssertEqual(preview, "sk-ant-oau***")
     }
 
-    func testAuthStatusShowsTokenSource() throws {
-        // Given: Token from Keychain
-        let token = "sk-ant-oauth-test-token"
-        try KeychainManager.saveClaudeCodeToken(token)
-
-        // When/Then: status should indicate source as "Keychain"
-        // (This will be implemented in AuthCommand)
-    }
-
     // MARK: - Auth Login Tests
 
     func testAuthLoginManualMode() throws {
         // Given: No existing token
-        XCTAssertThrowsError(try KeychainManager.getClaudeCodeToken())
+        XCTAssertThrowsError(
+            try KeychainManager.getToken(service: testService, account: testAccount)
+        )
 
         // When: Login with manual token input
-        let token = "sk-ant-oauth-manual-token-12345"
-        try KeychainManager.saveClaudeCodeToken(token)
+        let token = "sk-ant-oauth-manual-token-123456789012345"
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
 
         // Then: Token saved successfully
-        let stored = try KeychainManager.getClaudeCodeToken()
+        let stored = try KeychainManager.getToken(service: testService, account: testAccount)
         XCTAssertEqual(stored, token)
     }
 
     func testAuthLoginForceOverwritesExisting() throws {
         // Given: Existing token
-        let oldToken = "sk-ant-oauth-old-token"
-        try KeychainManager.saveClaudeCodeToken(oldToken)
+        let oldToken = "sk-ant-oauth-old-token-123456789012345"
+        try KeychainManager.saveToken(oldToken, service: testService, account: testAccount)
 
-        // When: Login with --force
-        let newToken = "sk-ant-oauth-new-token"
-        try KeychainManager.saveClaudeCodeToken(newToken)
+        // When: Login with --force (update token)
+        let newToken = "sk-ant-oauth-new-token-123456789012345"
+        try KeychainManager.saveToken(newToken, service: testService, account: testAccount)
 
         // Then: Token overwritten
-        let stored = try KeychainManager.getClaudeCodeToken()
+        let stored = try KeychainManager.getToken(service: testService, account: testAccount)
         XCTAssertEqual(stored, newToken)
     }
 
     func testAuthLoginValidatesToken() throws {
-        // Given: Invalid token format
-        let invalidToken = "not-a-valid-token"
+        // Given: Any token (Keychain accepts any string)
+        let token = "any-token-value-for-keychain-test"
 
-        // When: Try to save invalid token
-        try KeychainManager.saveClaudeCodeToken(invalidToken)
+        // When: Save to Keychain
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
 
-        // Then: Token saved (validation happens at API level, not Keychain level)
-        let stored = try KeychainManager.getClaudeCodeToken()
-        XCTAssertEqual(stored, invalidToken)
+        // Then: Token saved (Keychain doesn't validate format)
+        let stored = try KeychainManager.getToken(service: testService, account: testAccount)
+        XCTAssertEqual(stored, token)
 
-        // Note: Actual validation should happen in AuthCommand using ClaudeCodeAuthManager
+        // Note: Format validation is done by ClaudeCodeAuthManager, not Keychain
     }
 
     // MARK: - Auth Logout Tests
 
     func testAuthLogoutRemovesToken() throws {
         // Given: Token in Keychain
-        let token = "sk-ant-oauth-test-token"
-        try KeychainManager.saveClaudeCodeToken(token)
-        XCTAssertNoThrow(try KeychainManager.getClaudeCodeToken())
+        let token = "sk-ant-oauth-test-token-123456789012345"
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
+        XCTAssertNoThrow(try KeychainManager.getToken(service: testService, account: testAccount))
 
-        // When: Logout
-        try KeychainManager.deleteClaudeCodeToken()
+        // When: Logout (delete token)
+        try KeychainManager.deleteToken(service: testService, account: testAccount)
 
         // Then: Token removed
-        XCTAssertThrowsError(try KeychainManager.getClaudeCodeToken()) { error in
+        XCTAssertThrowsError(
+            try KeychainManager.getToken(service: testService, account: testAccount)
+        ) { error in
             guard case KeychainError.notFound = error else {
-                XCTFail("Expected itemNotFound error, got \(error)")
+                XCTFail("Expected .notFound error, got \(error)")
                 return
             }
         }
@@ -111,29 +118,34 @@ final class AuthCommandTests: XCTestCase {
 
     func testAuthLogoutWhenNoToken() throws {
         // Given: No token in Keychain
-        XCTAssertThrowsError(try KeychainManager.getClaudeCodeToken())
+        XCTAssertThrowsError(
+            try KeychainManager.getToken(service: testService, account: testAccount)
+        )
 
         // When: Try to logout
         // Then: Should throw notFound error
-        XCTAssertThrowsError(try KeychainManager.deleteClaudeCodeToken()) { error in
+        XCTAssertThrowsError(
+            try KeychainManager.deleteToken(service: testService, account: testAccount)
+        ) { error in
             guard case KeychainError.notFound = error else {
-                XCTFail("Expected notFound error, got \(error)")
+                XCTFail("Expected .notFound error, got \(error)")
                 return
             }
         }
-
-        // Note: AuthCommand handles this gracefully (shows "already logged out")
     }
 
-    // MARK: - Error Handling Tests
+    // MARK: - Token Format Tests
 
-    func testAuthCommandShowsHelpfulErrorMessages() throws {
-        // Test error messages for common scenarios
-        // (Will be implemented in AuthCommand)
+    func testNewTokenFormatOat01() throws {
+        // Given: New format token (sk-ant-oat01-)
+        let token = "sk-ant-oat01-test-token-123456789012345"
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
 
-        // 1. Keychain locked
-        // 2. Token expired (401 from API)
-        // 3. CLI not installed
-        // 4. Network error during validation
+        // When: Retrieve and validate format
+        let stored = try KeychainManager.getToken(service: testService, account: testAccount)
+
+        // Then: Token stored correctly
+        XCTAssertEqual(stored, token)
+        XCTAssertNoThrow(try ClaudeCodeAuthManager.validateTokenFormat(token))
     }
 }

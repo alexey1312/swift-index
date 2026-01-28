@@ -178,19 +178,37 @@ final class KeychainManagerTests: XCTestCase {
     // MARK: - Convenience Methods Tests
 
     func testClaudeCodeTokenConvenienceMethods() throws {
-        // Test convenience methods use default service/account names
-        let token = "sk-ant-oauth-convenience-test"
+        // Test save/get/delete flow using test-specific service/account
+        // to avoid Keychain prompts in CI (production keys require user interaction)
+        let token = "sk-ant-oauth-convenience-test-12345678901234567890"
 
-        // Note: These use production service/account names
-        // Clean up in tearDown
-        try KeychainManager.saveClaudeCodeToken(token)
+        // Save using test service/account
+        try KeychainManager.saveToken(
+            token,
+            service: testServiceName,
+            account: testAccountName
+        )
 
-        let retrieved = try KeychainManager.getClaudeCodeToken()
+        // Retrieve and verify
+        let retrieved = try KeychainManager.getToken(
+            service: testServiceName,
+            account: testAccountName
+        )
         XCTAssertEqual(retrieved, token)
 
-        try KeychainManager.deleteClaudeCodeToken()
+        // Delete
+        try KeychainManager.deleteToken(
+            service: testServiceName,
+            account: testAccountName
+        )
 
-        XCTAssertThrowsError(try KeychainManager.getClaudeCodeToken()) { error in
+        // Verify deletion
+        XCTAssertThrowsError(
+            try KeychainManager.getToken(
+                service: testServiceName,
+                account: testAccountName
+            )
+        ) { error in
             guard case KeychainError.notFound = error else {
                 XCTFail("Expected .notFound, got \(error)")
                 return

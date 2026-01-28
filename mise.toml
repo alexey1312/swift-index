@@ -68,10 +68,12 @@ cp -f .build/mlx-metal/default.metallib .build/mlx-metal/mlx.metallib "${BIN_DIR
 
 [tasks.test]
 description = "Run all tests"
+env = { SWIFTINDEX_SKIP_KEYCHAIN = "1" }
 run = "swift test 2>&1 | xcsift"
 
 [tasks."test:filter"]
 description = "Run tests with filter (usage: mise run test:filter SwiftIndexCoreTests)"
+env = { SWIFTINDEX_SKIP_KEYCHAIN = "1" }
 run = "swift test --filter {{arg(name='filter')}} 2>&1 | xcsift"
 
 [tasks.lint]

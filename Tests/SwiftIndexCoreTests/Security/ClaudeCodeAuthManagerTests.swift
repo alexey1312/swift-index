@@ -107,13 +107,37 @@ final class ClaudeCodeAuthManagerTests: XCTestCase {
     // MARK: - Token Validation Tests
 
     func testValidateTokenFormat_ValidToken_Succeeds() throws {
-        // Given: valid OAuth token format
+        // Given: valid OAuth token format (legacy)
         let token = "sk-ant-oauth-abc123_xyz789-12345678901234567890"
 
         // When: validating format
         try ClaudeCodeAuthManager.validateTokenFormat(token)
 
         // Then: should not throw (success)
+    }
+
+    func testValidateTokenFormat_NewFormat_Succeeds() throws {
+        // Given: valid OAuth token in new format (sk-ant-oat01-)
+        let token = "sk-ant-oat01-abc123_xyz789-12345678901234567890"
+
+        // When: validating format
+        try ClaudeCodeAuthManager.validateTokenFormat(token)
+
+        // Then: should not throw (success)
+    }
+
+    func testParseToken_NewFormat_ExtractsToken() throws {
+        // Given: output with new format token (sk-ant-oat01-)
+        let output = """
+        Success! Generated OAuth token:
+        sk-ant-oat01-v8a7uwluChMvsevK-3vtBpS-1Zl6rTkGRzhfcZ
+        """
+
+        // When: parsing token
+        let token = try ClaudeCodeAuthManager.parseToken(from: output)
+
+        // Then: should extract new format token
+        XCTAssertTrue(token.hasPrefix("sk-ant-oat01-"))
     }
 
     func testValidateTokenFormat_EmptyToken_ThrowsError() throws {

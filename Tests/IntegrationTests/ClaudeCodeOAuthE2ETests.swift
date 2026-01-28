@@ -7,66 +7,73 @@ import Testing
 
 /// End-to-end tests for Claude Code OAuth integration.
 ///
-/// These tests verify the complete OAuth workflow from init to authentication:
-/// - Automatic OAuth flow via `claude setup-token`
-/// - Manual token input fallback
-/// - Keychain storage and retrieval
-/// - Token validation and error handling
+/// Uses test-specific Keychain service/account to avoid interactive prompts.
 @Suite("Claude Code OAuth E2E")
 struct ClaudeCodeOAuthE2ETests {
-    // MARK: - Test Setup
+    // Test-specific service/account to avoid Keychain prompts
+    private let testService = "com.swiftindex.oauth.e2e-test"
+    private let testAccount = "claude-code-oauth-e2e-test"
 
-    /// Unique service name for test isolation
-    private static func testServiceName() -> String {
-        "com.swiftindex.test-\(UUID().uuidString)"
-    }
+    // MARK: - Test Cleanup
 
-    /// Cleanup Keychain after each test
-    private func cleanup() throws {
-        try? KeychainManager.deleteClaudeCodeToken()
+    private func cleanup() {
+        try? KeychainManager.deleteToken(service: testService, account: testAccount)
     }
 
     // MARK: - Full OAuth Flow Tests
 
-    @Test("OAuth flow: Automatic token generation and storage")
-    func automaticOAuthFlow() async throws {
-        defer { try? cleanup() }
+    @Test("OAuth flow: Token save and retrieval")
+    func tokenSaveAndRetrieval() async throws {
+        defer { cleanup() }
 
         // Given: No existing token
         #expect(throws: KeychainError.notFound) {
-            try KeychainManager.getClaudeCodeToken()
+            try KeychainManager.getToken(service: testService, account: testAccount)
         }
 
-        // When: Automatic OAuth flow (mocked)
-        // Note: Real CLI interaction is tested manually
-        let mockToken = "sk-ant-oauth-auto-generated-token-12345"
-        try KeychainManager.saveClaudeCodeToken(mockToken)
+        // When: Save token
+        let token = "sk-ant-oauth-auto-generated-token-12345"
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
 
         // Then: Token saved and retrievable
-        let retrieved = try KeychainManager.getClaudeCodeToken()
-        #expect(retrieved == mockToken)
+        let retrieved = try KeychainManager.getToken(service: testService, account: testAccount)
+        #expect(retrieved == token)
     }
 
     @Test("OAuth flow: Manual token input with validation")
     func manualTokenInputFlow() async throws {
-        defer { try? cleanup() }
+        defer { cleanup() }
 
-        // Given: No existing token, manual input mode
-        let manualToken = "sk-ant-oauth-manual-token-67890"
+        // Given: Manual input mode
+        let manualToken = "sk-ant-oauth-manual-token-6789012345678901234"
 
-        // When: User provides token manually
+        // When: Validate and save
         try ClaudeCodeAuthManager.validateTokenFormat(manualToken)
-        try KeychainManager.saveClaudeCodeToken(manualToken)
+        try KeychainManager.saveToken(manualToken, service: testService, account: testAccount)
 
         // Then: Token validated and saved
-        let retrieved = try KeychainManager.getClaudeCodeToken()
+        let retrieved = try KeychainManager.getToken(service: testService, account: testAccount)
         #expect(retrieved == manualToken)
+    }
+
+    @Test("OAuth flow: New format token (sk-ant-oat01-)")
+    func newFormatToken() async throws {
+        defer { cleanup() }
+
+        // Given: New format token
+        let newFormatToken = "sk-ant-oat01-test-token-123456789012345"
+
+        // When: Validate and save
+        try ClaudeCodeAuthManager.validateTokenFormat(newFormatToken)
+        try KeychainManager.saveToken(newFormatToken, service: testService, account: testAccount)
+
+        // Then: Token validated and saved
+        let retrieved = try KeychainManager.getToken(service: testService, account: testAccount)
+        #expect(retrieved == newFormatToken)
     }
 
     @Test("OAuth flow: Invalid token format rejected")
     func invalidTokenFormatRejected() async throws {
-        defer { try? cleanup() }
-
         // Given: Invalid token format
         let invalidToken = "not-a-valid-oauth-token"
 
@@ -76,26 +83,20 @@ struct ClaudeCodeOAuthE2ETests {
         }
     }
 
-    @Test("OAuth flow: Existing token not overwritten without force")
-    func existingTokenPreserved() async throws {
-        defer { try? cleanup() }
+    @Test("OAuth flow: Token update (overwrite)")
+    func tokenUpdate() async throws {
+        defer { cleanup() }
 
         // Given: Existing token
-        let existingToken = "sk-ant-oauth-existing-token"
-        try KeychainManager.saveClaudeCodeToken(existingToken)
+        let existingToken = "sk-ant-oauth-existing-token-1234567890"
+        try KeychainManager.saveToken(existingToken, service: testService, account: testAccount)
 
-        // When: Check if token exists
-        let retrieved = try KeychainManager.getClaudeCodeToken()
-
-        // Then: Original token preserved
-        #expect(retrieved == existingToken)
-
-        // When: Try to save new token (should overwrite)
-        let newToken = "sk-ant-oauth-new-token"
-        try KeychainManager.saveClaudeCodeToken(newToken)
+        // When: Save new token
+        let newToken = "sk-ant-oauth-new-token-0987654321"
+        try KeychainManager.saveToken(newToken, service: testService, account: testAccount)
 
         // Then: Token updated
-        let updated = try KeychainManager.getClaudeCodeToken()
+        let updated = try KeychainManager.getToken(service: testService, account: testAccount)
         #expect(updated == newToken)
     }
 
@@ -103,150 +104,103 @@ struct ClaudeCodeOAuthE2ETests {
 
     @Test("OAuth lifecycle: Save, retrieve, delete")
     func tokenLifecycle() async throws {
-        defer { try? cleanup() }
+        defer { cleanup() }
 
-        let token = "sk-ant-oauth-lifecycle-token"
+        let token = "sk-ant-oauth-lifecycle-token-123456789"
 
         // Save
-        try KeychainManager.saveClaudeCodeToken(token)
-        let saved = try KeychainManager.getClaudeCodeToken()
+        try KeychainManager.saveToken(token, service: testService, account: testAccount)
+        let saved = try KeychainManager.getToken(service: testService, account: testAccount)
         #expect(saved == token)
 
         // Delete
-        try KeychainManager.deleteClaudeCodeToken()
+        try KeychainManager.deleteToken(service: testService, account: testAccount)
 
         // Verify deleted
         #expect(throws: KeychainError.notFound) {
-            try KeychainManager.getClaudeCodeToken()
+            try KeychainManager.getToken(service: testService, account: testAccount)
         }
     }
 
     @Test("OAuth lifecycle: Multiple save operations")
     func multipleSaveOperations() async throws {
-        defer { try? cleanup() }
+        defer { cleanup() }
 
         // First save
-        let token1 = "sk-ant-oauth-token-1"
-        try KeychainManager.saveClaudeCodeToken(token1)
-        #expect(try KeychainManager.getClaudeCodeToken() == token1)
+        let token1 = "sk-ant-oauth-token-1-1234567890123456"
+        try KeychainManager.saveToken(token1, service: testService, account: testAccount)
+        #expect(try KeychainManager.getToken(service: testService, account: testAccount) == token1)
 
         // Second save (overwrite)
-        let token2 = "sk-ant-oauth-token-2"
-        try KeychainManager.saveClaudeCodeToken(token2)
-        #expect(try KeychainManager.getClaudeCodeToken() == token2)
+        let token2 = "sk-ant-oauth-token-2-1234567890123456"
+        try KeychainManager.saveToken(token2, service: testService, account: testAccount)
+        #expect(try KeychainManager.getToken(service: testService, account: testAccount) == token2)
 
         // Third save (overwrite again)
-        let token3 = "sk-ant-oauth-token-3"
-        try KeychainManager.saveClaudeCodeToken(token3)
-        #expect(try KeychainManager.getClaudeCodeToken() == token3)
-    }
-
-    // MARK: - Error Handling Tests
-
-    @Test("OAuth error: Keychain locked")
-    func keychainLockedError() async throws {
-        // Note: Real Keychain lock testing requires macOS security setup
-        // This test documents the expected behavior
-        // In real scenarios, KeychainError.interactionNotAllowed is thrown
-    }
-
-    @Test("OAuth error: Token parsing failure")
-    func tokenParsingFailure() async throws {
-        // Given: Invalid CLI output (no token found)
-        _ = """
-        Setting up Claude Code OAuth...
-        Please authenticate in your browser.
-        Authentication successful!
-        """
-
-        // When/Then: Parsing should fail gracefully
-        // ClaudeCodeAuthManager.extractToken() should return nil
-        // This is handled by fallback to manual input
+        let token3 = "sk-ant-oauth-token-3-1234567890123456"
+        try KeychainManager.saveToken(token3, service: testService, account: testAccount)
+        #expect(try KeychainManager.getToken(service: testService, account: testAccount) == token3)
     }
 
     // MARK: - Concurrent Access Tests
 
     @Test("OAuth concurrency: Multiple save operations")
     func concurrentSaveOperations() async throws {
-        defer { try? cleanup() }
+        defer { cleanup() }
 
         // Given: Multiple concurrent save attempts
-        let tokens = (1 ... 5).map { "sk-ant-oauth-concurrent-token-\($0)" }
+        let tokens = (1 ... 5).map { "sk-ant-oauth-concurrent-token-\($0)-12345" }
+        let service = testService
+        let account = testAccount
 
         // When: Save concurrently (with advisory lock)
         await withTaskGroup(of: Void.self) { group in
             for token in tokens {
                 group.addTask {
-                    try? KeychainManager.saveClaudeCodeToken(token)
+                    try? KeychainManager.saveToken(token, service: service, account: account)
                 }
             }
         }
 
         // Then: One token should be saved (last one wins with advisory lock)
-        let final = try? KeychainManager.getClaudeCodeToken()
+        let final = try? KeychainManager.getToken(service: testService, account: testAccount)
         #expect(final != nil)
         #expect(tokens.contains(final!))
     }
 
-    // MARK: - Integration with EnvironmentConfigLoader
+    // MARK: - Token Parsing Tests
 
-    @Test("OAuth integration: Priority chain with Keychain fallback")
-    func priorityChainIntegration() async throws {
-        defer { try? cleanup() }
+    @Test("Token parsing: Legacy format")
+    func parseTokenLegacyFormat() throws {
+        let output = """
+        Success! Generated OAuth token:
+        sk-ant-oauth-abc123_xyz789-abcdefghijklmnopqrstuvwxyz
+        """
 
-        // Given: Keychain token
-        let keychainToken = "sk-ant-oauth-keychain-token"
-        try KeychainManager.saveClaudeCodeToken(keychainToken)
-
-        // When: Load with EnvironmentConfigLoader (no env vars)
-        let loader = EnvironmentConfigLoader()
-        let partial = try loader.load()
-        let token = partial.anthropicAPIKey
-
-        // Then: Keychain token used as fallback
-        #expect(token == keychainToken)
+        let token = try ClaudeCodeAuthManager.parseToken(from: output)
+        #expect(token == "sk-ant-oauth-abc123_xyz789-abcdefghijklmnopqrstuvwxyz")
     }
 
-    @Test("OAuth integration: Environment variable overrides Keychain")
-    func environmentOverridesKeychain() async throws {
-        defer { try? cleanup() }
+    @Test("Token parsing: New format (oat01)")
+    func parseTokenNewFormat() throws {
+        let output = """
+        Success! Generated OAuth token:
+        sk-ant-oat01-v8a7uwluChMvsevK-3vtBpS-1Zl6rTkGRzhfcZ
+        """
 
-        // Given: Both Keychain and env var tokens
-        let keychainToken = "sk-ant-oauth-keychain-token"
-        try KeychainManager.saveClaudeCodeToken(keychainToken)
-
-        let envToken = "sk-ant-api-env-token-12345"
-        setenv("SWIFTINDEX_ANTHROPIC_API_KEY", envToken, 1)
-        defer { unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY") }
-
-        // When: Load with EnvironmentConfigLoader
-        let loader = EnvironmentConfigLoader()
-        let partial = try loader.load()
-        let token = partial.anthropicAPIKey
-
-        // Then: Env var takes precedence
-        #expect(token == envToken)
+        let token = try ClaudeCodeAuthManager.parseToken(from: output)
+        #expect(token.hasPrefix("sk-ant-oat01-"))
     }
 
-    @Test("OAuth integration: CLAUDE_CODE_OAUTH_TOKEN priority")
-    func claudeCodeOAuthEnvVarPriority() async throws {
-        defer { try? cleanup() }
+    @Test("Token parsing: No token in output")
+    func parseTokenNoToken() throws {
+        let output = """
+        Error: Authentication failed
+        Please try again
+        """
 
-        // Given: CLAUDE_CODE_OAUTH_TOKEN env var (auto-set by Claude Code CLI)
-        let oauthEnvToken = "sk-ant-oauth-env-auto-token"
-        setenv("CLAUDE_CODE_OAUTH_TOKEN", oauthEnvToken, 1)
-        defer { unsetenv("CLAUDE_CODE_OAUTH_TOKEN") }
-
-        // And: Keychain token
-        let keychainToken = "sk-ant-oauth-keychain-token"
-        try KeychainManager.saveClaudeCodeToken(keychainToken)
-
-        // When: Load with EnvironmentConfigLoader
-        let loader = EnvironmentConfigLoader()
-        let partial = try loader.load()
-        let token = partial.anthropicAPIKey
-
-        // Then: CLAUDE_CODE_OAUTH_TOKEN takes precedence over Keychain
-        #expect(token == oauthEnvToken)
+        #expect(throws: ClaudeCodeAuthError.parsingFailed) {
+            try ClaudeCodeAuthManager.parseToken(from: output)
+        }
     }
 }

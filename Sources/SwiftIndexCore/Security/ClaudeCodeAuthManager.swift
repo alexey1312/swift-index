@@ -138,8 +138,14 @@ public enum ClaudeCodeAuthManager {
     ///
     /// - Returns: OAuth token if available
     /// - Throws: KeychainError if token not found or Keychain locked
+    ///
+    /// Set `SWIFTINDEX_SKIP_KEYCHAIN=1` to disable Keychain access (for testing).
     public static func getToken() throws -> String {
-        try KeychainManager.getClaudeCodeToken()
+        // Skip Keychain access if env var is set (for testing)
+        if ProcessInfo.processInfo.environment["SWIFTINDEX_SKIP_KEYCHAIN"] != nil {
+            throw KeychainError.notFound
+        }
+        return try KeychainManager.getClaudeCodeToken()
     }
 
     /// Save OAuth token to Keychain

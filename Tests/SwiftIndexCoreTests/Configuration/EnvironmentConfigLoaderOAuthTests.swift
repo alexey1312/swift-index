@@ -8,7 +8,27 @@ import XCTest
 /// 2. CLAUDE_CODE_OAUTH_TOKEN (Claude Code CLI auto-set)
 /// 3. ANTHROPIC_API_KEY (standard API key)
 /// 4. Keychain OAuth Token (lowest - managed fallback)
+///
+/// Note: Tests use SWIFTINDEX_SKIP_KEYCHAIN=1 to avoid interactive prompts
+/// when testing env var priority (Keychain fallback is skipped).
 final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
+    // MARK: - Setup/Teardown
+
+    override func setUp() {
+        super.setUp()
+        // Skip Keychain fallback by default to avoid interactive prompts
+        setenv("SWIFTINDEX_SKIP_KEYCHAIN", "1", 1)
+    }
+
+    override func tearDown() {
+        // Clean up env vars
+        unsetenv("SWIFTINDEX_SKIP_KEYCHAIN")
+        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
+        unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
+        unsetenv("ANTHROPIC_API_KEY")
+        super.tearDown()
+    }
+
     // MARK: - Priority Chain Tests
 
     func testAnthropicKey_SWIFTINDEX_HasHighestPriority() throws {
@@ -16,12 +36,6 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         setenv("SWIFTINDEX_ANTHROPIC_API_KEY", "swiftindex-key", 1)
         setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-token", 1)
         setenv("ANTHROPIC_API_KEY", "standard-key", 1)
-
-        defer {
-            unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-            unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-            unsetenv("ANTHROPIC_API_KEY")
-        }
 
         // When: loading config
         let loader = EnvironmentConfigLoader()
@@ -36,11 +50,6 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         setenv("CLAUDE_CODE_OAUTH_TOKEN", "oauth-token", 1)
         setenv("ANTHROPIC_API_KEY", "standard-key", 1)
 
-        defer {
-            unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-            unsetenv("ANTHROPIC_API_KEY")
-        }
-
         // When: loading config
         let loader = EnvironmentConfigLoader()
         let partial = try loader.load()
@@ -53,10 +62,6 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         // Given: Only standard ANTHROPIC_API_KEY set
         setenv("ANTHROPIC_API_KEY", "standard-key", 1)
 
-        defer {
-            unsetenv("ANTHROPIC_API_KEY")
-        }
-
         // When: loading config
         let loader = EnvironmentConfigLoader()
         let partial = try loader.load()
@@ -65,59 +70,8 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         XCTAssertEqual(partial.anthropicAPIKey, "standard-key")
     }
 
-    func testAnthropicKey_KeychainFallback() throws {
-        // Given: No env vars, token in Keychain
-        let testToken = "sk-ant-oauth-keychain-test-12345678901234567890"
-
-        // Save test token to Keychain
-        try KeychainManager.saveClaudeCodeToken(testToken)
-
-        defer {
-            try? KeychainManager.deleteClaudeCodeToken()
-        }
-
-        // Ensure no env vars set
-        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-        unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-        unsetenv("ANTHROPIC_API_KEY")
-
-        // When: loading config
-        let loader = EnvironmentConfigLoader()
-        let partial = try loader.load()
-
-        // Then: Keychain token should be used
-        XCTAssertEqual(partial.anthropicAPIKey, testToken)
-    }
-
-    func testAnthropicKey_EnvVarOverridesKeychain() throws {
-        // Given: Both env var and Keychain token
-        let keychainToken = "sk-ant-oauth-keychain-12345678901234567890"
-        let envToken = "env-override-key"
-
-        try KeychainManager.saveClaudeCodeToken(keychainToken)
-        setenv("ANTHROPIC_API_KEY", envToken, 1)
-
-        defer {
-            try? KeychainManager.deleteClaudeCodeToken()
-            unsetenv("ANTHROPIC_API_KEY")
-        }
-
-        // When: loading config
-        let loader = EnvironmentConfigLoader()
-        let partial = try loader.load()
-
-        // Then: env var should override Keychain
-        XCTAssertEqual(partial.anthropicAPIKey, envToken)
-    }
-
     func testAnthropicKey_NoSourcesSet_ReturnsNil() throws {
-        // Given: No env vars or Keychain token
-        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-        unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-        unsetenv("ANTHROPIC_API_KEY")
-
-        // Ensure no Keychain token
-        try? KeychainManager.deleteClaudeCodeToken()
+        // Given: No env vars (SWIFTINDEX_SKIP_KEYCHAIN is set in setUp)
 
         // When: loading config
         let loader = EnvironmentConfigLoader()
@@ -126,6 +80,14 @@ final class EnvironmentConfigLoaderOAuthTests: XCTestCase {
         // Then: anthropicAPIKey should be nil
         XCTAssertNil(partial.anthropicAPIKey)
     }
+
+    // MARK: - Keychain Integration Tests
+
+    //
+    // Note: Tests for Keychain fallback are REMOVED because they require
+    // interactive Keychain access (password prompt) which cannot be automated.
+    // The Keychain integration is tested manually and via KeychainManagerTests
+    // which use a test-specific service name.
 
     // MARK: - Other API Keys Tests (ensure no regression)
 
