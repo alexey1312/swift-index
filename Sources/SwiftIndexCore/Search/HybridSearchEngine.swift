@@ -236,6 +236,12 @@ public actor HybridSearchEngine: SearchEngine {
     /// Demotion multiplier for paths containing "/Tests/".
     private static let testPathDemotion: Float = 0.8
 
+    /// Demotion multiplier for documentation and spec files.
+    private static let documentationDemotion: Float = 0.9
+
+    /// Strong demotion multiplier for archive and benchmark files.
+    private static let archiveDemotion: Float = 0.5
+
     /// Boost multiplier for public declarations.
     private static let publicModifierBoost: Float = 1.1
 
@@ -303,17 +309,18 @@ public actor HybridSearchEngine: SearchEngine {
             }
         }
 
-        // 3. Source path boost (prioritize production code over tests)
+        // 3. Path-based ranking (Sources > Docs > Tests > Archives)
         if chunk.path.contains("/Sources/") {
             score *= Self.sourcePathBoost
-        }
-
-        // 4. Test path demotion
-        if chunk.path.contains("/Tests/") {
+        } else if chunk.path.contains("/Tests/") {
             score *= Self.testPathDemotion
+        } else if chunk.path.contains("/benchmarks/") || chunk.path.contains("/archive/") {
+            score *= Self.archiveDemotion
+        } else if chunk.path.contains("/docs/") || chunk.path.contains("/openspec/") {
+            score *= Self.documentationDemotion
         }
 
-        // 5. Public modifier boost (prioritize public API)
+        // 4. Public modifier boost (prioritize public API)
         if let signature = chunk.signature, signature.hasPrefix("public ") {
             score *= Self.publicModifierBoost
         }
