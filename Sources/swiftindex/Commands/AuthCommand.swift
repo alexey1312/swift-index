@@ -1,5 +1,6 @@
 // MARK: - Auth Command
 
+import AppKit
 import ArgumentParser
 import Foundation
 import Logging
@@ -164,14 +165,16 @@ extension AuthCommand {
             Authenticates with Claude Code and stores the OAuth token
             securely in macOS Keychain.
 
-            By default, this command runs the automatic OAuth flow:
-              1. Checks if 'claude' CLI is installed
-              2. Runs 'claude setup-token' to generate OAuth token
-              3. Validates the token format
-              4. Stores token in Keychain
+            Steps to get your token:
+              1. Open a NEW terminal window
+              2. Run: claude setup-token
+              3. Authorize in browser
+              4. Copy the token (sk-ant-oauth-...) from CLI output
+              5. Paste here when prompted
 
-            Use --manual flag to manually enter a token (useful when
-            'claude' CLI is unavailable or in non-interactive environments).
+            Known issue: 'claude setup-token' callback may hang due to
+            IPv6/IPv4 mismatch (github.com/anthropics/claude-code/issues/9376).
+            Run it in a separate terminal and copy the token manually.
 
             Use --force to overwrite existing tokens.
             """
@@ -182,12 +185,6 @@ extension AuthCommand {
             help: "Overwrite existing token without prompting"
         )
         var force: Bool = false
-
-        @Flag(
-            name: .long,
-            help: "Manual token input mode (skip automatic OAuth flow)"
-        )
-        var manual: Bool = false
 
         @Flag(
             name: .shortAndLong,
@@ -214,85 +211,66 @@ extension AuthCommand {
                 return
             }
 
-            var token: String?
-
-            // Manual mode or automatic fallback
-            if manual {
-                token = try await manualTokenInput(ui: ui)
-            } else {
-                // Try automatic flow first
-                if await ClaudeCodeAuthManager.isCLIAvailable() {
-                    print("Running automatic OAuth flow...")
-                    print("A browser window will open for authentication.\n")
-
-                    do {
-                        token = try await ClaudeCodeAuthManager.setupOAuthToken()
-                        print("✓ OAuth token generated successfully")
-                    } catch {
-                        print("✗ Automatic flow failed: \(error.localizedDescription)")
-
-                        // Fallback to manual
-                        if ui.yesOrNoChoicePrompt(
-                            question: "Try manual token input?",
-                            defaultAnswer: true
-                        ) {
-                            token = try await manualTokenInput(ui: ui)
-                        } else {
-                            throw ExitCode.failure
-                        }
-                    }
-                } else {
-                    print("⚠️  'claude' CLI not found")
-                    print("\nTo install Claude Code CLI:")
-                    print("  npm install -g @anthropic-ai/claude-code")
-                    print("\nOr use manual mode:")
-                    print("  swiftindex auth login --manual\n")
-
-                    if ui.yesOrNoChoicePrompt(
-                        question: "Continue with manual token input?",
-                        defaultAnswer: true
-                    ) {
-                        token = try await manualTokenInput(ui: ui)
-                    } else {
-                        throw ExitCode.failure
-                    }
-                }
-            }
-
-            guard let finalToken = token else {
-                print("✗ No token provided")
+            // Check CLI availability
+            guard await ClaudeCodeAuthManager.isCLIAvailable() else {
+                print("⚠️  'claude' CLI not found")
+                print("\nTo install Claude Code CLI:")
+                print("  npm install -g @anthropic-ai/claude-code")
                 throw ExitCode.failure
             }
+
+            // Manual flow is default due to IPv6/IPv4 callback issues
+            print("To get your OAuth token:")
+            print("")
+            print("  1. Open a NEW terminal window")
+            print("  2. Run: claude setup-token")
+            print("  3. Authorize in browser")
+            print("  4. Copy the token (sk-ant-oauth-...) from CLI output")
+            print("")
+            print("If callback hangs, see: github.com/anthropics/claude-code/issues/9376")
+            print("")
+
+            let token = ui.textPrompt(
+                title: nil,
+                prompt: "OAuth Token",
+                description: "Paste your token here",
+                collapseOnAnswer: true,
+                renderer: Renderer(),
+                validationRules: [NonEmptyValidationRule(error: "Token cannot be empty")]
+            )
 
             // Validate token format
             print("\nValidating token format...")
             do {
-                try ClaudeCodeAuthManager.validateTokenFormat(finalToken)
+                try ClaudeCodeAuthManager.validateTokenFormat(token)
                 print("✓ Token format is valid")
             } catch {
                 print("✗ Validation failed: \(error.localizedDescription)")
-                print("\nThe token format is invalid. Please check and try again.")
                 throw ExitCode.failure
             }
 
             // Save token
-            do {
-                // Clear old token first (if exists)
-                do {
-                    try ClaudeCodeAuthManager.deleteToken()
-                } catch KeychainError.notFound {
-                    // Expected - no old token to delete
-                } catch KeychainError.keychainLocked {
-                    print("✗ Keychain is locked. Cannot save token.")
-                    print("\nUnlock Keychain with:")
-                    print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
-                    throw ExitCode.failure
-                } catch {
-                    // Log but continue - old token might still be overwritten
-                    logger.warning("Failed to delete old token: \(error.localizedDescription)")
-                }
+            try saveToken(token, logger: logger)
+        }
 
-                try ClaudeCodeAuthManager.saveToken(finalToken)
+        private func saveToken(_ token: String, logger: Logger) throws {
+            // Clear old token first (if exists)
+            do {
+                try ClaudeCodeAuthManager.deleteToken()
+            } catch KeychainError.notFound {
+                // Expected - no old token to delete
+            } catch KeychainError.keychainLocked {
+                print("✗ Keychain is locked. Cannot save token.")
+                print("\nUnlock Keychain with:")
+                print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
+                throw ExitCode.failure
+            } catch {
+                // Log but continue - old token might still be overwritten
+                logger.warning("Failed to delete old token: \(error.localizedDescription)")
+            }
+
+            do {
+                try ClaudeCodeAuthManager.saveToken(token)
                 print("✓ Token saved successfully")
                 print("\nAuthentication complete! You can now use search enhancement features.")
             } catch KeychainError.keychainLocked {
@@ -304,24 +282,6 @@ extension AuthCommand {
                 print("✗ Failed to save token: \(error.localizedDescription)")
                 throw ExitCode.failure
             }
-        }
-
-        private func manualTokenInput(ui: Noora) async throws -> String {
-            print("\nManual Token Input")
-            print("──────────────────")
-            print("1. Run: claude setup-token")
-            print("2. Copy the generated OAuth token")
-            print("3. Paste it below\n")
-
-            let token = ui.textPrompt(
-                title: nil,
-                prompt: "OAuth Token",
-                description: "Paste your Claude Code OAuth token",
-                collapseOnAnswer: true,
-                renderer: Renderer(),
-                validationRules: []
-            )
-            return token
         }
 
         private func tokenPreview(_ token: String) -> String {

@@ -1,5 +1,6 @@
 // MARK: - Init Command
 
+import AppKit
 import ArgumentParser
 import Foundation
 import Logging
@@ -664,83 +665,50 @@ private struct InitWizard {
             return
         }
 
-        // Try automatic flow first
-        if await ClaudeCodeAuthManager.isCLIAvailable() {
-            print("Running automatic OAuth flow...")
-            print("A browser window will open for authentication.\n")
+        // Check CLI availability
+        let cliAvailable = await ClaudeCodeAuthManager.isCLIAvailable()
 
-            do {
-                let token = try await ClaudeCodeAuthManager.setupOAuthToken()
-                try ClaudeCodeAuthManager.saveToken(token)
-                print("✓ OAuth token saved successfully\n")
-            } catch let ClaudeCodeAuthError.cliExecutionFailed(exitCode, _) {
-                logger.error("Automatic OAuth flow failed: CLI returned exit code \(exitCode)")
-                await manualOAuthFallback()
-            } catch ClaudeCodeAuthError.parsingFailed {
-                logger.error("Failed to parse OAuth token from CLI output")
-                print("⚠️  Unable to extract token from CLI output. Try manual mode.\n")
-                await manualOAuthFallback()
-            } catch KeychainError.keychainLocked {
-                print("✗ Keychain is locked. Cannot save OAuth token.")
-                print("\nUnlock Keychain with:")
-                print("  security unlock-keychain ~/Library/Keychains/login.keychain-db")
-                print("\nYou can set up OAuth later with:")
-                print("  swiftindex auth login\n")
-                // Don't fallback - Keychain needs to be unlocked first
-            } catch {
-                logger.error("Automatic OAuth flow failed: \(error.localizedDescription)")
-                await manualOAuthFallback()
-            }
-        } else {
+        if !cliAvailable {
             print("⚠️  'claude' CLI not found")
             print("\nTo install Claude Code CLI:")
-            print("  npm install -g @anthropic-ai/claude-code\n")
-            await manualOAuthFallback()
-        }
-    }
-
-    private func manualOAuthFallback() async {
-        let tryManual = ui.yesOrNoChoicePrompt(
-            question: "Try manual token input?",
-            defaultAnswer: true,
-            description: "Run 'claude setup-token' and paste the generated token."
-        )
-
-        guard tryManual else {
-            print("\nSkipping OAuth setup. You can set it up later with:")
+            print("  npm install -g @anthropic-ai/claude-code")
+            print("\nAfter installing, run:")
             print("  swiftindex auth login\n")
             return
         }
 
-        print("\nManual Token Input")
-        print("──────────────────")
-        print("1. Run: claude setup-token")
-        print("2. Copy the generated OAuth token")
-        print("3. Paste it below\n")
+        // Manual flow is default due to IPv6/IPv4 callback issues in Claude CLI
+        print("To get your OAuth token:")
+        print("")
+        print("  1. Open a NEW terminal window")
+        print("  2. Run: claude setup-token")
+        print("  3. Authorize in browser")
+        print("  4. Copy the token from CLI output (sk-ant-oauth-...)")
+        print("")
+        print("If callback hangs, see: github.com/anthropics/claude-code/issues/9376")
+        print("")
 
         let token = ui.textPrompt(
             title: nil,
             prompt: "OAuth Token",
-            description: "Paste your Claude Code OAuth token",
+            description: "Paste your token here (or press Enter to skip)",
             collapseOnAnswer: true,
             renderer: Renderer(),
             validationRules: []
         )
 
-        // Validate and save
+        guard !token.isEmpty else {
+            print("\nSkipping OAuth setup. Run 'swiftindex auth login' later.\n")
+            return
+        }
+
         do {
             try ClaudeCodeAuthManager.validateTokenFormat(token)
             try ClaudeCodeAuthManager.saveToken(token)
             print("✓ OAuth token saved successfully\n")
         } catch {
-            print("✗ Failed to save token: \(error.localizedDescription)")
-            print("\nYou can set it up later with:")
-            print("  swiftindex auth login\n")
+            print("✗ Invalid token: \(error.localizedDescription)")
+            print("\nRun 'swiftindex auth login' to try again.\n")
         }
-    }
-
-    private func tokenPreview(_ token: String) -> String {
-        let prefixLength = min(10, token.count)
-        return String(token.prefix(prefixLength)) + "***"
     }
 }

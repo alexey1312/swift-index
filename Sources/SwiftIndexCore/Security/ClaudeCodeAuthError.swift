@@ -22,7 +22,7 @@ public enum ClaudeCodeAuthError: Error, Equatable {
 
     /// Invalid token format
     ///
-    /// Token must match pattern: sk-ant-oauth-[a-zA-Z0-9_-]{20,}
+    /// Token must match pattern: sk-ant-oauth-... or sk-ant-oat01-...
     case invalidToken
 
     /// Token validation failed (Anthropic API returned error)
@@ -30,6 +30,12 @@ public enum ClaudeCodeAuthError: Error, Equatable {
 
     /// Validation timeout (took longer than configured limit)
     case validationTimeout
+
+    /// OAuth flow timeout (browser callback not received)
+    ///
+    /// Known issue: Claude Code CLI may bind callback server to IPv6 only,
+    /// while browser redirects to IPv4. See: github.com/anthropics/claude-code/issues/9376
+    case oauthFlowTimeout
 }
 
 extension ClaudeCodeAuthError: LocalizedError {
@@ -66,7 +72,7 @@ extension ClaudeCodeAuthError: LocalizedError {
         case .invalidToken:
             """
             Invalid OAuth token format.
-            Expected: sk-ant-oauth-[alphanumeric-_]{20,}
+            Expected: sk-ant-oauth-... or sk-ant-oat01-...
             """
 
         case let .validationFailed(message):
@@ -74,6 +80,17 @@ extension ClaudeCodeAuthError: LocalizedError {
 
         case .validationTimeout:
             "Token validation timed out after 15 seconds"
+
+        case .oauthFlowTimeout:
+            """
+            OAuth flow timed out waiting for browser callback.
+
+            This is a known Claude Code CLI issue (github.com/anthropics/claude-code/issues/9376).
+            The callback server may bind to IPv6 while the browser uses IPv4.
+
+            Workaround: Use manual mode instead:
+              swiftindex auth login --manual
+            """
         }
     }
 
@@ -96,6 +113,9 @@ extension ClaudeCodeAuthError: LocalizedError {
 
         case .validationTimeout:
             "Check network connectivity and retry"
+
+        case .oauthFlowTimeout:
+            "Run: swiftindex auth login --manual"
         }
     }
 }

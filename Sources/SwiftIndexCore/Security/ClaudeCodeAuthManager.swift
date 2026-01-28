@@ -1,3 +1,4 @@
+import Crypto
 import Foundation
 import Logging
 
@@ -29,9 +30,11 @@ public enum ClaudeCodeAuthManager {
 
     /// OAuth token format pattern
     ///
-    /// Pattern: `sk-ant-oauth-` followed by 20+ alphanumeric/underscore/dash characters
+    /// Supports both formats:
+    /// - Legacy: `sk-ant-oauth-` followed by 20+ characters
+    /// - New:    `sk-ant-oat01-` followed by 20+ characters
     /// Used for both parsing CLI output and validating user input
-    private static let tokenPattern = #"sk-ant-oauth-[\w-]{20,}"#
+    private static let tokenPattern = #"sk-ant-oa(uth|t\d+)-[\w-]{20,}"#
 
     // MARK: - CLI Detection
 
@@ -107,7 +110,7 @@ public enum ClaudeCodeAuthManager {
     /// - Throws: ClaudeCodeAuthError.invalidToken if format invalid
     ///
     /// Format Requirements:
-    /// - Prefix: `sk-ant-oauth-`
+    /// - Prefix: `sk-ant-oauth-` (legacy) or `sk-ant-oat01-` (new)
     /// - Minimum length: 20 characters after prefix
     /// - Allowed characters: alphanumeric, underscore, dash
     public static func validateTokenFormat(_ token: String) throws {
@@ -115,19 +118,12 @@ public enum ClaudeCodeAuthManager {
             throw ClaudeCodeAuthError.invalidToken
         }
 
-        // Check prefix
-        guard token.hasPrefix("sk-ant-oauth-") else {
+        // Check prefix (supports both legacy and new format)
+        guard token.hasPrefix("sk-ant-oa") else {
             throw ClaudeCodeAuthError.invalidToken
         }
 
-        // Check minimum length (prefix + 20 chars)
-        let prefix = "sk-ant-oauth-"
-        let body = String(token.dropFirst(prefix.count))
-        guard body.count >= 20 else {
-            throw ClaudeCodeAuthError.invalidToken
-        }
-
-        // Check allowed characters (with anchors for exact match)
+        // Check allowed characters and full pattern (with anchors for exact match)
         let pattern = "^" + tokenPattern + "$"
         let regex = try NSRegularExpression(pattern: pattern, options: [])
         let range = NSRange(token.startIndex ..< token.endIndex, in: token)
@@ -161,7 +157,7 @@ public enum ClaudeCodeAuthManager {
         try KeychainManager.deleteClaudeCodeToken()
     }
 
-    // MARK: - OAuth Flow (Automatic)
+    // MARK: - OAuth Flow (CLI-based)
 
     #if os(macOS) || os(Linux)
 
@@ -193,8 +189,9 @@ public enum ClaudeCodeAuthManager {
 
             try process.run()
 
-            // Wait for process with timeout (60 seconds)
-            let timeoutSeconds: TimeInterval = 60
+            // Wait for process with timeout (30 seconds - reduced due to IPv6/IPv4 callback issues)
+            // If browser auth takes longer, user should use manual mode
+            let timeoutSeconds: TimeInterval = 30
             let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
                 if process.isRunning {
@@ -213,6 +210,19 @@ public enum ClaudeCodeAuthManager {
             let output = (String(data: outputData, encoding: .utf8) ?? "") +
                 "\n" +
                 (String(data: errorData, encoding: .utf8) ?? "")
+
+            // Check for timeout (process terminated by signal = our SIGTERM from timeout)
+            // Known issue: Claude Code CLI may bind callback to IPv6 only
+            if process.terminationReason == .uncaughtSignal {
+                logger.error(
+                    "OAuth flow timeout - likely IPv6 callback issue",
+                    metadata: [
+                        "error_id": .string("oauth_flow_timeout"),
+                        "github_issue": .string("anthropics/claude-code#9376"),
+                    ]
+                )
+                throw ClaudeCodeAuthError.oauthFlowTimeout
+            }
 
             // Check exit code
             guard process.terminationStatus == 0 else {

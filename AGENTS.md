@@ -270,6 +270,13 @@ dimension in the mapping file for validation on load.
 
 ## Code Conventions
 
+### Platform: macOS Only
+
+This is a **macOS-only application** (Apple Silicon ARM). Do not add `#if os(macOS)` conditionals
+or cross-platform compatibility code. Assume macOS APIs (AppKit, Security.framework, etc.) are
+always available. The only exception is existing `#if os(macOS) || os(Linux)` blocks in
+ClaudeCodeAuthManager for the CLI-based flow.
+
 ### Swift 6 Requirements
 
 - Strict concurrency enabled

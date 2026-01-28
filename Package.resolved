@@ -1,5 +1,5 @@
 {
-  "originHash" : "f00dbf698be2cdb72ecf24ce0708aceb4d7efd4045de1abff796d38d092bccdc",
+  "originHash" : "7c0b0430eb27178058e91d00b7cbe480a3989f7c2a28d849e45c1d50e6e0347b",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/ml-explore/mlx-swift-lm.git",
       "state" : {
-        "branch" : "main",
-        "revision" : "77ebb037ab0937e0337dbfc222024907cabfc93e"
+        "revision" : "360c5052b81cc154b04ee0933597a4ad6db4b8ae",
+        "version" : "2.30.3"
       }
     },
     {
@@ -123,8 +123,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/huggingface/swift-jinja.git",
       "state" : {
-        "revision" : "ba2364165002abe8f4f3992d74a7b547c635638e",
-        "version" : "2.2.1"
+        "revision" : "d81197f35f41445bc10e94600795e68c6f5e94b0",
+        "version" : "2.3.1"
       }
     },
     {
@@ -159,8 +159,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/jkrukowski/swift-safetensors.git",
       "state" : {
-        "revision" : "df83e886595293e4d3584d32466ccebed0bbf7b7",
-        "version" : "0.0.9"
+        "revision" : "d249ae40bdea0db5e725d86c84a74d5eaf0e0e8f",
+        "version" : "0.1.0"
       }
     },
     {
