@@ -30,6 +30,12 @@
         "https://sosumi.ai/mcp"
       ],
       "command": "npx"
+    },
+    "swiftindex": {
+      "args": [
+        "serve"
+      ],
+      "command": "/opt/homebrew/bin/swiftindex"
     }
   }
 }
