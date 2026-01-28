@@ -231,7 +231,10 @@ public actor HybridSearchEngine: SearchEngine {
     private static let exactContentBoost: Float = 2.0
 
     /// Boost multiplier for paths containing "/Sources/" vs "/Tests/".
-    private static let sourcePathBoost: Float = 1.1
+    private static let sourcePathBoost: Float = 1.25
+
+    /// Demotion multiplier for paths containing "/Tests/".
+    private static let testPathDemotion: Float = 0.8
 
     /// Boost multiplier for public declarations.
     private static let publicModifierBoost: Float = 1.1
@@ -305,7 +308,12 @@ public actor HybridSearchEngine: SearchEngine {
             score *= Self.sourcePathBoost
         }
 
-        // 4. Public modifier boost (prioritize public API)
+        // 4. Test path demotion
+        if chunk.path.contains("/Tests/") {
+            score *= Self.testPathDemotion
+        }
+
+        // 5. Public modifier boost (prioritize public API)
         if let signature = chunk.signature, signature.hasPrefix("public ") {
             score *= Self.publicModifierBoost
         }
