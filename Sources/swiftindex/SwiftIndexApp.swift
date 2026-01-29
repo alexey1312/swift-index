@@ -7,6 +7,10 @@ import SwiftIndexMCP
 
 @main
 struct SwiftIndex: AsyncParsableCommand {
+    // Custom version flag with -v shorthand (standard CLI convention)
+    @Flag(name: [.short, .long], help: "Show version information")
+    var version: Bool = false
+
     static let configuration = CommandConfiguration(
         commandName: "swiftindex",
         abstract: "Semantic code search for Swift codebases",
@@ -46,7 +50,16 @@ struct SwiftIndex: AsyncParsableCommand {
             InstallCursorCommand.self,
             InstallCodexCommand.self,
             InstallGeminiCommand.self,
-        ],
-        defaultSubcommand: IndexCommand.self
+        ]
+        // No defaultSubcommand - running without subcommand shows help
     )
+
+    mutating func run() throws {
+        if version {
+            print(Self.configuration.version)
+            throw ExitCode.success
+        }
+        // No subcommand provided - show help
+        throw CleanExit.helpRequest()
+    }
 }
