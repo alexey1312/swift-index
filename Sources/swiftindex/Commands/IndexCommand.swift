@@ -81,7 +81,7 @@ struct IndexCommand: AsyncParsableCommand {
 
         let resolvedPath = try resolvePath(logger: logger)
         let configuration = try await loadConfigurationWithInitFallback(
-            projectDirectory: resolvedPath,
+            projectDirectory: FileManager.default.currentDirectoryPath,
             logger: logger
         )
         let indexPath = try createIndexDirectory(

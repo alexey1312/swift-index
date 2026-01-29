@@ -385,6 +385,86 @@ struct CLITests {
         #expect(stdout.contains("Force: true") || stdout.contains("Mode: Force re-index"), "Should show force enabled")
     }
 
+    @Test("index command searches config in working directory, not target path")
+    func indexCommandSearchesConfigInWorkingDirectory() throws {
+        // Create working directory with config
+        let workDir = tempDir
+        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+        defer { cleanupFixtures(workDir) }
+
+        // Create config in working directory
+        let configFile = workDir.appendingPathComponent(".swiftindex.toml")
+        try """
+        [embedding]
+        provider = "mock"
+        model = "all-MiniLM-L6-v2"
+        dimension = 384
+        """.write(to: configFile, atomically: true, encoding: .utf8)
+
+        // Create subdirectory to index (without config)
+        let subDir = workDir.appendingPathComponent("subproject")
+        try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+
+        let swiftFile = subDir.appendingPathComponent("Code.swift")
+        try """
+        struct Code {
+            let value: Int
+        }
+        """.write(to: swiftFile, atomically: true, encoding: .utf8)
+
+        // Run index from working directory targeting subdirectory
+        let (stdout, stderr, exitCode) = try runCommand(
+            ["index", "subproject"],
+            workingDirectory: workDir.path
+        )
+
+        // Should succeed using config from working directory
+        #expect(exitCode == 0, "Should find config in working directory. stderr: \(stderr)")
+        #expect(stdout.contains("Indexing:"), "Should show indexing message")
+    }
+
+    @Test("index command fails if config missing from working directory")
+    func indexCommandFailsWithoutConfigInWorkingDirectory() throws {
+        // Create working directory without config
+        let workDir = tempDir
+        try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+        defer { cleanupFixtures(workDir) }
+
+        // Create subdirectory with config (but we should NOT find it there)
+        let subDir = workDir.appendingPathComponent("subproject")
+        try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
+
+        let subConfigFile = subDir.appendingPathComponent(".swiftindex.toml")
+        try """
+        [embedding]
+        provider = "mock"
+        model = "all-MiniLM-L6-v2"
+        dimension = 384
+        """.write(to: subConfigFile, atomically: true, encoding: .utf8)
+
+        let swiftFile = subDir.appendingPathComponent("Code.swift")
+        try """
+        struct Code {
+            let value: Int
+        }
+        """.write(to: swiftFile, atomically: true, encoding: .utf8)
+
+        // Run index from working directory targeting subdirectory
+        // This should fail because config is in subproject, not working directory
+        let (_, stderr, exitCode) = try runCommand(
+            ["index", "subproject"],
+            workingDirectory: workDir.path,
+            environment: ["SWIFTINDEX_TTY_OVERRIDE": "noninteractive"]
+        )
+
+        // Should fail because config is not in working directory
+        #expect(exitCode != 0, "Should fail without config in working directory")
+        #expect(
+            stderr.contains("No configuration found") || stderr.contains("configuration file"),
+            "Should indicate missing config"
+        )
+    }
+
     // MARK: - Search Command Tests
 
     @Test("search command shows help with --help")
