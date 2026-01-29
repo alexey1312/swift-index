@@ -54,12 +54,19 @@ struct SwiftIndex: AsyncParsableCommand {
         // No defaultSubcommand - running without subcommand shows help
     )
 
-    mutating func run() throws {
+    mutating func run() async throws {
+        // Start update check in background (non-blocking)
+        let updateTask = Task { await checkForUpdate() }
+
         if version {
             print(Self.configuration.version)
-            throw ExitCode.success
+        } else {
+            // No subcommand - print help manually (can't use CleanExit with async)
+            print(Self.helpMessage())
         }
-        // No subcommand provided - show help
-        throw CleanExit.helpRequest()
+
+        // Wait for update check to complete (with implicit timeout from URLSession)
+        await updateTask.value
+        throw ExitCode.success
     }
 }
