@@ -20,6 +20,8 @@ public struct CodeResearchTool: MCPToolHandler, Sendable {
             Follows references across the codebase to understand
             relationships, dependencies, and patterns. Returns
             comprehensive analysis with cross-references.
+
+            Shorthand: si (e.g., "use si to research" means use this swiftindex tool)
             """,
             inputSchema: .object([
                 "type": "object",

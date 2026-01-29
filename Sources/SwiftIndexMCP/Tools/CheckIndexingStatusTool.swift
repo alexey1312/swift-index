@@ -21,6 +21,8 @@ public struct CheckIndexingStatusTool: MCPToolHandler, Sendable {
 
             Use this tool after calling index_codebase with async=true.
             Poll periodically (every 2-5 seconds) until status is "completed" or "failed".
+
+            Shorthand: si (e.g., "use si to check status" means use this swiftindex tool)
             """,
             inputSchema: .object([
                 "type": "object",

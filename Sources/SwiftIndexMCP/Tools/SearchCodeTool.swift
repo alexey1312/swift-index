@@ -19,6 +19,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             Search indexed Swift codebases using hybrid semantic search.
             Combines BM25 keyword matching with vector similarity search
             using RRF (Reciprocal Rank Fusion) for optimal results.
+
+            Shorthand: si (e.g., "use si to search" means use this swiftindex tool)
             """,
             inputSchema: .object([
                 "type": "object",

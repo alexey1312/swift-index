@@ -22,6 +22,8 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             For long-running indexing operations, set async=true to run in background.
             Returns a task_id immediately that can be used with check_indexing_status
             to monitor progress.
+
+            Shorthand: si (e.g., "use si to index" means use this swiftindex tool)
             """,
             inputSchema: .object([
                 "type": "object",

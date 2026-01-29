@@ -18,6 +18,8 @@ public struct SearchDocsTool: MCPToolHandler, Sendable {
             Search indexed documentation using full-text search.
             Searches Markdown files, README sections, and other documentation
             content for relevant information.
+
+            Shorthand: si (e.g., "use si to search docs" means use this swiftindex tool)
             """,
             inputSchema: .object([
                 "type": "object",
