@@ -119,8 +119,8 @@ struct PerformanceBenchmarkTests {
     }
 }
 
-// Helper to define benchmark tag if not exists
-extension Tag {
+// Helper to define benchmark tag
+private extension Tag {
     @available(macOS 13.0, *)
     @Tag static var benchmark: Tag
 }
