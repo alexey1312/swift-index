@@ -195,6 +195,52 @@ swiftindex search --synthesize "authentication flow"   # Generate summary and fo
 
 Both flags require `[search.enhancement]` configuration. See [Search Enhancement](#search-enhancement).
 
+### `swiftindex parse-tree <path>`
+
+Visualize the AST (Abstract Syntax Tree) structure of Swift files. Useful for understanding code structure, finding declarations, and exploring the syntax tree.
+
+```bash
+# Parse a single file
+swiftindex parse-tree Sources/Sample.swift
+
+# Parse all Swift files in a directory
+swiftindex parse-tree Sources/
+
+# Use custom glob pattern
+swiftindex parse-tree Sources/ --pattern "**/*Tests.swift"
+
+# Limit AST depth
+swiftindex parse-tree Sources/Sample.swift --max-depth 2
+
+# Filter by node kinds
+swiftindex parse-tree Sources/ --kind-filter "class,struct,method"
+
+# Output formats
+swiftindex parse-tree Sources/Sample.swift                  # Default: TOON
+swiftindex parse-tree Sources/Sample.swift --format human   # Human-readable tree
+swiftindex parse-tree Sources/Sample.swift --format json    # Verbose JSON
+```
+
+**Node Kinds:**
+
+| Kind        | Description               |
+| ----------- | ------------------------- |
+| `class`     | Class declaration         |
+| `struct`    | Struct declaration        |
+| `enum`      | Enum declaration          |
+| `protocol`  | Protocol declaration      |
+| `actor`     | Actor declaration         |
+| `extension` | Extension declaration     |
+| `function`  | Top-level function        |
+| `method`    | Method inside a type      |
+| `init`      | Initializer               |
+| `deinit`    | Deinitializer             |
+| `variable`  | Variable (`var`) property |
+| `constant`  | Constant (`let`) property |
+| `subscript` | Subscript declaration     |
+| `typealias` | Type alias declaration    |
+| `macro`     | Macro declaration         |
+
 ### `swiftindex auth <subcommand>`
 
 Manage Claude Code OAuth authentication (Apple platforms only).
@@ -598,6 +644,34 @@ Perform multi-step research over the indexed codebase.
   "focus": "architecture"
 }
 ```
+
+### `parse_tree`
+
+Visualize Swift AST (Abstract Syntax Tree) structure. Parses Swift files and displays their declaration hierarchy. Supports both single files and directories with glob patterns.
+
+**Parameters:**
+
+- `path` (required): Path to a Swift file or directory to parse
+- `pattern` (optional): Glob pattern for directories (default: `**/*.swift`)
+- `max_depth` (optional): Maximum AST depth to traverse
+- `kind_filter` (optional): Comma-separated list of node kinds to include (e.g., `class,struct,method`)
+- `format` (optional): Output format - `toon`, `json`, or `human`
+
+**Example:**
+
+```json
+{
+  "path": "/path/to/Sources",
+  "pattern": "**/*.swift",
+  "max_depth": 3,
+  "kind_filter": "class,struct,method",
+  "format": "toon"
+}
+```
+
+**Node Kinds:** `class`, `struct`, `enum`, `protocol`, `actor`, `extension`, `function`, `method`, `init`, `deinit`, `variable`, `constant`, `subscript`, `typealias`, `macro`
+
+**Batch Results:** When parsing directories, files that cannot be read (permissions, encoding) are tracked in `skippedFiles` array with path and reason.
 
 ### Output Formats
 

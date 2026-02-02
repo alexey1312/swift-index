@@ -7,7 +7,24 @@ import Foundation
 /// Represents a single node in the abstract syntax tree with metadata
 /// for displaying code structure in tree format.
 public struct ASTNode: Sendable, Codable, Equatable, Hashable {
-    /// The kind of syntax node (e.g., "class", "function", "struct").
+    /// The kind of syntax node.
+    ///
+    /// Possible values:
+    /// - `"class"` — Class declaration
+    /// - `"struct"` — Struct declaration
+    /// - `"enum"` — Enum declaration
+    /// - `"protocol"` — Protocol declaration
+    /// - `"actor"` — Actor declaration
+    /// - `"extension"` — Extension declaration
+    /// - `"function"` — Top-level function declaration
+    /// - `"method"` — Method inside a type
+    /// - `"init"` — Initializer
+    /// - `"deinit"` — Deinitializer
+    /// - `"variable"` — Variable (`var`) property
+    /// - `"constant"` — Constant (`let`) property
+    /// - `"subscript"` — Subscript declaration
+    /// - `"typealias"` — Type alias declaration
+    /// - `"macro"` — Macro declaration
     public let kind: String
 
     /// The identifier name (if applicable).
@@ -81,6 +98,22 @@ public struct ParseTreeResult: Sendable, Codable, Equatable {
     }
 }
 
+// MARK: - SkippedFile
+
+/// A file that was skipped during batch processing.
+public struct SkippedFile: Sendable, Codable, Equatable {
+    /// Path to the skipped file.
+    public let path: String
+
+    /// Reason why the file was skipped.
+    public let reason: String
+
+    public init(path: String, reason: String) {
+        self.path = path
+        self.reason = reason
+    }
+}
+
 // MARK: - ParseTreeBatchResult
 
 /// Result of parsing multiple files (directory mode).
@@ -100,18 +133,23 @@ public struct ParseTreeBatchResult: Sendable, Codable, Equatable {
     /// Root path that was scanned.
     public let rootPath: String
 
+    /// Files that were skipped during processing.
+    public let skippedFiles: [SkippedFile]
+
     public init(
         files: [ParseTreeResult],
         totalFiles: Int,
         totalNodes: Int,
         maxDepth: Int,
-        rootPath: String
+        rootPath: String,
+        skippedFiles: [SkippedFile] = []
     ) {
         self.files = files
         self.totalFiles = totalFiles
         self.totalNodes = totalNodes
         self.maxDepth = maxDepth
         self.rootPath = rootPath
+        self.skippedFiles = skippedFiles
     }
 }
 

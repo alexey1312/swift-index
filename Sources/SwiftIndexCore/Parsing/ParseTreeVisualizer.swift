@@ -4,6 +4,28 @@ import Foundation
 import SwiftParser
 import SwiftSyntax
 
+// MARK: - ParseTreeError
+
+/// Errors that can occur during parse tree operations.
+public enum ParseTreeError: Error, Sendable, Equatable, LocalizedError {
+    case invalidGlobPattern(pattern: String, reason: String)
+    case directoryEnumerationFailed(path: String)
+    case jsonEncodingFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case let .invalidGlobPattern(pattern, reason):
+            "Invalid glob pattern '\(pattern)': \(reason)"
+        case let .directoryEnumerationFailed(path):
+            "Failed to enumerate directory: \(path)"
+        case .jsonEncodingFailed:
+            "Failed to encode result as JSON"
+        }
+    }
+}
+
+// MARK: - ParseTreeOptions
+
 /// Options for AST visualization.
 public struct ParseTreeOptions: Sendable {
     /// Maximum depth to traverse (nil = unlimited).
@@ -117,6 +139,7 @@ public struct ParseTreeVisualizer: Sendable {
         let files = try findMatchingFiles(in: directoryPath, pattern: pattern)
 
         var results: [ParseTreeResult] = []
+        var skippedFiles: [SkippedFile] = []
         var totalNodes = 0
         var maxDepth = 0
 
@@ -127,7 +150,10 @@ public struct ParseTreeVisualizer: Sendable {
                 totalNodes += result.totalNodes
                 maxDepth = max(maxDepth, result.maxDepth)
             } catch {
-                // Skip files that can't be read
+                skippedFiles.append(SkippedFile(
+                    path: filePath,
+                    reason: error.localizedDescription
+                ))
                 continue
             }
         }
@@ -137,7 +163,8 @@ public struct ParseTreeVisualizer: Sendable {
             totalFiles: results.count,
             totalNodes: totalNodes,
             maxDepth: maxDepth,
-            rootPath: directoryPath
+            rootPath: directoryPath,
+            skippedFiles: skippedFiles
         )
     }
 
@@ -180,7 +207,10 @@ public struct ParseTreeVisualizer: Sendable {
     /// Format result as JSON.
     public func formatJSON(_ result: ParseTreeResult) throws -> String {
         let data = try JSONCodec.encodePrettySorted(result)
-        return String(data: data, encoding: .utf8) ?? "{}"
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw ParseTreeError.jsonEncodingFailed
+        }
+        return string
     }
 
     // MARK: - Output Formatters (Batch)
@@ -200,6 +230,13 @@ public struct ParseTreeVisualizer: Sendable {
                 output += formatNodesTOON(fileResult.nodes, includeSignature: false)
             }
             output += "\n"
+        }
+
+        if !result.skippedFiles.isEmpty {
+            output += "skipped[\(result.skippedFiles.count)]{path,reason}:\n"
+            for skipped in result.skippedFiles {
+                output += "  \"\(escapeString(skipped.path))\",\"\(escapeString(skipped.reason))\"\n"
+            }
         }
 
         return output
@@ -224,13 +261,26 @@ public struct ParseTreeVisualizer: Sendable {
             output += "\n"
         }
 
+        if !result.skippedFiles.isEmpty {
+            output += "Skipped Files (\(result.skippedFiles.count))\n"
+            output += String(repeating: "─", count: 40) + "\n"
+            for skipped in result.skippedFiles {
+                output += "  \(skipped.path)\n"
+                output += "    Reason: \(skipped.reason)\n"
+            }
+            output += "\n"
+        }
+
         return output
     }
 
     /// Format batch result as JSON.
     public func formatJSON(_ result: ParseTreeBatchResult) throws -> String {
         let data = try JSONCodec.encodePrettySorted(result)
-        return String(data: data, encoding: .utf8) ?? "{}"
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw ParseTreeError.jsonEncodingFailed
+        }
+        return string
     }
 
     // MARK: - Private Helpers
@@ -337,7 +387,7 @@ public struct ParseTreeVisualizer: Sendable {
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return []
+            throw ParseTreeError.directoryEnumerationFailed(path: directory)
         }
 
         var matchingFiles: [String] = []
@@ -355,7 +405,7 @@ public struct ParseTreeVisualizer: Sendable {
             let relativePath = String(fullPath.dropFirst(directory.count))
                 .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
 
-            if matcher.matches(relativePath, pattern: pattern) {
+            if try matcher.matches(relativePath, pattern: pattern) {
                 matchingFiles.append(fullPath)
             }
         }
@@ -368,13 +418,18 @@ public struct ParseTreeVisualizer: Sendable {
 
 /// A simple synchronous glob matcher for file filtering.
 private struct SyncGlobMatcher {
-    func matches(_ path: String, pattern: String) -> Bool {
+    func matches(_ path: String, pattern: String) throws -> Bool {
         let regexPattern = globToRegex(pattern)
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
-            return false
+        do {
+            let regex = try NSRegularExpression(pattern: regexPattern)
+            let range = NSRange(path.startIndex..., in: path)
+            return regex.firstMatch(in: path, range: range) != nil
+        } catch {
+            throw ParseTreeError.invalidGlobPattern(
+                pattern: pattern,
+                reason: error.localizedDescription
+            )
         }
-        let range = NSRange(path.startIndex..., in: path)
-        return regex.firstMatch(in: path, range: range) != nil
     }
 
     private func globToRegex(_ pattern: String) -> String {
