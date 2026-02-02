@@ -193,24 +193,37 @@ public actor FollowUpGenerator {
         return (query, nil)
     }
 
-    private func categorize(query: String) -> FollowUpCategory {
-        let lowercased = query.lowercased()
+    // MARK: - Regex Patterns
 
-        if lowercased.contains("how") || lowercased.contains("usage") ||
-            lowercased.contains("example")
-        {
+    // Pre-compiled regex patterns for categorization (case-insensitive)
+    private static let howToRegex: NSRegularExpression = // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "how|usage|example", options: .caseInsensitive)
+
+    private static let deeperUnderstandingRegex: NSRegularExpression = // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "why|reason", options: .caseInsensitive)
+
+    private static let testingRegex: NSRegularExpression = // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "test|spec", options: .caseInsensitive)
+
+    private static let relatedCodeRegex: NSRegularExpression = // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "similar|related|like", options: .caseInsensitive)
+
+    private static let configurationRegex: NSRegularExpression = // swiftlint:disable:next force_try
+        try! NSRegularExpression(pattern: "config|setup|init", options: .caseInsensitive)
+
+    private func categorize(query: String) -> FollowUpCategory {
+        // Use regex matching to avoid multiple string traversals and lowercasing allocations
+        let range = NSRange(query.startIndex ..< query.endIndex, in: query)
+
+        if Self.howToRegex.firstMatch(in: query, options: [], range: range) != nil {
             return .howTo
-        } else if lowercased.contains("why") || lowercased.contains("reason") {
+        } else if Self.deeperUnderstandingRegex.firstMatch(in: query, options: [], range: range) != nil {
             return .deeperUnderstanding
-        } else if lowercased.contains("test") || lowercased.contains("spec") {
+        } else if Self.testingRegex.firstMatch(in: query, options: [], range: range) != nil {
             return .testing
-        } else if lowercased.contains("similar") || lowercased.contains("related") ||
-            lowercased.contains("like")
-        {
+        } else if Self.relatedCodeRegex.firstMatch(in: query, options: [], range: range) != nil {
             return .relatedCode
-        } else if lowercased.contains("config") || lowercased.contains("setup") ||
-            lowercased.contains("init")
-        {
+        } else if Self.configurationRegex.firstMatch(in: query, options: [], range: range) != nil {
             return .configuration
         }
 
