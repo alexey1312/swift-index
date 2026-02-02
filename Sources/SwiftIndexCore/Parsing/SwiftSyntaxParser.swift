@@ -13,8 +13,10 @@ import SwiftSyntax
 public struct SwiftSyntaxParser: Parser, Sendable {
     // MARK: - Parser Protocol
 
+    private static let _supportedExtensions: Set<String> = ["swift"]
+
     public var supportedExtensions: Set<String> {
-        ["swift"]
+        Self._supportedExtensions
     }
 
     public init() {}
