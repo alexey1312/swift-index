@@ -734,29 +734,33 @@ struct SearchCommand: AsyncParsableCommand {
         // Format: search{q,n,ms}: followed by tabular results
         let elapsedMs = Int(elapsed * 1000)
 
-        var output = "search{q,n,ms}:\n"
-        output += "  \"\(escapeString(query))\",\(results.count),\(elapsedMs)\n"
+        var output = [String]()
+        // Estimate capacity: header + results * lines_per_result + metadata + code + synthesis
+        output.reserveCapacity(results.count * 10 + 50)
+
+        output.append("search{q,n,ms}:\n")
+        output.append("  \"\(escapeString(query))\",\(results.count),\(elapsedMs)\n")
 
         // Add query expansion info if available
         if let expanded = expandedQuery {
-            output += "\nexpanded{syn,rel,var}:\n"
+            output.append("\nexpanded{syn,rel,var}:\n")
             let sep = "\",\""
             let syns = expanded.synonyms.isEmpty ? "~" : "[\"\(expanded.synonyms.joined(separator: sep))\"]"
             let rels = expanded.relatedConcepts.isEmpty
                 ? "~" : "[\"\(expanded.relatedConcepts.joined(separator: sep))\"]"
             let vars = expanded.variations.isEmpty ? "~" : "[\"\(expanded.variations.joined(separator: sep))\"]"
-            output += "  \(syns),\(rels),\(vars)\n"
+            output.append("  \(syns),\(rels),\(vars)\n")
         }
 
-        output += "\n"
+        output.append("\n")
 
         if results.isEmpty {
-            print(output)
+            print(output.joined())
             return
         }
 
         // Tabular results with rich metadata: rank, relevance%, path, lines, kind, symbols, lang, tokens
-        output += "results[\(results.count)]{r,rel,p,l,k,s,lang,tok}:\n"
+        output.append("results[\(results.count)]{r,rel,p,l,k,s,lang,tok}:\n")
 
         for (index, result) in results.enumerated() {
             let rank = index + 1
@@ -772,31 +776,31 @@ struct SearchCommand: AsyncParsableCommand {
 
             let row = "  \(rank),\(relevance),\"\(escapeString(path))\",\(lines),"
                 + "\"\(kind)\",\(symbols),\"\(lang)\",\(tokens)"
-            output += row + "\n"
+            output.append(row + "\n")
         }
 
         // Metadata section for signatures and breadcrumbs (compact)
         let hasMetadata = results.contains { $0.chunk.signature != nil || $0.chunk.breadcrumb != nil }
         if hasMetadata {
-            output += "\nmeta[\(results.count)]{sig,bc}:\n"
+            output.append("\nmeta[\(results.count)]{sig,bc}:\n")
             for result in results {
                 let sig = result.chunk.signature.map { "\"\(escapeString($0))\"" } ?? "~"
                 let bc = result.chunk.breadcrumb.map { "\"\(escapeString($0))\"" } ?? "~"
-                output += "  \(sig),\(bc)\n"
+                output.append("  \(sig),\(bc)\n")
             }
         }
 
         // Doc comments section (compact, truncated)
         let hasDocComments = results.contains { $0.chunk.docComment != nil }
         if hasDocComments {
-            output += "\ndocs[\(results.count)]:\n"
+            output.append("\ndocs[\(results.count)]:\n")
             for result in results {
                 if let doc = result.chunk.docComment {
                     let truncated = String(doc.prefix(150)).replacingOccurrences(of: "\n", with: " ")
                     let suffix = doc.count > 150 ? "..." : ""
-                    output += "  \"\(escapeString(truncated))\(suffix)\"\n"
+                    output.append("  \"\(escapeString(truncated))\(suffix)\"\n")
                 } else {
-                    output += "  ~\n"
+                    output.append("  ~\n")
                 }
             }
         }
@@ -804,17 +808,17 @@ struct SearchCommand: AsyncParsableCommand {
         // Generated descriptions section
         let hasDescriptions = results.contains { $0.chunk.generatedDescription != nil }
         if hasDescriptions {
-            output += "\ndescs[\(results.count)]:\n"
+            output.append("\ndescs[\(results.count)]:\n")
             for result in results {
                 if let desc = result.chunk.generatedDescription {
-                    output += "  \"\(escapeString(desc))\"\n"
+                    output.append("  \"\(escapeString(desc))\"\n")
                 } else {
-                    output += "  ~\n"
+                    output.append("  ~\n")
                 }
             }
         }
 
-        output += "\ncode[\(results.count)]:\n"
+        output.append("\ncode[\(results.count)]:\n")
 
         for result in results {
             // Truncate content for TOON output (first 10 lines max)
@@ -822,18 +826,18 @@ struct SearchCommand: AsyncParsableCommand {
             let preview = lines.prefix(10).joined(separator: "\n")
             let truncated = lines.count > 10
 
-            output += "  ---\n"
+            output.append("  ---\n")
             for line in preview.split(separator: "\n", omittingEmptySubsequences: false) {
-                output += "  \(line)\n"
+                output.append("  \(line)\n")
             }
             if truncated {
-                output += "  ...\(lines.count - 10) more lines\n"
+                output.append("  ...\(lines.count - 10) more lines\n")
             }
         }
 
         // Add synthesis if available
         if let synthesis {
-            output += "\nsynthesis{sum,insights,refs,conf}:\n"
+            output.append("\nsynthesis{sum,insights,refs,conf}:\n")
             let summary = escapeString(synthesis.summary)
             let keyInsights = synthesis.keyInsights.isEmpty
                 ? "[]"
@@ -841,21 +845,21 @@ struct SearchCommand: AsyncParsableCommand {
             let codeRefs = synthesis.codeReferences.isEmpty
                 ? "[]"
                 : "[\"\(synthesis.codeReferences.map { escapeString($0.formatted) }.joined(separator: "\",\""))\"]"
-            output += "  \"\(summary)\"\n"
-            output += "  \(keyInsights)\n"
-            output += "  \(codeRefs)\n"
-            output += "  \(synthesis.confidence)\n"
+            output.append("  \"\(summary)\"\n")
+            output.append("  \(keyInsights)\n")
+            output.append("  \(codeRefs)\n")
+            output.append("  \(synthesis.confidence)\n")
         }
 
         // Add follow-up suggestions if available
         if let followUps, !followUps.isEmpty {
-            output += "\nfollow_ups[\(followUps.count)]{q,cat}:\n"
+            output.append("\nfollow_ups[\(followUps.count)]{q,cat}:\n")
             for followUp in followUps {
-                output += "  \"\(escapeString(followUp.query))\",\"\(followUp.category.rawValue)\"\n"
+                output.append("  \"\(escapeString(followUp.query))\",\"\(followUp.category.rawValue)\"\n")
             }
         }
 
-        print(output)
+        print(output.joined())
     }
 
     private func escapeString(_ str: String) -> String {
