@@ -19,18 +19,20 @@ public struct TreeSitterParser: Parser, Sendable {
     // MARK: - Parser Protocol
 
     public var supportedExtensions: Set<String> {
-        [
-            // Objective-C
-            "m", "mm", "h",
-            // C/C++
-            "c", "cpp", "cc", "cxx", "hpp",
-            // Data formats
-            "json",
-            "yaml", "yml",
-            // Documentation
-            "md", "markdown",
-        ]
+        Self._supportedExtensions
     }
+
+    private static let _supportedExtensions: Set<String> = [
+        // Objective-C
+        "m", "mm", "h",
+        // C/C++
+        "c", "cpp", "cc", "cxx", "hpp",
+        // Data formats
+        "json",
+        "yaml", "yml",
+        // Documentation
+        "md", "markdown",
+    ]
 
     // MARK: - Regex Patterns
 
