@@ -22,20 +22,23 @@ public struct HybridParser: Parser, Sendable {
 
     // MARK: - Parser Protocol
 
-    public var supportedExtensions: Set<String> {
-        var extensions = swiftParser.supportedExtensions
-        extensions.formUnion(treeSitterParser.supportedExtensions)
-        // PlainTextParser handles everything else
-        return extensions
-    }
+    public let supportedExtensions: Set<String>
 
     // MARK: - Initialization
 
     /// Creates a hybrid parser with default configuration.
     public init() {
-        swiftParser = SwiftSyntaxParser()
-        treeSitterParser = TreeSitterParser()
+        let swift = SwiftSyntaxParser()
+        let treeSitter = TreeSitterParser()
+
+        swiftParser = swift
+        treeSitterParser = treeSitter
         plainTextParser = PlainTextParser()
+
+        var extensions = swift.supportedExtensions
+        extensions.formUnion(treeSitter.supportedExtensions)
+        // PlainTextParser handles everything else
+        supportedExtensions = extensions
     }
 
     /// Creates a hybrid parser with custom parsers.
@@ -52,6 +55,11 @@ public struct HybridParser: Parser, Sendable {
         self.swiftParser = swiftParser
         self.treeSitterParser = treeSitterParser
         self.plainTextParser = plainTextParser
+
+        var extensions = swiftParser.supportedExtensions
+        extensions.formUnion(treeSitterParser.supportedExtensions)
+        // PlainTextParser handles everything else
+        supportedExtensions = extensions
     }
 
     // MARK: - Parsing
