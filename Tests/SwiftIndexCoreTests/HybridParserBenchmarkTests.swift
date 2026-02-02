@@ -12,7 +12,7 @@ struct HybridParserBenchmarkTests {
         print("Starting benchmark: Accessing supportedExtensions \(iterations) times")
 
         let clock = ContinuousClock()
-        let result = try await clock.measure {
+        let result = clock.measure {
             for _ in 0 ..< iterations {
                 _ = parser.supportedExtensions
             }
@@ -27,8 +27,8 @@ struct HybridParserBenchmarkTests {
     }
 }
 
-// Helper to define benchmark tag if not exists
-extension Tag {
+// Helper to define benchmark tag
+private extension Tag {
     @available(macOS 13.0, *)
     @Tag static var benchmark: Tag
 }

@@ -81,6 +81,7 @@ public actor MCPServer {
         tools["search_code"] = SearchCodeTool()
         tools["search_docs"] = SearchDocsTool()
         tools["code_research"] = CodeResearchTool()
+        tools["parse_tree"] = ParseTreeTool()
     }
 
     // MARK: - Server Loop

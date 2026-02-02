@@ -43,6 +43,7 @@ struct SwiftIndex: AsyncParsableCommand {
             IndexCommand.self,
             SearchCommand.self,
             SearchDocsCommand.self,
+            ParseTreeCommand.self,
             WatchCommand.self,
             ProvidersCommand.self,
             ServeCommand.self,

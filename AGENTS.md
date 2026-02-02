@@ -54,6 +54,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 | `swiftindex index [PATH]`        | Index a codebase                        |
 | `swiftindex search <QUERY>`      | Search indexed code                     |
 | `swiftindex search-docs <QUERY>` | Search documentation snippets           |
+| `swiftindex parse-tree [PATH]`   | Visualize Swift AST structure           |
 | `swiftindex watch [PATH]`        | Watch mode (incremental)                |
 | `swiftindex serve`               | Start MCP server                        |
 | `swiftindex providers`           | List embedding providers                |
