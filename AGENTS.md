@@ -63,6 +63,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 | `swiftindex install-claude-code` | Configure Claude Code                   |
 | `swiftindex install-cursor`      | Configure Cursor                        |
 | `swiftindex install-codex`       | Configure Codex                         |
+| `swiftindex parse-tree <PATH>`   | Visualize Swift AST structure           |
 
 **Getting Started**: Run `swiftindex init` first to create `.swiftindex.toml`, then
 `swiftindex index` to build the search index. If you run `index` without a config,
@@ -152,7 +153,7 @@ TOON is the default format for both CLI and MCP server.
 - `MCPTasks` — Tasks API for async long-running operations
 - `CancellationToken` — Cooperative cancellation for tool execution
 - Protocol version: `2025-11-25`
-- 5 tools: `index_codebase`, `check_indexing_status`, `search_code`, `search_docs`, `code_research`
+- 6 tools: `index_codebase`, `check_indexing_status`, `search_code`, `search_docs`, `code_research`, `parse_tree`
 
 #### MCP 2025-11-25 Features
 
@@ -167,13 +168,14 @@ TOON is the default format for both CLI and MCP server.
 
 #### Tool Annotations
 
-| Tool                    | Title                | readOnly | idempotent |
-| ----------------------- | -------------------- | -------- | ---------- |
-| `index_codebase`        | Code Indexer         | false    | true       |
-| `check_indexing_status` | Indexing Status      | true     | true       |
-| `search_code`           | Code Search          | true     | true       |
-| `search_docs`           | Documentation Search | true     | true       |
-| `code_research`         | Code Research        | true     | true       |
+| Tool                    | Title                 | readOnly | idempotent |
+| ----------------------- | --------------------- | -------- | ---------- |
+| `index_codebase`        | Code Indexer          | false    | true       |
+| `check_indexing_status` | Indexing Status       | true     | true       |
+| `search_code`           | Code Search           | true     | true       |
+| `search_docs`           | Documentation Search  | true     | true       |
+| `code_research`         | Code Research         | true     | true       |
+| `parse_tree`            | Parse Tree Visualizer | true     | true       |
 
 #### Async Indexing (Two-Tool Callback Pattern)
 
@@ -244,7 +246,7 @@ check_indexing_status(task_id="abc-123")
 | swift-transformers     | 1.1.6   | HuggingFace model integration |
 | GRDB.swift             | 7.9.0   | SQLite + FTS5                 |
 | usearch                | 2.23.0  | Vector index (HNSW)           |
-| swift-toml             | 1.0.0   | Configuration                 |
+| swift-toml             | 2.0.0   | Configuration                 |
 | toon-swift             | 0.3.0   | Token-optimized output format |
 | swift-argument-parser  | 1.7.0   | CLI argument parsing          |
 | swift-log              | 1.9.0   | Structured logging            |

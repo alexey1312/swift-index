@@ -39,7 +39,7 @@ let package = Package(
         .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.23.0"),
 
         // Configuration
-        .package(url: "https://github.com/alexey1312/swift-toml.git", from: "1.0.0"),
+        .package(url: "https://github.com/mattt/swift-toml.git", from: "2.0.0"),
 
         // Output format
         .package(url: "https://github.com/toon-format/toon-swift.git", from: "0.3.0"),
