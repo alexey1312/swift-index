@@ -208,6 +208,15 @@ struct SearchCommand: AsyncParsableCommand {
         )
         try await indexManager.load()
 
+        var remoteIndex: IndexManager?
+        if let remoteConfig = configuration.remote, remoteConfig.enabled {
+            let cacheDirectory = RemoteCLI.cacheDirectory(for: resolvedPath, config: configuration)
+            remoteIndex = try await OverlayIndexManager.loadRemoteIndexIfAvailable(
+                cacheDirectory: cacheDirectory,
+                dimension: embeddingProvider.dimension
+            )
+        }
+
         // Verify index has data
         let stats = try await indexManager.statistics()
         guard stats.chunkCount > 0 else {
@@ -228,10 +237,21 @@ struct SearchCommand: AsyncParsableCommand {
         // Create search engine using stores from index manager
         let chunkStore = await indexManager.chunkStore
         let vectorStore = await indexManager.vectorStore
+        let remoteChunkStore: GRDBChunkStore?
+        let remoteVectorStore: USearchVectorStore?
+        if let remoteIndex {
+            remoteChunkStore = await remoteIndex.chunkStore
+            remoteVectorStore = await remoteIndex.vectorStore
+        } else {
+            remoteChunkStore = nil
+            remoteVectorStore = nil
+        }
         let searchEngine = HybridSearchEngine(
             chunkStore: chunkStore,
             vectorStore: vectorStore,
             embeddingProvider: embeddingProvider,
+            remoteChunkStore: remoteChunkStore,
+            remoteVectorStore: remoteVectorStore,
             rrfK: configuration.rrfK
         )
 

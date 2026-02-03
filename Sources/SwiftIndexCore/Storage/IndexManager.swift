@@ -80,6 +80,7 @@ public actor IndexManager {
     ///   - vector: The embedding vector for the chunk.
     /// - Throws: If indexing fails.
     public func index(chunk: CodeChunk, vector: [Float]) async throws {
+        try ensureWritable()
         try await chunkStore.insert(chunk)
         try await vectorStore.add(id: chunk.id, vector: vector)
 
@@ -95,6 +96,7 @@ public actor IndexManager {
     /// - Parameter items: Array of (chunk, vector) pairs.
     /// - Throws: If indexing fails.
     public func indexBatch(_ items: [(chunk: CodeChunk, vector: [Float])]) async throws {
+        try ensureWritable()
         guard !items.isEmpty else { return }
 
         let chunks = items.map(\.chunk)
@@ -121,6 +123,7 @@ public actor IndexManager {
     /// - Returns: Number of snippets indexed.
     @discardableResult
     public func reindexSnippets(path: String, snippets: [InfoSnippet]) async throws -> Int {
+        try ensureWritable()
         // Delete old snippets for this path
         try await chunkStore.deleteSnippetsByPath(path)
 
@@ -155,6 +158,7 @@ public actor IndexManager {
         parseResult: ParseResult,
         embedder: ([CodeChunk]) async throws -> [[Float]]
     ) async throws -> FileIndexResult {
+        try ensureWritable()
         let chunks = parseResult.chunks
         let snippets = parseResult.snippets
 
@@ -210,6 +214,7 @@ public actor IndexManager {
     ///   - hash: The file content hash.
     ///   - path: The file path.
     public func recordIndexed(fileHash hash: String, path: String) async throws {
+        try ensureWritable()
         try await chunkStore.setFileHash(hash, forPath: path)
     }
 
@@ -231,6 +236,7 @@ public actor IndexManager {
         newChunks: [CodeChunk],
         embedder: ([CodeChunk]) async throws -> [[Float]]
     ) async throws -> ReindexResult {
+        try ensureWritable()
         // Get existing chunks and their vectors for this file
         let oldChunks = try await chunkStore.getByPath(path)
 
@@ -493,6 +499,7 @@ public actor IndexManager {
     ///
     /// - Throws: If saving fails.
     public func save() async throws {
+        try ensureWritable()
         try await vectorStore.save()
         // Chunk store auto-persists via SQLite
         logger.info("Index saved")
@@ -513,6 +520,7 @@ public actor IndexManager {
     ///
     /// - Throws: If clearing fails.
     public func clear() async throws {
+        try ensureWritable()
         try await chunkStore.clear()
         try await chunkStore.clearSnippets()
         try await vectorStore.clear()
@@ -526,6 +534,7 @@ public actor IndexManager {
     /// - Returns: Number of chunks removed.
     @discardableResult
     public func pruneDeletedFiles() async throws -> Int {
+        try ensureWritable()
         let paths = try await indexedPaths()
         var removedCount = 0
 
@@ -579,6 +588,7 @@ public actor IndexManager {
     /// - Returns: Number of entries repaired.
     @discardableResult
     public func repair() async throws -> Int {
+        try ensureWritable()
         let report = try await verifyConsistency()
         var repairedCount = 0
 
@@ -607,6 +617,9 @@ public struct IndexManagerConfig: Sendable {
     /// Default configuration.
     public static let `default` = IndexManagerConfig()
 
+    /// Whether the index is read-only.
+    public let readOnly: Bool
+
     /// Whether to auto-save after batch operations.
     public let autoSave: Bool
 
@@ -614,11 +627,27 @@ public struct IndexManagerConfig: Sendable {
     public let batchSize: Int
 
     public init(
+        readOnly: Bool = false,
         autoSave: Bool = true,
         batchSize: Int = 100
     ) {
+        self.readOnly = readOnly
         self.autoSave = autoSave
         self.batchSize = batchSize
+    }
+}
+
+// MARK: - IndexManagerError
+
+public enum IndexManagerError: Error, Sendable {
+    case readOnly
+}
+
+extension IndexManager {
+    private func ensureWritable() throws {
+        if config.readOnly {
+            throw IndexManagerError.readOnly
+        }
     }
 }
 

@@ -27,15 +27,15 @@
 
 - [x] Create `Sources/SwiftIndexCore/Remote/S3StorageProvider.swift`
 - [x] Implement upload with multipart for large files
-- [ ] Implement download with progress
+- [x] Implement download with progress
 - [x] Implement credential loading (env, profile, IAM)
 - **Validation:** Integration test with LocalStack or real S3
 
 ### 1.5 Implement GCSStorageProvider
 
 - [x] Create `Sources/SwiftIndexCore/Remote/GCSStorageProvider.swift`
-- [ ] Implement upload with resumable upload
-- [ ] Implement download with progress
+- [x] Implement upload with resumable upload
+- [x] Implement download with progress
 - [x] Implement credential loading (JSON key, default, service account)
 - **Validation:** Integration test with real GCS (optional)
 
@@ -67,56 +67,56 @@
 
 ### 3.1 Implement `swiftindex push` Command
 
-- [ ] Create `Sources/swiftindex/Commands/PushCommand.swift`
-- [ ] Compress local index files
-- [ ] Upload with progress display
-- [ ] Create and upload manifest
+- [x] Create `Sources/swiftindex/Commands/PushCommand.swift`
+- [x] Compress local index files
+- [x] Upload with progress display
+- [x] Create and upload manifest
 - **Validation:** Manual test: push to S3, verify files in bucket
 
 ### 3.2 Implement `swiftindex pull` Command
 
-- [ ] Create `Sources/swiftindex/Commands/PullCommand.swift`
-- [ ] Fetch manifest and compute delta
-- [ ] Download with progress display
-- [ ] Decompress to cache
+- [x] Create `Sources/swiftindex/Commands/PullCommand.swift`
+- [x] Fetch manifest and compute delta
+- [x] Download with progress display
+- [x] Decompress to cache
 - **Validation:** Manual test: pull from S3, verify cache populated
 
 ### 3.3 Implement `swiftindex remote config` Command
 
-- [ ] Create `Sources/swiftindex/Commands/RemoteConfigCommand.swift`
-- [ ] Interactive wizard for provider/bucket/credentials
-- [ ] Validate credentials during setup
-- [ ] Write `[remote]` section to config
+- [x] Create `Sources/swiftindex/Commands/RemoteConfigCommand.swift`
+- [x] Interactive wizard for provider/bucket/credentials
+- [x] Validate credentials during setup
+- [x] Write `[remote]` section to config
 - **Validation:** Wizard completes, config file updated
 
 ### 3.4 Implement `swiftindex remote status` Command
 
-- [ ] Create `Sources/swiftindex/Commands/RemoteStatusCommand.swift`
-- [ ] Compare remote vs local versions
-- [ ] Display sync status
+- [x] Create `Sources/swiftindex/Commands/RemoteStatusCommand.swift`
+- [x] Compare remote vs local versions
+- [x] Display sync status
 - **Validation:** Shows correct status for various states
 
 ## Phase 4: Overlay Search
 
 ### 4.1 Modify IndexManager for Read-Only Mode
 
-- [ ] Add `readOnly` flag to IndexManager
-- [ ] Prevent writes when in read-only mode
-- [ ] Load from cache directory
+- [x] Add `readOnly` flag to IndexManager
+- [x] Prevent writes when in read-only mode
+- [x] Load from cache directory
 - **Validation:** Read-only index works for search
 
 ### 4.2 Implement OverlayIndexManager
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/OverlayIndexManager.swift`
-- [ ] Load remote index from cache (if available)
-- [ ] Merge search results with deduplication
-- [ ] Local wins for same path
+- [x] Create `Sources/SwiftIndexCore/Remote/OverlayIndexManager.swift`
+- [x] Load remote index from cache (if available)
+- [x] Merge search results with deduplication
+- [x] Local wins for same path
 - **Validation:** Unit tests for merge logic
 
 ### 4.3 Integrate Overlay into HybridSearchEngine
 
-- [ ] Modify HybridSearchEngine to accept optional remote index
-- [ ] Implement RRF fusion across both indexes
+- [x] Modify HybridSearchEngine to accept optional remote index
+- [x] Implement RRF fusion across both indexes
 - [ ] Maintain search performance < 200ms
 - **Validation:** Integration test with both indexes
 
@@ -124,17 +124,17 @@
 
 ### 5.1 Add Remote Config Schema
 
-- [ ] Update `TOMLConfig` with `RemoteConfig` struct
-- [ ] Add `[remote]` and `[remote.sync]` sections
-- [ ] Add validation for provider values
-- [ ] Update `TOMLConfigValidator.allowedSections`
+- [x] Update `TOMLConfig` with `RemoteConfig` struct
+- [x] Add `[remote]` and `[remote.sync]` sections
+- [x] Add validation for provider values
+- [x] Update `TOMLConfigValidator.allowedSections`
 - **Validation:** Config loads without errors
 
 ### 5.2 Documentation
 
-- [ ] Add `docs/remote-storage.md` with setup guide
-- [ ] Update CLAUDE.md with new commands
-- [ ] Add examples for CI/CD integration
+- [x] Add `docs/remote-storage.md` with setup guide
+- [x] Update CLAUDE.md with new commands
+- [x] Add examples for CI/CD integration
 - **Validation:** Docs are clear and complete
 
 ## Phase 6: Testing
@@ -143,7 +143,7 @@
 
 - [x] `RemoteManifestTests` — serialization
 - [x] `DeltaSyncManagerTests` — checksum comparison
-- [ ] `OverlayIndexManagerTests` — merge and deduplication
+- [x] `OverlayIndexManagerTests` — merge and deduplication
 - **Validation:** All unit tests pass
 
 ### 6.2 Integration Tests

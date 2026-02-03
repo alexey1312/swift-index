@@ -36,6 +36,10 @@
 | `swiftindex watch [PATH]`        | Watch mode (incremental)                |
 | `swiftindex serve`               | Start MCP server                        |
 | `swiftindex providers`           | List embedding providers                |
+| `swiftindex push`                | Upload index to remote storage          |
+| `swiftindex pull`                | Download index from remote storage      |
+| `swiftindex remote config`       | Configure remote storage                |
+| `swiftindex remote status`       | Show remote sync status                 |
 | `swiftindex auth status`         | Check OAuth token status                |
 | `swiftindex auth login`          | Set up Claude Code OAuth token          |
 | `swiftindex auth logout`         | Remove OAuth token from Keychain        |

@@ -39,6 +39,12 @@ import Foundation
 /// score = (1 - semanticWeight) * RRF(bm25_rank) + semanticWeight * RRF(semantic_rank)
 /// ```
 public actor HybridSearchEngine: SearchEngine {
+    private struct SearchContext: Sendable {
+        let chunkStore: any ChunkStore
+        let bm25Search: BM25Search
+        let semanticSearch: SemanticSearch
+    }
+
     /// The BM25 search engine for keyword matching.
     private let bm25Search: BM25Search
 
@@ -47,6 +53,12 @@ public actor HybridSearchEngine: SearchEngine {
 
     /// The chunk store for retrieving chunk data.
     private let chunkStore: any ChunkStore
+
+    /// Optional remote search context.
+    private let remoteContext: SearchContext?
+
+    /// The local search context.
+    private let localContext: SearchContext
 
     /// The RRF fusion algorithm instance.
     private let fusion: RRFFusion
@@ -68,6 +80,8 @@ public actor HybridSearchEngine: SearchEngine {
         chunkStore: any ChunkStore,
         vectorStore: any VectorStore,
         embeddingProvider: any EmbeddingProvider,
+        remoteChunkStore: (any ChunkStore)? = nil,
+        remoteVectorStore: (any VectorStore)? = nil,
         rrfK: Int = 60,
         globMatcher: GlobMatcher = GlobMatcher()
     ) {
@@ -80,6 +94,27 @@ public actor HybridSearchEngine: SearchEngine {
             embeddingProvider: embeddingProvider,
             globMatcher: globMatcher
         )
+        localContext = SearchContext(
+            chunkStore: chunkStore,
+            bm25Search: bm25Search,
+            semanticSearch: semanticSearch
+        )
+        if let remoteChunkStore, let remoteVectorStore {
+            let remoteBM25 = BM25Search(chunkStore: remoteChunkStore, globMatcher: globMatcher)
+            let remoteSemantic = SemanticSearch(
+                vectorStore: remoteVectorStore,
+                chunkStore: remoteChunkStore,
+                embeddingProvider: embeddingProvider,
+                globMatcher: globMatcher
+            )
+            remoteContext = SearchContext(
+                chunkStore: remoteChunkStore,
+                bm25Search: remoteBM25,
+                semanticSearch: remoteSemantic
+            )
+        } else {
+            remoteContext = nil
+        }
         fusion = RRFFusion(k: rrfK)
     }
 
@@ -90,103 +125,32 @@ public actor HybridSearchEngine: SearchEngine {
     ///   - options: Search configuration options.
     /// - Returns: Array of search results ranked by combined relevance.
     public func search(query: String, options: SearchOptions) async throws -> [SearchResult] {
-        // Calculate search limits for each method
-        // Fetch more than needed to ensure we have enough after fusion and filtering
-        // Higher multiplier improves recall at the cost of processing more candidates
-        let fetchLimit = options.limit * 5
+        let resultLimit = options.limit * 2
+        let localResults = try await searchIndex(
+            context: localContext,
+            bm25Query: query,
+            semanticQuery: query,
+            options: options,
+            resultLimit: resultLimit
+        )
 
-        // Extract query terms for boost calculations
-        let queryTerms = extractQueryTerms(from: query)
-
-        // Detect "implements X" pattern and get conforming types
-        let conformanceResults = try await getConformanceResults(query: query, limit: fetchLimit)
-
-        // Run BM25 and semantic search in parallel
-        async let bm25Task = bm25Search.searchRaw(query: query, limit: fetchLimit)
-        async let semanticTask = semanticSearch.searchRaw(query: query, limit: fetchLimit)
-
-        let (bm25Results, semanticResults) = try await (bm25Task, semanticTask)
-
-        // Apply weighted RRF fusion (with conformance results as third source)
-        let bm25Weight = 1.0 - options.semanticWeight
-        let semanticWeight = options.semanticWeight
-
-        let fusedResults: [(id: String, score: Float, ranks: [Int?])] = if conformanceResults.isEmpty {
-            fusion.fuse(
-                bm25Results,
-                firstWeight: bm25Weight,
-                semanticResults,
-                secondWeight: semanticWeight
-            )
-        } else {
-            // Include conformance results with high weight (3.0x boost)
-            fusion.fuse(
-                [bm25Results, semanticResults, conformanceResults],
-                weights: [bm25Weight, semanticWeight, 3.0]
-            )
+        guard let remoteContext else {
+            return Array(localResults.sorted { $0.score > $1.score }.prefix(options.limit))
         }
 
-        // Build lookup dictionaries for original scores
-        let bm25Scores = buildScoreLookup(from: bm25Results)
-        let semanticScores = buildScoreLookup(from: semanticResults)
-        let conformanceIds = Set(conformanceResults.map(\.id))
+        let remoteResults = try await searchIndex(
+            context: remoteContext,
+            bm25Query: query,
+            semanticQuery: query,
+            options: options,
+            resultLimit: resultLimit
+        )
 
-        // Convert fused results to SearchResults
-        var results: [SearchResult] = []
-
-        // Batch fetch chunks to avoid N+1 query pattern
-        let chunkIds = Array(Set(fusedResults.map(\.id)))
-        let chunks = try await chunkStore.getByIDs(chunkIds)
-        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-
-        for fusedItem in fusedResults {
-            guard let chunk = chunkMap[fusedItem.id],
-                  await passesFilters(chunk, options: options)
-            else {
-                continue
-            }
-
-            let bm25Info = bm25Scores[fusedItem.id]
-            let semanticInfo = semanticScores[fusedItem.id]
-
-            // Apply all ranking boosts
-            let (boostedScore, hasExactMatch) = try await applyRankingBoosts(
-                baseScore: fusedItem.score,
-                chunk: chunk,
-                query: query,
-                queryTerms: queryTerms
-            )
-
-            let result = SearchResult(
-                chunk: chunk,
-                score: boostedScore,
-                bm25Score: bm25Info?.score,
-                semanticScore: semanticInfo?.score,
-                bm25Rank: bm25Info?.rank,
-                semanticRank: semanticInfo?.rank,
-                isMultiHop: false,
-                hopDepth: 0,
-                exactSymbolMatch: hasExactMatch || conformanceIds.contains(fusedItem.id)
-            )
-            results.append(result)
-
-            if results.count >= options.limit * 2 {
-                break
-            }
-        }
-
-        // Optionally perform multi-hop search
-        if options.multiHop, options.multiHopDepth > 0 {
-            let multiHopResults = try await performMultiHop(
-                initialResults: results,
-                options: options,
-                currentDepth: 1
-            )
-            results.append(contentsOf: multiHopResults)
-        }
-
-        // Final sort and limit
-        return Array(results.sorted { $0.score > $1.score }.prefix(options.limit))
+        return mergeOverlayResults(
+            localResults: localResults,
+            remoteResults: remoteResults,
+            limit: options.limit
+        )
     }
 
     // MARK: - Helper Methods
@@ -198,6 +162,134 @@ public actor HybridSearchEngine: SearchEngine {
         Dictionary(uniqueKeysWithValues: results.enumerated().map { index, result in
             (result.id, (score: result.score, rank: index + 1))
         })
+    }
+
+    private func searchIndex(
+        context: SearchContext,
+        bm25Query: String,
+        semanticQuery: String,
+        options: SearchOptions,
+        resultLimit: Int
+    ) async throws -> [SearchResult] {
+        let fetchLimit = max(options.limit * 5, resultLimit)
+        let queryTerms = extractQueryTerms(from: semanticQuery)
+
+        let conformanceResults = try await getConformanceResults(
+            query: semanticQuery,
+            limit: fetchLimit,
+            chunkStore: context.chunkStore
+        )
+
+        async let bm25Task = context.bm25Search.searchRaw(query: bm25Query, limit: fetchLimit)
+        async let semanticTask = context.semanticSearch.searchRaw(query: semanticQuery, limit: fetchLimit)
+
+        let (bm25Results, semanticResults) = try await (bm25Task, semanticTask)
+
+        let bm25Weight = 1.0 - options.semanticWeight
+        let semanticWeight = options.semanticWeight
+
+        let fusedResults: [(id: String, score: Float, ranks: [Int?])] = if conformanceResults.isEmpty {
+            fusion.fuse(
+                bm25Results,
+                firstWeight: bm25Weight,
+                semanticResults,
+                secondWeight: semanticWeight
+            )
+        } else {
+            fusion.fuse(
+                [bm25Results, semanticResults, conformanceResults],
+                weights: [bm25Weight, semanticWeight, 3.0]
+            )
+        }
+
+        let bm25Scores = buildScoreLookup(from: bm25Results)
+        let semanticScores = buildScoreLookup(from: semanticResults)
+        let conformanceIds = Set(conformanceResults.map(\.id))
+
+        let chunkIds = Array(Set(fusedResults.map(\.id)))
+        let chunks = try await context.chunkStore.getByIDs(chunkIds)
+        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+
+        var results: [SearchResult] = []
+
+        for fusedItem in fusedResults {
+            guard let chunk = chunkMap[fusedItem.id],
+                  await passesFilters(chunk, options: options)
+            else {
+                continue
+            }
+
+            let bm25Info = bm25Scores[fusedItem.id]
+            let semanticInfo = semanticScores[fusedItem.id]
+
+            let (boostedScore, hasExactMatch) = try await applyRankingBoosts(
+                baseScore: fusedItem.score,
+                chunk: chunk,
+                query: semanticQuery,
+                queryTerms: queryTerms,
+                chunkStore: context.chunkStore
+            )
+
+            results.append(
+                SearchResult(
+                    chunk: chunk,
+                    score: boostedScore,
+                    bm25Score: bm25Info?.score,
+                    semanticScore: semanticInfo?.score,
+                    bm25Rank: bm25Info?.rank,
+                    semanticRank: semanticInfo?.rank,
+                    isMultiHop: false,
+                    hopDepth: 0,
+                    exactSymbolMatch: hasExactMatch || conformanceIds.contains(fusedItem.id)
+                )
+            )
+
+            if results.count >= resultLimit {
+                break
+            }
+        }
+
+        if options.multiHop, options.multiHopDepth > 0 {
+            let multiHopResults = try await performMultiHop(
+                initialResults: results,
+                options: options,
+                currentDepth: 1,
+                bm25Search: context.bm25Search,
+                chunkStore: context.chunkStore
+            )
+            results.append(contentsOf: multiHopResults)
+        }
+
+        return results.sorted { $0.score > $1.score }
+    }
+
+    private func mergeOverlayResults(
+        localResults: [SearchResult],
+        remoteResults: [SearchResult],
+        limit: Int
+    ) -> [SearchResult] {
+        let localPaths = Set(localResults.map(\.chunk.path))
+        let filteredRemote = remoteResults.filter { !localPaths.contains($0.chunk.path) }
+
+        let localList = localResults.map { (id: $0.chunk.id, score: $0.score) }
+        let remoteList = filteredRemote.map { (id: $0.chunk.id, score: $0.score) }
+        let fused = fusion.fuse([localList, remoteList], weights: [1.0, 1.0])
+
+        let lookup = Dictionary(
+            (localResults + filteredRemote).map { ($0.chunk.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+
+        var merged: [SearchResult] = []
+        for item in fused {
+            guard let result = lookup[item.id] else { continue }
+            merged.append(result)
+            if merged.count >= limit {
+                break
+            }
+        }
+
+        return merged
     }
 
     /// Checks if a chunk passes the configured filters.
@@ -277,7 +369,8 @@ public actor HybridSearchEngine: SearchEngine {
         baseScore: Float,
         chunk: CodeChunk,
         query: String,
-        queryTerms: [String]
+        queryTerms: [String],
+        chunkStore: any ChunkStore
     ) async throws -> (score: Float, hasExactMatch: Bool) {
         var score = baseScore
         var hasExactMatch = false
@@ -432,7 +525,8 @@ public actor HybridSearchEngine: SearchEngine {
     /// - Returns: Array of (id, score) pairs for conforming types.
     private func getConformanceResults(
         query: String,
-        limit: Int
+        limit: Int,
+        chunkStore: any ChunkStore
     ) async throws -> [(id: String, score: Float)] {
         // Detect "implements X" or "conforms to X" patterns
         let patterns = [
@@ -495,7 +589,9 @@ public actor HybridSearchEngine: SearchEngine {
     private func performMultiHop(
         initialResults: [SearchResult],
         options: SearchOptions,
-        currentDepth: Int
+        currentDepth: Int,
+        bm25Search: BM25Search,
+        chunkStore: any ChunkStore
     ) async throws -> [SearchResult] {
         guard currentDepth <= options.multiHopDepth else {
             return []
@@ -553,7 +649,9 @@ public actor HybridSearchEngine: SearchEngine {
             let nextHopResults = try await performMultiHop(
                 initialResults: hopResults,
                 options: options,
-                currentDepth: currentDepth + 1
+                currentDepth: currentDepth + 1,
+                bm25Search: bm25Search,
+                chunkStore: chunkStore
             )
             hopResults.append(contentsOf: nextHopResults)
         }
@@ -696,75 +794,36 @@ public extension HybridSearchEngine {
         // Use the original query for semantic search (best representation)
         // Use combined terms for BM25 (keyword coverage)
         let expandedBM25Query = expandedQuery.allTerms.joined(separator: " ")
+        let resultLimit = options.limit * 2
 
-        // Fetch more results to account for overlap
-        let fetchLimit = options.limit * 4
-
-        // Run searches with original and expanded queries
-        async let originalSemanticTask = semanticSearch.searchRaw(
-            query: query,
-            limit: fetchLimit
-        )
-        async let expandedBM25Task = bm25Search.searchRaw(
-            query: expandedBM25Query,
-            limit: fetchLimit
+        let localResults = try await searchIndex(
+            context: localContext,
+            bm25Query: expandedBM25Query,
+            semanticQuery: query,
+            options: options,
+            resultLimit: resultLimit
         )
 
-        let (semanticResults, bm25Results) = try await (
-            originalSemanticTask,
-            expandedBM25Task
-        )
-
-        // Fuse results
-        let bm25Weight = 1.0 - options.semanticWeight
-        let semanticWeight = options.semanticWeight
-
-        let fusedResults = fusion.fuse(
-            bm25Results,
-            firstWeight: bm25Weight,
-            semanticResults,
-            secondWeight: semanticWeight
-        )
-
-        // Build results
-        var results: [SearchResult] = []
-        let bm25Scores = buildScoreLookup(from: bm25Results)
-        let semanticScores = buildScoreLookup(from: semanticResults)
-
-        // Batch fetch chunks to avoid N+1 query pattern
-        let chunkIds = Array(Set(fusedResults.map(\.id)))
-        let chunks = try await chunkStore.getByIDs(chunkIds)
-        let chunkMap = Dictionary(chunks.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-
-        for fusedItem in fusedResults {
-            guard let chunk = chunkMap[fusedItem.id],
-                  await passesFilters(chunk, options: options)
-            else {
-                continue
-            }
-
-            let bm25Info = bm25Scores[fusedItem.id]
-            let semanticInfo = semanticScores[fusedItem.id]
-
-            let result = SearchResult(
-                chunk: chunk,
-                score: fusedItem.score,
-                bm25Score: bm25Info?.score,
-                semanticScore: semanticInfo?.score,
-                bm25Rank: bm25Info?.rank,
-                semanticRank: semanticInfo?.rank,
-                isMultiHop: false,
-                hopDepth: 0
+        let finalResults: [SearchResult]
+        if let remoteContext {
+            let remoteResults = try await searchIndex(
+                context: remoteContext,
+                bm25Query: expandedBM25Query,
+                semanticQuery: query,
+                options: options,
+                resultLimit: resultLimit
             )
-            results.append(result)
-
-            if results.count >= options.limit {
-                break
-            }
+            finalResults = mergeOverlayResults(
+                localResults: localResults,
+                remoteResults: remoteResults,
+                limit: options.limit
+            )
+        } else {
+            finalResults = Array(localResults.prefix(options.limit))
         }
 
         return EnhancedSearchResult(
-            results: Array(results.sorted().prefix(options.limit)),
+            results: finalResults,
             expandedQuery: expandedQuery
         )
     }

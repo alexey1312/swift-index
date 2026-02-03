@@ -118,6 +118,11 @@ public struct Config: Sendable, Equatable {
     /// LLM-powered search enhancement configuration.
     public var searchEnhancement: SearchEnhancementConfig
 
+    // MARK: - Remote Storage
+
+    /// Remote storage configuration (optional).
+    public var remote: RemoteConfig?
+
     // MARK: - Initialization
 
     public init(
@@ -151,7 +156,8 @@ public struct Config: Sendable, Equatable {
         maxConcurrentTasks: Int = ProcessInfo.processInfo.activeProcessorCount,
         watchDebounceMs: Int = 500,
         logLevel: String = "info",
-        searchEnhancement: SearchEnhancementConfig = .default
+        searchEnhancement: SearchEnhancementConfig = .default,
+        remote: RemoteConfig? = nil
     ) {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
@@ -184,6 +190,7 @@ public struct Config: Sendable, Equatable {
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
         self.searchEnhancement = searchEnhancement
+        self.remote = remote
     }
 }
 
@@ -332,6 +339,7 @@ public extension Config {
         applyIfPresent(partial.watchDebounceMs, to: \.watchDebounceMs)
         applyIfPresent(partial.logLevel, to: \.logLevel)
         applyIfPresent(partial.searchEnhancement, to: \.searchEnhancement)
+        applyIfPresent(partial.remote, to: \.remote)
     }
 
     private mutating func applyIfPresent<T>(

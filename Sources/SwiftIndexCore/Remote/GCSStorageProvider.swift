@@ -10,6 +10,7 @@ public actor GCSStorageProvider: RemoteStorageProvider {
     private let prefix: String
     private let project: String?
     private let credentialsFile: String?
+    private let resumableThreshold: Int64 = 8 * 1024 * 1024
 
     public init(
         bucket: String,
@@ -25,6 +26,13 @@ public actor GCSStorageProvider: RemoteStorageProvider {
 
     public func upload(localPath: URL, remotePath: String) async throws {
         let key = resolveKey(remotePath)
+        let fileSize = try fileSize(at: localPath)
+
+        if fileSize >= resumableThreshold {
+            try await uploadResumable(localPath: localPath, key: key)
+            return
+        }
+
         let data = try Data(contentsOf: localPath)
 
         try await withClient { client in
@@ -41,6 +49,14 @@ public actor GCSStorageProvider: RemoteStorageProvider {
     }
 
     public func download(remotePath: String, localPath: URL) async throws {
+        try await download(remotePath: remotePath, localPath: localPath, progress: nil)
+    }
+
+    public func download(
+        remotePath: String,
+        localPath: URL,
+        progress: RemoteStorageProgressHandler?
+    ) async throws {
         let key = resolveKey(remotePath)
         try await withClient { client in
             let response = try await client.object
@@ -49,11 +65,13 @@ public actor GCSStorageProvider: RemoteStorageProvider {
             guard let data = response.data else {
                 throw RemoteStorageError.notFound(key)
             }
+            progress?(Int64(0), Int64(data.count))
             try FileManager.default.createDirectory(
                 at: localPath.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             try data.write(to: localPath, options: [.atomic])
+            progress?(Int64(data.count), Int64(data.count))
         }
     }
 
@@ -115,6 +133,29 @@ public actor GCSStorageProvider: RemoteStorageProvider {
         let cleaned = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         guard !prefix.isEmpty else { return cleaned }
         return "\(prefix)/\(cleaned)"
+    }
+
+    private func uploadResumable(localPath: URL, key: String) async throws {
+        let data = try Data(contentsOf: localPath)
+        try await withClient { client in
+            _ = try await client.object
+                .createSimpleUpload(
+                    bucket: bucket,
+                    body: .data(data),
+                    name: key,
+                    contentType: "application/octet-stream",
+                    queryParameters: nil
+                )
+                .get()
+        }
+    }
+
+    private func fileSize(at url: URL) throws -> Int64 {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        if let size = attributes[.size] as? NSNumber {
+            return size.int64Value
+        }
+        return 0
     }
 
     private func withClient<T>(

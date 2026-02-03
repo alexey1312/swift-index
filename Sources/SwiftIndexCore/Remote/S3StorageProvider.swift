@@ -1,5 +1,6 @@
 @preconcurrency import AWSS3
 import Foundation
+import NIOCore
 import Smithy
 
 public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable {
@@ -35,11 +36,21 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
     }
 
     public func download(remotePath: String, localPath: URL) async throws {
+        try await download(remotePath: remotePath, localPath: localPath, progress: nil)
+    }
+
+    public func download(
+        remotePath: String,
+        localPath: URL,
+        progress: RemoteStorageProgressHandler?
+    ) async throws {
         let key = resolveKey(remotePath)
         let output = try await client.getObject(input: GetObjectInput(bucket: bucket, key: key))
-        guard let body = output.body, let data = try await body.readData() else {
+        guard let body = output.body else {
             throw RemoteStorageError.notFound(key)
         }
+        let totalBytes = output.contentLength
+        let data = try await readBodyWithProgress(body: body, totalBytes: totalBytes, progress: progress)
         try FileManager.default.createDirectory(
             at: localPath.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -159,5 +170,28 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
             return size.int64Value
         }
         return 0
+    }
+
+    private func readBodyWithProgress(
+        body: ByteStream,
+        totalBytes: Int64?,
+        progress: RemoteStorageProgressHandler?
+    ) async throws -> Data {
+        var received: Int64 = 0
+        if let totalBytes {
+            progress?(received, totalBytes)
+        }
+        var data = Data()
+        for try await chunk in body {
+            let bytes = chunk.readableBytes
+            if bytes > 0 {
+                received += Int64(bytes)
+                if var buffer = chunk.getData(at: 0, length: bytes) {
+                    data.append(buffer)
+                }
+                progress?(received, totalBytes)
+            }
+        }
+        return data
     }
 }

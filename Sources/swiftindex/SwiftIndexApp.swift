@@ -25,6 +25,10 @@ struct SwiftIndex: AsyncParsableCommand {
           swiftindex search "query"  Search the index
           swiftindex search-docs "q" Search documentation
           swiftindex watch           Watch for changes
+          swiftindex push            Upload index to remote storage
+          swiftindex pull            Download index from remote storage
+          swiftindex remote config   Configure remote storage
+          swiftindex remote status   Show remote sync status
 
         Authentication (for search enhancement):
           swiftindex auth status     Check authentication status
@@ -45,6 +49,9 @@ struct SwiftIndex: AsyncParsableCommand {
             SearchDocsCommand.self,
             ParseTreeCommand.self,
             WatchCommand.self,
+            PushCommand.self,
+            PullCommand.self,
+            RemoteCommand.self,
             ProvidersCommand.self,
             ServeCommand.self,
             InstallClaudeCodeCommand.self,
