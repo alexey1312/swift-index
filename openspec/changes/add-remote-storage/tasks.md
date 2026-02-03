@@ -25,18 +25,18 @@
 
 ### 1.4 Implement S3StorageProvider
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/S3StorageProvider.swift`
-- [ ] Implement upload with multipart for large files
+- [x] Create `Sources/SwiftIndexCore/Remote/S3StorageProvider.swift`
+- [x] Implement upload with multipart for large files
 - [ ] Implement download with progress
-- [ ] Implement credential loading (env, profile, IAM)
+- [x] Implement credential loading (env, profile, IAM)
 - **Validation:** Integration test with LocalStack or real S3
 
 ### 1.5 Implement GCSStorageProvider
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/GCSStorageProvider.swift`
+- [x] Create `Sources/SwiftIndexCore/Remote/GCSStorageProvider.swift`
 - [ ] Implement upload with resumable upload
 - [ ] Implement download with progress
-- [ ] Implement credential loading (JSON key, default, service account)
+- [x] Implement credential loading (JSON key, default, service account)
 - **Validation:** Integration test with real GCS (optional)
 
 ### 1.6 Implement Compression

@@ -55,6 +55,9 @@ let package = Package(
         // Collections
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
 
+        // Async HTTP (for Google Cloud Storage client)
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.18.0"),
+
         // Crypto (for file hashing)
         .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "5.0.0"),
 
@@ -110,6 +113,13 @@ let package = Package(
 
                 // Compression
                 .product(name: "zstd", package: "zstd.swift"),
+
+                // Remote storage SDKs
+                .product(name: "AWSS3", package: "aws-sdk-swift"),
+                .product(name: "GoogleCloudStorage", package: "google-cloud-kit"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
 
                 // Utilities
                 .product(name: "Logging", package: "swift-log"),
