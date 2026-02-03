@@ -50,6 +50,19 @@ compression = "zstd"   # zstd | none
 auto_pull = false
 ```
 
+## Credentials
+
+**AWS S3:**
+
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- Optional profile in `~/.aws/credentials`
+
+**GCS:**
+
+- `GOOGLE_APPLICATION_CREDENTIALS` (path to JSON key)
+- Or `gcloud auth application-default login`
+
 ## Commands
 
 - `swiftindex push`: Compresses index files, uploads them, and writes the remote manifest.

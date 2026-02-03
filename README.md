@@ -21,6 +21,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 - **LLM Description Generation**: Automatic AI-generated descriptions for code chunks (when LLM provider available)
 - **Watch Mode**: Automatically updates the index when files change
 - **MCP Server**: Exposes search capabilities to AI assistants via Model Context Protocol
+- **Remote Index Sharing**: Push/pull indexes to S3 or GCS with delta sync and overlay search
 
 ## System Requirements
 
@@ -197,6 +198,19 @@ swiftindex search --synthesize "authentication flow"   # Generate summary and fo
 | `--synthesize`   | Generate AI summary of results with follow-up suggestions  |
 
 Both flags require `[search.enhancement]` configuration. See [Search Enhancement](#search-enhancement).
+
+### Remote Storage (Team Index Sharing)
+
+Share indexes across a team with remote storage:
+
+```bash
+swiftindex remote config
+swiftindex push
+swiftindex pull
+swiftindex remote status
+```
+
+See `docs/remote-storage.md` for setup details and CI/CD examples.
 
 ### `swiftindex parse-tree <path>`
 
