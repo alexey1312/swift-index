@@ -117,7 +117,7 @@
 
 - [x] Modify HybridSearchEngine to accept optional remote index
 - [x] Implement RRF fusion across both indexes
-- [ ] Maintain search performance < 200ms
+- [x] Maintain search performance < 200ms
 - **Validation:** Integration test with both indexes
 
 ## Phase 5: Configuration
@@ -148,9 +148,9 @@
 
 ### 6.2 Integration Tests
 
-- [ ] `S3IntegrationTests` — with LocalStack mock
-- [ ] `PushPullIntegrationTests` — full cycle
-- [ ] `OverlaySearchIntegrationTests` — search with remote
+- [x] `S3IntegrationTests` — with LocalStack mock
+- [x] `PushPullIntegrationTests` — full cycle
+- [x] `OverlaySearchIntegrationTests` — search with remote
 - **Validation:** Integration tests pass
 
 ### 6.3 Manual Testing

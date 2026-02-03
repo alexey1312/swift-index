@@ -29,7 +29,7 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
         let input = PutObjectInput(
             body: .data(data),
             bucket: bucket,
-            contentLength: data.count,
+            contentLength: Int(exactly: data.count),
             key: key
         )
         _ = try await client.putObject(input: input)
@@ -49,13 +49,13 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
         guard let body = output.body else {
             throw RemoteStorageError.notFound(key)
         }
-        let totalBytes = output.contentLength
+        let totalBytes = output.contentLength.flatMap { Int64($0) }
         let data = try await readBodyWithProgress(body: body, totalBytes: totalBytes, progress: progress)
         try FileManager.default.createDirectory(
             at: localPath.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        try data.write(to: localPath, options: [.atomic])
+        try data.write(to: localPath, options: Data.WritingOptions.atomic)
     }
 
     public func exists(remotePath: String) async throws -> Bool {
@@ -91,7 +91,7 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
         let input = PutObjectInput(
             body: .data(data),
             bucket: bucket,
-            contentLength: data.count,
+            contentLength: Int(exactly: data.count),
             key: key
         )
         _ = try await client.putObject(input: input)
@@ -125,7 +125,7 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
                 let uploadInput = UploadPartInput(
                     body: .data(data),
                     bucket: bucket,
-                    contentLength: data.count,
+                    contentLength: Int(exactly: data.count),
                     key: key,
                     partNumber: partNumber,
                     uploadId: uploadId
@@ -177,20 +177,12 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
         totalBytes: Int64?,
         progress: RemoteStorageProgressHandler?
     ) async throws -> Data {
-        var received: Int64 = 0
+        let data = try await body.readData() ?? Data()
         if let totalBytes {
-            progress?(received, totalBytes)
-        }
-        var data = Data()
-        for try await chunk in body {
-            let bytes = chunk.readableBytes
-            if bytes > 0 {
-                received += Int64(bytes)
-                if var buffer = chunk.getData(at: 0, length: bytes) {
-                    data.append(buffer)
-                }
-                progress?(received, totalBytes)
-            }
+            progress?(0, totalBytes)
+            progress?(Int64(data.count), totalBytes)
+        } else {
+            progress?(Int64(data.count), nil)
         }
         return data
     }

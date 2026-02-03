@@ -14,12 +14,12 @@ public actor OverlayIndexManager {
         self.localIndex = localIndex
         self.remoteIndex = remoteIndex
 
-        let localChunkStore = await localIndex.chunkStore
-        let localVectorStore = await localIndex.vectorStore
+        let localChunkStore = localIndex.chunkStore
+        let localVectorStore = localIndex.vectorStore
 
         if let remoteIndex {
-            let remoteChunkStore = await remoteIndex.chunkStore
-            let remoteVectorStore = await remoteIndex.vectorStore
+            let remoteChunkStore = remoteIndex.chunkStore
+            let remoteVectorStore = remoteIndex.vectorStore
             searchEngine = HybridSearchEngine(
                 chunkStore: localChunkStore,
                 vectorStore: localVectorStore,

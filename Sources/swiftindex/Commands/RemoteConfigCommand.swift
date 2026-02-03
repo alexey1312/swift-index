@@ -136,7 +136,7 @@ struct RemoteConfigCommand: AsyncParsableCommand {
 
         var updated = rootTable
         var remoteTable: [String: TOMLValue] = [
-            "enabled": .bool(remote.enabled),
+            "enabled": .boolean(remote.enabled),
             "provider": .string(remote.provider.rawValue),
             "bucket": .string(remote.bucket),
             "prefix": .string(remote.prefix),
@@ -152,14 +152,14 @@ struct RemoteConfigCommand: AsyncParsableCommand {
 
         remoteTable["sync"] = .table([
             "compression": .string(remote.sync.compression.rawValue),
-            "auto_pull": .bool(remote.sync.autoPull),
+            "auto_pull": .boolean(remote.sync.autoPull),
         ])
 
         updated["remote"] = .table(remoteTable)
 
         let encoder = TOMLEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
-        let output = try encoder.encodeToString(.table(updated))
+        let output = try encoder.encodeToString(TOMLValue.table(updated))
         try output.write(toFile: path, atomically: true, encoding: .utf8)
     }
 }
