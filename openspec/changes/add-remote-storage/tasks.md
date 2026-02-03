@@ -50,17 +50,17 @@
 
 ### 2.1 Implement DeltaSyncManager
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/DeltaSyncManager.swift`
-- [ ] Implement checksum comparison logic
-- [ ] Implement selective download
-- [ ] Track and report sync statistics
+- [x] Create `Sources/SwiftIndexCore/Remote/DeltaSyncManager.swift`
+- [x] Implement checksum comparison logic
+- [x] Implement selective download
+- [x] Track and report sync statistics
 - **Validation:** Unit tests for delta computation
 
 ### 2.2 Implement Local Cache Management
 
-- [ ] Create cache directory structure at `~/.cache/swiftindex/shared/`
-- [ ] Implement repo-hash based isolation
-- [ ] Store local manifest copy
+- [x] Create cache directory structure at `~/.cache/swiftindex/shared/`
+- [x] Implement repo-hash based isolation
+- [x] Store local manifest copy
 - **Validation:** Multiple repos don't interfere
 
 ## Phase 3: CLI Commands
@@ -142,7 +142,7 @@
 ### 6.1 Unit Tests
 
 - [x] `RemoteManifestTests` — serialization
-- [ ] `DeltaSyncManagerTests` — checksum comparison
+- [x] `DeltaSyncManagerTests` — checksum comparison
 - [ ] `OverlayIndexManagerTests` — merge and deduplication
 - **Validation:** All unit tests pass
 
