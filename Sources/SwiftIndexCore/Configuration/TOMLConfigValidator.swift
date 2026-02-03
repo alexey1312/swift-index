@@ -37,6 +37,7 @@ public enum TOMLConfigValidator {
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
         "logging": ["level"],
+        "remote": ["enabled", "provider", "bucket", "region", "project", "prefix", "sync"],
     ]
 
     /// Allowed keys for nested subsections (e.g., search.enhancement.utility).
@@ -45,6 +46,7 @@ public enum TOMLConfigValidator {
         "search.enhancement": ["enabled", "utility", "synthesis"],
         "search.enhancement.utility": ["provider", "model", "timeout"],
         "search.enhancement.synthesis": ["provider", "model", "timeout"],
+        "remote.sync": ["compression", "auto_pull"],
     ]
 
     private static let forbiddenSections: Set<String> = ["api_keys"]

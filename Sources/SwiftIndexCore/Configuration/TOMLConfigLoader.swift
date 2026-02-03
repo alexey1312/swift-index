@@ -130,6 +130,8 @@ public struct TOMLConfigLoader: ConfigLoader, Sendable {
             throw ConfigError.invalidSyntax("Invalid TOML: \(error.localizedDescription)")
         }
 
+        try validateRemoteConfig(tomlConfig.remote)
+
         return tomlConfig.toPartialConfig()
     }
 }
@@ -144,6 +146,7 @@ private struct TOMLConfig: Codable {
     var storage: StorageSection?
     var watch: WatchSection?
     var logging: LoggingSection?
+    var remote: RemoteSection?
 
     struct EmbeddingSection: Codable {
         var provider: String?
@@ -200,6 +203,21 @@ private struct TOMLConfig: Codable {
 
     struct LoggingSection: Codable {
         var level: String?
+    }
+
+    struct RemoteSection: Codable {
+        var enabled: Bool?
+        var provider: String?
+        var bucket: String?
+        var region: String?
+        var project: String?
+        var prefix: String?
+        var sync: SyncSection?
+
+        struct SyncSection: Codable {
+            var compression: String?
+            var auto_pull: Bool?
+        }
     }
 
     /// Converts the intermediate TOML structure to a PartialConfig.
@@ -287,7 +305,67 @@ private struct TOMLConfig: Codable {
             config.logLevel = logging.level
         }
 
+        // Remote storage section
+        if let remote {
+            let enabled = remote.enabled ?? true
+            if enabled, let provider = remote.provider, let bucket = remote.bucket {
+                let sync = RemoteConfig.Sync(
+                    compression: RemoteConfig.Compression(rawValue: remote.sync?.compression ?? "zstd") ?? .zstd,
+                    autoPull: remote.sync?.auto_pull ?? false
+                )
+                if let providerValue = RemoteConfig.Provider(rawValue: provider) {
+                    config.remote = RemoteConfig(
+                        enabled: enabled,
+                        provider: providerValue,
+                        bucket: bucket,
+                        region: remote.region,
+                        project: remote.project,
+                        prefix: remote.prefix ?? "",
+                        sync: sync
+                    )
+                }
+            }
+        }
+
         return config
+    }
+}
+
+private extension TOMLConfigLoader {
+    func validateRemoteConfig(_ remote: TOMLConfig.RemoteSection?) throws {
+        guard let remote else { return }
+        let enabled = remote.enabled ?? true
+        guard enabled else { return }
+
+        guard let provider = remote.provider, !provider.isEmpty else {
+            throw ConfigError.missingRequired("remote.provider")
+        }
+
+        if RemoteConfig.Provider(rawValue: provider) == nil {
+            throw ConfigError.invalidValue(
+                key: "remote.provider",
+                message: "Supported providers: s3, gcs"
+            )
+        }
+
+        guard let bucket = remote.bucket, !bucket.isEmpty else {
+            throw ConfigError.missingRequired("remote.bucket")
+        }
+
+        if provider == RemoteConfig.Provider.s3.rawValue,
+           remote.region == nil || remote.region?.isEmpty == true
+        {
+            throw ConfigError.missingRequired("remote.region")
+        }
+
+        if let compression = remote.sync?.compression,
+           RemoteConfig.Compression(rawValue: compression) == nil
+        {
+            throw ConfigError.invalidValue(
+                key: "remote.sync.compression",
+                message: "Supported values: zstd, none"
+            )
+        }
     }
 }
 
