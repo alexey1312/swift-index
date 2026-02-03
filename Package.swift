@@ -56,7 +56,12 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
 
         // Crypto (for file hashing)
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "5.0.0"),
+
+        // Remote storage
+        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.5.79"),
+        .package(url: "https://github.com/vapor-community/google-cloud-kit.git", from: "1.0.0-rc.12"),
+        .package(url: "https://github.com/awxkee/zstd.swift.git", from: "1.0.1"),
 
         // JSON codec (faster than Foundation, RFC 8259 strict mode)
         .package(
@@ -102,6 +107,9 @@ let package = Package(
 
                 // Crypto
                 .product(name: "Crypto", package: "swift-crypto"),
+
+                // Compression
+                .product(name: "zstd", package: "zstd.swift"),
 
                 // Utilities
                 .product(name: "Logging", package: "swift-log"),

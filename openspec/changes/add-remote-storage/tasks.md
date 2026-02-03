@@ -4,23 +4,23 @@
 
 ### 1.1 Add Dependencies
 
-- [ ] Add `aws-sdk-swift` to Package.swift
-- [ ] Add `google-cloud-swift` to Package.swift
-- [ ] Verify builds pass with new dependencies
+- [x] Add `aws-sdk-swift` to Package.swift
+- [x] Add `google-cloud-kit` to Package.swift
+- [x] Verify builds pass with new dependencies
 - **Validation:** `swift build` succeeds
 
 ### 1.2 Create RemoteStorageProvider Protocol
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/RemoteStorageProvider.swift`
-- [ ] Define protocol with upload/download/exists/manifest operations
-- [ ] Create `RemoteStorageError` enum
+- [x] Create `Sources/SwiftIndexCore/Remote/RemoteStorageProvider.swift`
+- [x] Define protocol with upload/download/exists/manifest operations
+- [x] Create `RemoteStorageError` enum
 - **Validation:** Protocol compiles, tests can mock it
 
 ### 1.3 Implement RemoteManifest
 
-- [ ] Create `Sources/SwiftIndexCore/Remote/RemoteManifest.swift`
-- [ ] Implement Codable struct with version, files, checksums
-- [ ] Add JSON serialization tests
+- [x] Create `Sources/SwiftIndexCore/Remote/RemoteManifest.swift`
+- [x] Implement Codable struct with version, files, checksums
+- [x] Add JSON serialization tests
 - **Validation:** Unit tests for encode/decode
 
 ### 1.4 Implement S3StorageProvider
@@ -41,9 +41,9 @@
 
 ### 1.6 Implement Compression
 
-- [ ] Add zstd compression/decompression utilities
-- [ ] Create `CompressionHelper` with compress/decompress methods
-- [ ] Handle streaming for large files
+- [x] Add zstd compression/decompression utilities
+- [x] Create `CompressionHelper` with compress/decompress methods
+- [x] Handle streaming for large files
 - **Validation:** Round-trip test: compress → decompress → compare
 
 ## Phase 2: Delta Sync
@@ -141,7 +141,7 @@
 
 ### 6.1 Unit Tests
 
-- [ ] `RemoteManifestTests` — serialization
+- [x] `RemoteManifestTests` — serialization
 - [ ] `DeltaSyncManagerTests` — checksum comparison
 - [ ] `OverlayIndexManagerTests` — merge and deduplication
 - **Validation:** All unit tests pass
