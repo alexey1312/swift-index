@@ -118,9 +118,10 @@ See `docs/search-enhancement.md`.
 
 ### Indexing Flags
 
-| Flag      | Description                                   |
-| --------- | --------------------------------------------- |
-| `--force` | Re-index all files, ignoring change detection |
+| Flag      | Description                                         |
+| --------- | --------------------------------------------------- |
+| `--force` | Re-index all files, ignoring change detection       |
+| `--quiet` | Suppress all output except progress bar and summary |
 
 **LLM Descriptions**: Automatically generated when an LLM provider is available.
 No flag needed - descriptions are created during indexing if `[search.enhancement]`
@@ -286,6 +287,7 @@ ClaudeCodeAuthManager for the CLI-based flow.
 - Actors for shared state (HybridSearchEngine, IndexManager, MCPServer)
 - Sendable conformance required
 - async/await throughout
+- Ternary `condition ? nil : { closure }` fails `@Sendable` checks when closure captures non-Sendable values — use `if/else` with explicit let-bindings instead
 
 ### Architecture Patterns
 
@@ -298,6 +300,12 @@ ClaudeCodeAuthManager for the CLI-based flow.
 - SwiftFormat for formatting
 - SwiftLint for linting
 - Conventional Commits for git messages
+
+### SwiftLint Limits
+
+- `function_body_length`: max 120 lines. Extract helpers when adding code to large functions.
+- `function_parameter_count`: max 5 parameters. Use a params struct to group related parameters.
+- `line_length`: max 120 characters.
 
 ### JSON Handling
 
