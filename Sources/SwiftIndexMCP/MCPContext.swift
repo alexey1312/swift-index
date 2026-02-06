@@ -230,10 +230,39 @@ public actor MCPContext {
         let chunkStore = await manager.chunkStore
         let vectorStore = await manager.vectorStore
 
+        let remoteIndex: IndexManager?
+        if let remote = config.remote, remote.enabled {
+            let cacheRoot = (config.cachePath as NSString).expandingTildeInPath
+            let rootURL = URL(fileURLWithPath: cacheRoot, isDirectory: true)
+                .appendingPathComponent("shared", isDirectory: true)
+            let cachePaths = RemoteCachePaths(root: rootURL)
+            let cacheDirectory = cachePaths.cacheDirectory(
+                forRepoPath: URL(fileURLWithPath: resolvePath(basePath), isDirectory: true)
+            )
+            remoteIndex = try await OverlayIndexManager.loadRemoteIndexIfAvailable(
+                cacheDirectory: cacheDirectory,
+                dimension: provider.dimension
+            )
+        } else {
+            remoteIndex = nil
+        }
+
+        let remoteChunkStore: GRDBChunkStore?
+        let remoteVectorStore: USearchVectorStore?
+        if let remoteIndex {
+            remoteChunkStore = await remoteIndex.chunkStore
+            remoteVectorStore = await remoteIndex.vectorStore
+        } else {
+            remoteChunkStore = nil
+            remoteVectorStore = nil
+        }
+
         return HybridSearchEngine(
             chunkStore: chunkStore,
             vectorStore: vectorStore,
             embeddingProvider: provider,
+            remoteChunkStore: remoteChunkStore,
+            remoteVectorStore: remoteVectorStore,
             rrfK: config.rrfK
         )
     }

@@ -78,6 +78,10 @@ public struct PartialConfig: Sendable, Equatable {
 
     public var searchEnhancement: SearchEnhancementConfig?
 
+    // MARK: - Remote Storage
+
+    public var remote: RemoteConfig?
+
     public init(
         embeddingProvider: String? = nil,
         embeddingModel: String? = nil,
@@ -109,7 +113,8 @@ public struct PartialConfig: Sendable, Equatable {
         maxConcurrentTasks: Int? = nil,
         watchDebounceMs: Int? = nil,
         logLevel: String? = nil,
-        searchEnhancement: SearchEnhancementConfig? = nil
+        searchEnhancement: SearchEnhancementConfig? = nil,
+        remote: RemoteConfig? = nil
     ) {
         self.embeddingProvider = embeddingProvider
         self.embeddingModel = embeddingModel
@@ -142,6 +147,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.watchDebounceMs = watchDebounceMs
         self.logLevel = logLevel
         self.searchEnhancement = searchEnhancement
+        self.remote = remote
     }
 
     /// Empty partial config.

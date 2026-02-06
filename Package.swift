@@ -55,8 +55,16 @@ let package = Package(
         // Collections
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
 
+        // Async HTTP (for Google Cloud Storage client)
+        .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.18.0"),
+
         // Crypto (for file hashing)
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0" ..< "5.0.0"),
+
+        // Remote storage
+        .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.5.79"),
+        .package(url: "https://github.com/vapor-community/google-cloud-kit.git", from: "1.0.0-rc.12"),
+        .package(url: "https://github.com/awxkee/zstd.swift.git", from: "1.0.1"),
 
         // JSON codec (faster than Foundation, RFC 8259 strict mode)
         .package(
@@ -102,6 +110,16 @@ let package = Package(
 
                 // Crypto
                 .product(name: "Crypto", package: "swift-crypto"),
+
+                // Compression
+                .product(name: "zstd", package: "zstd.swift"),
+
+                // Remote storage SDKs
+                .product(name: "AWSS3", package: "aws-sdk-swift"),
+                .product(name: "GoogleCloudStorage", package: "google-cloud-kit"),
+                .product(name: "AsyncHTTPClient", package: "async-http-client"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio"),
 
                 // Utilities
                 .product(name: "Logging", package: "swift-log"),
