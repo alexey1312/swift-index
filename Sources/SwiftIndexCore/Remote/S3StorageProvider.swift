@@ -172,6 +172,7 @@ public final class S3StorageProvider: RemoteStorageProvider, @unchecked Sendable
         return 0
     }
 
+    // TODO: For large indexes, consider streaming ByteStream in chunks for memory efficiency
     private func readBodyWithProgress(
         body: ByteStream,
         totalBytes: Int64?,

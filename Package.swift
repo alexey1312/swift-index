@@ -59,7 +59,7 @@ let package = Package(
         .package(url: "https://github.com/swift-server/async-http-client.git", from: "1.18.0"),
 
         // Crypto (for file hashing)
-        .package(url: "https://github.com/apple/swift-crypto.git", "1.0.0" ..< "5.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", "3.0.0" ..< "5.0.0"),
 
         // Remote storage
         .package(url: "https://github.com/awslabs/aws-sdk-swift.git", from: "1.5.79"),

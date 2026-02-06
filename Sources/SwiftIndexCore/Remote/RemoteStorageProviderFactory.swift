@@ -9,7 +9,7 @@ public enum RemoteStorageProviderFactory {
             }
             return try S3StorageProvider(bucket: config.bucket, region: region, prefix: config.prefix)
         case .gcs:
-            return GCSStorageProvider(
+            return try GCSStorageProvider(
                 bucket: config.bucket,
                 project: config.project,
                 credentialsFile: nil,
