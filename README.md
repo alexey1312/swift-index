@@ -144,6 +144,9 @@ swiftindex index .
 # Force re-index all files
 swiftindex index --force .
 
+# Quiet mode (progress bar and summary only)
+swiftindex index --quiet .
+
 # Watch for changes and re-index automatically
 swiftindex watch .
 

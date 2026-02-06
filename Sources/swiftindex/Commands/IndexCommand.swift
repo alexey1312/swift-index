@@ -53,10 +53,20 @@ struct IndexCommand: AsyncParsableCommand {
     )
     var verbose: Bool = false
 
+    @Flag(
+        name: .shortAndLong,
+        help: "Suppress all output except progress bar and summary"
+    )
+    var quiet: Bool = false
+
     // MARK: - Execution
 
     mutating func run() async throws {
+        guard !(verbose && quiet) else {
+            throw ValidationError("--verbose and --quiet are mutually exclusive")
+        }
         let verboseFlag = verbose
+        let quietFlag = quiet
         let terminal = Terminal()
         let progressRenderer = StickyProgressRenderer(terminal: terminal)
         let descriptionState = DescriptionGenerationState()
@@ -66,7 +76,7 @@ struct IndexCommand: AsyncParsableCommand {
                 progressRenderer: progressRenderer,
                 terminal: terminal
             )
-            handler.logLevel = verboseFlag ? .debug : .info
+            handler.logLevel = quietFlag ? .critical : (verboseFlag ? .debug : .info)
             return handler
         }
 
@@ -93,6 +103,7 @@ struct IndexCommand: AsyncParsableCommand {
             resolvedPath: resolvedPath,
             indexPath: indexPath,
             configuration: configuration,
+            quiet: quietFlag,
             logger: logger
         )
 
@@ -100,19 +111,20 @@ struct IndexCommand: AsyncParsableCommand {
         let embeddingProvider = try EmbeddingProviderFactory.createProvider(config: configuration, logger: logger)
 
         // Check provider availability
-        try await ensureEmbeddingProviderAvailable(embeddingProvider)
+        try await ensureEmbeddingProviderAvailable(embeddingProvider, quiet: quietFlag)
 
         // Create index manager
         let indexManager = try await createIndexManager(
             indexPath: indexPath,
-            embeddingProvider: embeddingProvider
+            embeddingProvider: embeddingProvider,
+            quiet: quietFlag
         )
 
         // Create parser
         let parser = HybridParser()
 
         // Collect files to index
-        print("\nScanning files...")
+        if !quietFlag { print("\nScanning files...") }
         let files = try FileCollector.collectFiles(
             at: resolvedPath,
             config: configuration,
@@ -120,25 +132,13 @@ struct IndexCommand: AsyncParsableCommand {
             logger: logger
         )
 
-        print("Found \(files.count) files to process")
+        if !quietFlag { print("Found \(files.count) files to process") }
 
-        // Create description generator (auto-generates when LLM provider is available)
+        // Prepare indexing pipeline
         let descriptionGenerator = DescriptionGeneratorFactory.create(config: configuration, logger: logger)
         await DescriptionGeneratorFactory.checkAvailability(descriptionGenerator, logger: logger)
 
-        // Create embedding batcher for cross-file batching
-        let batcherConfig = EmbeddingBatcher.Configuration(
-            batchSize: configuration.embeddingBatchSize,
-            timeoutMs: configuration.embeddingBatchTimeoutMs,
-            memoryLimitMB: configuration.embeddingBatchMemoryLimitMB
-        )
-        let embeddingBatcher = EmbeddingBatcher(
-            provider: embeddingProvider,
-            configuration: batcherConfig
-        )
-
-        // Index files in parallel
-        let stats = AtomicIndexingStats()
+        let embeddingBatcher = createEmbeddingBatcher(config: configuration, provider: embeddingProvider)
         let indexingContext = createIndexingContext(from: IndexingContextParams(
             indexManager: indexManager,
             parser: parser,
@@ -148,11 +148,13 @@ struct IndexCommand: AsyncParsableCommand {
             progressRenderer: progressRenderer,
             terminal: terminal,
             projectPath: resolvedPath,
+            quiet: quietFlag,
             logger: logger
         ))
 
+        let stats = AtomicIndexingStats()
         let maxConcurrentTasks = configuration.maxConcurrentTasks
-        print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks")
+        if !quietFlag { print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks") }
 
         // Use TaskGroup for parallel processing with bounded concurrency
         // Capture force as local constant to avoid capturing self
@@ -213,6 +215,7 @@ struct IndexCommand: AsyncParsableCommand {
             startTime: startTime,
             stats: stats,
             indexManager: indexManager,
+            quiet: quietFlag,
             logger: logger
         )
     }
@@ -221,11 +224,21 @@ struct IndexCommand: AsyncParsableCommand {
         startTime: Date,
         stats: AtomicIndexingStats,
         indexManager: IndexManager,
+        quiet: Bool,
         logger: Logger
     ) async throws {
         let elapsed = Date().timeIntervalSince(startTime)
         let statistics = try await indexManager.statistics()
         let finalStats = stats.snapshot()
+
+        if quiet {
+            let errors = finalStats.errors > 0 ? " (\(finalStats.errors) errors)" : ""
+            let time = String(format: "%.1f", elapsed)
+            print(
+                "\nIndexed \(statistics.chunkCount) chunks from \(finalStats.filesProcessed) files in \(time)s\(errors)"
+            )
+            return
+        }
 
         print("\n")
         print("Indexing completed in \(String(format: "%.2f", elapsed)) seconds")
@@ -255,6 +268,15 @@ struct IndexCommand: AsyncParsableCommand {
     }
 
     // MARK: - Private Helpers
+
+    private func createEmbeddingBatcher(config: Config, provider: EmbeddingProviderChain) -> EmbeddingBatcher {
+        let batcherConfig = EmbeddingBatcher.Configuration(
+            batchSize: config.embeddingBatchSize,
+            timeoutMs: config.embeddingBatchTimeoutMs,
+            memoryLimitMB: config.embeddingBatchMemoryLimitMB
+        )
+        return EmbeddingBatcher(provider: provider, configuration: batcherConfig)
+    }
 
     private func resolvePath(logger: Logger) throws -> String {
         let resolvedPath = CLIUtils.resolvePath(path)
@@ -361,8 +383,10 @@ struct IndexCommand: AsyncParsableCommand {
         resolvedPath: String,
         indexPath: String,
         configuration: Config,
+        quiet: Bool,
         logger: Logger
     ) {
+        if quiet { return }
         print("Indexing: \(resolvedPath)")
         print("Index path: \(indexPath)")
         print("Provider: \(configuration.embeddingProvider)")
@@ -385,52 +409,67 @@ struct IndexCommand: AsyncParsableCommand {
         let progressRenderer: StickyProgressRenderer
         let terminal: Terminaling
         let projectPath: String
+        let quiet: Bool
         let logger: Logger
     }
 
     private func createIndexingContext(from params: IndexingContextParams) -> IndexingContext {
-        IndexingContext(
+        let descriptionProgress: DescriptionProgressCallback?
+        if params.quiet {
+            descriptionProgress = nil
+        } else {
+            let renderer = params.progressRenderer
+            let terminal = params.terminal
+            descriptionProgress = { completed, total, file in
+                let displayFile = (file as NSString).lastPathComponent
+                let message = "  └─ Descriptions: \(completed)/\(total) (\(displayFile))"
+                let pipeline: StandardPipelining = terminal.isInteractive
+                    ? StandardOutputPipeline()
+                    : StandardErrorPipeline()
+                renderer.log(message, standardPipeline: pipeline)
+            }
+        }
+        return IndexingContext(
             indexManager: params.indexManager,
             parser: params.parser,
             embeddingBatcher: params.embeddingBatcher,
             descriptionGenerator: params.descriptionGenerator,
             descriptionState: params.descriptionState,
-            descriptionProgress: { completed, total, file in
-                let displayFile = (file as NSString).lastPathComponent
-                let message = "  └─ Descriptions: \(completed)/\(total) (\(displayFile))"
-                let pipeline: StandardPipelining = params.terminal.isInteractive
-                    ? StandardOutputPipeline()
-                    : StandardErrorPipeline()
-                params.progressRenderer.log(message, standardPipeline: pipeline)
-            },
+            descriptionProgress: descriptionProgress,
             projectPath: params.projectPath,
             logger: params.logger
         )
     }
 
     private func ensureEmbeddingProviderAvailable(
-        _ embeddingProvider: EmbeddingProviderChain
+        _ embeddingProvider: EmbeddingProviderChain,
+        quiet: Bool = false
     ) async throws {
         guard await embeddingProvider.isAvailable() else {
             throw ValidationError("No embedding provider available. Check your configuration.")
         }
 
-        if let activeProvider = await embeddingProvider.activeProvider() {
-            print("Embedding provider: \(activeProvider.name) (dimension: \(activeProvider.dimension))")
-        } else if let firstAvailable = await embeddingProvider.firstAvailableProvider() {
-            print("Embedding provider: \(firstAvailable.name) (dimension: \(firstAvailable.dimension))")
+        if !quiet {
+            if let activeProvider = await embeddingProvider.activeProvider() {
+                print("Embedding provider: \(activeProvider.name) (dimension: \(activeProvider.dimension))")
+            } else if let firstAvailable = await embeddingProvider.firstAvailableProvider() {
+                print("Embedding provider: \(firstAvailable.name) (dimension: \(firstAvailable.dimension))")
+            }
         }
     }
 
     private func createIndexManager(
         indexPath: String,
-        embeddingProvider: EmbeddingProviderChain
+        embeddingProvider: EmbeddingProviderChain,
+        quiet: Bool = false
     ) async throws -> IndexManager {
         // Check for dimension mismatch on --force to prevent segfault from incompatible USearch index
         if force {
             let vectorPath = (indexPath as NSString).appendingPathComponent("vectors.usearch")
             if let old = USearchVectorStore.existingDimension(at: vectorPath), old != embeddingProvider.dimension {
-                print("Dimension changed (\(old) → \(embeddingProvider.dimension)), recreating index...")
+                if !quiet {
+                    print("Dimension changed (\(old) → \(embeddingProvider.dimension)), recreating index...")
+                }
                 try USearchVectorStore.deleteIndex(at: vectorPath)
             }
         }

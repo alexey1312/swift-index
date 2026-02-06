@@ -45,6 +45,7 @@ Options:
 - `--include-tests` — include test files
 - `--rebuild` — clear and rebuild index
 - `--verbose` — show detailed progress
+- `--quiet` — suppress all output except progress bar and summary
 
 #### Scenario: Index current directory
 
