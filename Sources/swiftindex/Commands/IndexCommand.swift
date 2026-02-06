@@ -234,9 +234,9 @@ struct IndexCommand: AsyncParsableCommand {
         if quiet {
             let errors = finalStats.errors > 0 ? " (\(finalStats.errors) errors)" : ""
             let time = String(format: "%.1f", elapsed)
-            print(
-                "\nIndexed \(statistics.chunkCount) chunks from \(finalStats.filesProcessed) files in \(time)s\(errors)"
-            )
+            let chunks = finalStats.chunksIndexed
+            let files = finalStats.filesProcessed
+            print("\nIndexed \(chunks) chunks from \(files) files in \(time)s\(errors)")
             return
         }
 
