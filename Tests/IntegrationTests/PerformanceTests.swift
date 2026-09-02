@@ -1,8 +1,7 @@
 // swiftlint:disable file_length
 import Foundation
-import Testing
-
 @testable import SwiftIndexCore
+import Testing
 
 /// Performance tests for SwiftIndex components.
 ///
@@ -109,7 +108,7 @@ struct PerformanceTests {
     // MARK: - Parser Performance Tests
 
     @Test("Parser throughput - single file")
-    func parserThroughputSingleFile() throws {
+    func parserThroughputSingleFile() {
         let parser = HybridParser()
         let iterations = 100
 
@@ -142,7 +141,7 @@ struct PerformanceTests {
     }
 
     @Test("Parser throughput - large file")
-    func parserThroughputLargeFile() throws {
+    func parserThroughputLargeFile() {
         let parser = HybridParser()
 
         // Generate a large file by repeating the sample code
@@ -816,7 +815,7 @@ struct LLMSearchEnhancementPerformanceTests {
         }
 
         // Synthesis should complete in reasonable time even for 20 results
-        #expect(latenciesByCount[20]! < 0.1, "Synthesis of 20 results should be under 100ms")
+        #expect(try #require(latenciesByCount[20]) < 0.1, "Synthesis of 20 results should be under 100ms")
     }
 
     // MARK: - Follow-Up Generation Latency
@@ -993,13 +992,17 @@ private final class MockLLMEmbeddingProvider: EmbeddingProvider, @unchecked Send
         self.dimension = dimension
     }
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
 
     func embed(_ text: String) async throws -> [Float] {
         var generator = SeededRNG(seed: stableHash(text))
         var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
-        if norm > 0 { embedding = embedding.map { $0 / norm } }
+        if norm > 0 {
+            embedding = embedding.map { $0 / norm }
+        }
         return embedding
     }
 
@@ -1031,7 +1034,9 @@ private final class FastMockLLMProvider: LLMProvider, @unchecked Sendable {
         self.responseDelay = responseDelay
     }
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
 
     func complete(
         messages: [LLMMessage],

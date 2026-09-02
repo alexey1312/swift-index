@@ -195,7 +195,7 @@ public actor FollowUpGenerator {
 
     // MARK: - Regex Patterns
 
-    // Pre-compiled regex patterns for categorization (case-insensitive)
+    /// Pre-compiled regex patterns for categorization (case-insensitive)
     private static let howToRegex: NSRegularExpression = // swiftlint:disable:next force_try
         try! NSRegularExpression(pattern: "how|usage|example", options: .caseInsensitive)
 

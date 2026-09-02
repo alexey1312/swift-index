@@ -1,9 +1,8 @@
 // swiftlint:disable file_length
 import Foundation
-import Testing
-
 @testable import SwiftIndexCore
 @testable import SwiftIndexMCP
+import Testing
 
 /// End-to-end integration tests for SwiftIndex.
 ///
@@ -307,7 +306,7 @@ struct E2ETests {
     }
 
     @Test("Provider chain throws when all providers unavailable")
-    func providerChainAllUnavailable() async throws {
+    func providerChainAllUnavailable() async {
         let chain = EmbeddingProviderChain(
             providers: [UnavailableEmbeddingProvider(), UnavailableEmbeddingProvider()],
             id: "empty-chain",
@@ -379,7 +378,7 @@ struct E2ETests {
     }
 
     @Test("Parser handles Swift declarations correctly")
-    func parserHandlesDeclarations() throws {
+    func parserHandlesDeclarations() {
         let code = """
         struct User {
             let id: UUID
@@ -923,7 +922,9 @@ private struct MockLLMProvider: LLMProvider {
         self.response = response
     }
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
 
     func complete(
         messages: [LLMMessage],
@@ -944,7 +945,9 @@ private final class CountingLLMProvider: LLMProvider, @unchecked Sendable {
         self.onCall = onCall
     }
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
 
     func complete(
         messages: [LLMMessage],
@@ -961,7 +964,9 @@ private struct UnavailableLLMProvider: LLMProvider {
     let id = "unavailable-llm"
     let name = "Unavailable LLM"
 
-    func isAvailable() async -> Bool { false }
+    func isAvailable() async -> Bool {
+        false
+    }
 
     func complete(
         messages: [LLMMessage],
@@ -982,13 +987,17 @@ private final class MockEmbeddingProviderE2E: EmbeddingProvider, @unchecked Send
         self.dimension = dimension
     }
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
 
     func embed(_ text: String) async throws -> [Float] {
         var generator = SeededRNG(seed: stableHash(text))
         var embedding = (0 ..< dimension).map { _ in Float.random(in: -1 ... 1, using: &generator) }
         let norm = sqrt(embedding.reduce(0) { $0 + $1 * $1 })
-        if norm > 0 { embedding = embedding.map { $0 / norm } }
+        if norm > 0 {
+            embedding = embedding.map { $0 / norm }
+        }
         return embedding
     }
 
