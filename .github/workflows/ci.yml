@@ -65,4 +65,15 @@ jobs:
       - name: Show test failures
         if: failure()
         run: |
-          grep -E '✘|recorded an issue|Fatal error|Test run with' test-output.log | head -60 || true
+          echo "--- last 200 lines ---"
+          tail -200 test-output.log
+          echo "--- failure markers ---"
+          grep -nE '✘|recorded an issue|Fatal error|error:|Crashed|Abort|Signal|exited abnormally' \
+            test-output.log | tail -60 || true
+
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-output
+          path: test-output.log
