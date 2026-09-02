@@ -186,6 +186,8 @@ private actor MLXLLMModelManager {
 
         let configuration = ModelConfiguration(id: modelId)
         let container = try await LLMModelFactory.shared.loadContainer(
+            from: MLXModelLoading.downloader,
+            using: MLXModelLoading.tokenizerLoader,
             configuration: configuration
         )
         loadedContainers[modelId] = container

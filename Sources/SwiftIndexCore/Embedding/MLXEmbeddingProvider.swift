@@ -5,7 +5,7 @@ import Foundation
 #if canImport(MLX) && canImport(MLXEmbedders)
     import MLX
     import MLXEmbedders
-    import Tokenizers
+    import MLXLMCommon
 #endif
 
 /// Embedding provider using Apple MLX for native Apple Silicon acceleration.
@@ -168,7 +168,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         private let expectedDimension: Int
 
         private var isLoaded: Bool = false
-        private var modelContainer: ModelContainer?
+        private var modelContainer: EmbedderModelContainer?
 
         init(modelId: String, dimension: Int) {
             self.modelId = modelId
@@ -190,9 +190,14 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             }
 
             do {
-                // Load embedding model using MLXEmbedders (Qwen3 models work natively)
+                // Load embedding model using MLXEmbedders (Qwen3 models work natively).
+                // mlx-swift-lm 3.x takes the downloader and tokenizer loader explicitly.
                 let configuration = ModelConfiguration(id: modelId)
-                modelContainer = try await MLXEmbedders.loadModelContainer(configuration: configuration)
+                modelContainer = try await EmbedderModelFactory.shared.loadContainer(
+                    from: MLXModelLoading.downloader,
+                    using: MLXModelLoading.tokenizerLoader,
+                    configuration: configuration
+                )
                 isLoaded = true
             } catch {
                 throw ProviderError.modelNotFound(name: modelId)
@@ -206,9 +211,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 throw ProviderError.notAvailable(reason: "Model not loaded")
             }
 
-            let embedding = await container.perform { model, tokenizer, pooling -> [Float] in
+            let embedding = try await container.perform { context -> [Float] in
                 // Tokenize input
-                let tokens = tokenizer.encode(text: text, addSpecialTokens: true)
+                let tokens = context.tokenizer.encode(text: text, addSpecialTokens: true)
 
                 // Create input tensor
                 let inputArray = MLXArray(tokens)
@@ -216,23 +221,15 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 let mask = MLXArray.ones([1, tokens.count])
                 let tokenTypes = MLXArray.zeros([1, tokens.count])
 
-                // Forward pass through model
-                // Note: MLXEmbedders pooling doesn't work for Qwen3 decoder models
-                // We need to manually do last-token pooling
-                let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
-                let hiddenStates = pooling(output, normalize: false, applyLayerNorm: false)
-                // hiddenStates shape: [1, seq_len, hidden_dim]
+                // Forward pass through model. Qwen3 is a decoder model, so the
+                // library's pooling head is bypassed and last-token pooling is
+                // applied to the raw hidden states: [1, seq_len, hidden_dim].
+                let output = context.model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                let hiddenStates = try Self.hiddenStates(of: output)
 
                 // Last-token pooling for decoder models
-                let lastTokenIdx = tokens.count - 1
-                let lastHidden = hiddenStates[0, lastTokenIdx] // [hidden_dim]
-
-                // L2 normalize
-                let norm = sqrt((lastHidden * lastHidden).sum())
-                let normalized = lastHidden / norm
-                eval(normalized)
-
-                return normalized.asArray(Float.self)
+                let lastHidden = hiddenStates[0, tokens.count - 1] // [hidden_dim]
+                return Self.normalized(lastHidden)
             }
 
             // Validate dimension
@@ -258,10 +255,10 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                 let batchEnd = min(batchStart + maxBatchSize, texts.count)
                 let batch = Array(texts[batchStart ..< batchEnd])
 
-                let batchEmbeddings = await container.perform { model, tokenizer, pooling -> [[Float]] in
+                let batchEmbeddings = try await container.perform { context -> [[Float]] in
                     // Tokenize all inputs
                     let tokenizedInputs = batch.map {
-                        tokenizer.encode(text: $0, addSpecialTokens: true)
+                        context.tokenizer.encode(text: $0, addSpecialTokens: true)
                     }
 
                     // Store original lengths for last-token pooling
@@ -272,7 +269,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                         acc = max(acc, elem.count)
                     }
 
-                    let padToken = tokenizer.eosTokenId ?? 0
+                    let padToken = context.tokenizer.eosTokenId ?? 0
 
                     let padded = stacked(
                         tokenizedInputs.map { tokens in
@@ -285,24 +282,16 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
                     let mask = (padded .!= padToken)
                     let tokenTypes = MLXArray.zeros(like: padded)
 
-                    // Forward pass through model
-                    // Note: MLXEmbedders pooling doesn't work for Qwen3 decoder models
-                    let output = model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
-                    let hiddenStates = pooling(output, normalize: false, applyLayerNorm: false)
+                    // Forward pass through model; pooling is done manually below.
                     // hiddenStates shape: [batch_size, seq_len, hidden_dim]
+                    let output = context.model(padded, positionIds: nil, tokenTypeIds: tokenTypes, attentionMask: mask)
+                    let hiddenStates = try Self.hiddenStates(of: output)
 
                     // Last-token pooling for decoder models
                     var embeddings: [[Float]] = []
                     for i in 0 ..< batch.count {
-                        let lastTokenIdx = originalLengths[i] - 1
-                        let lastHidden = hiddenStates[i, lastTokenIdx] // [hidden_dim]
-
-                        // L2 normalize
-                        let norm = sqrt((lastHidden * lastHidden).sum())
-                        let normalized = lastHidden / norm
-                        eval(normalized)
-
-                        embeddings.append(normalized.asArray(Float.self))
+                        let lastHidden = hiddenStates[i, originalLengths[i] - 1] // [hidden_dim]
+                        embeddings.append(Self.normalized(lastHidden))
                     }
                     return embeddings
                 }
@@ -311,6 +300,24 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             }
 
             return results
+        }
+
+        // MARK: - Helpers
+
+        /// Extracts the full-sequence hidden states from a forward pass.
+        private static func hiddenStates(of output: EmbeddingModelOutput) throws -> MLXArray {
+            guard let hiddenStates = output.hiddenStates else {
+                throw ProviderError.notAvailable(reason: "Embedding model returned no hidden states")
+            }
+            return hiddenStates
+        }
+
+        /// L2-normalizes a single embedding vector and materializes it.
+        private static func normalized(_ vector: MLXArray) -> [Float] {
+            let norm = sqrt((vector * vector).sum())
+            let result = vector / norm
+            eval(result)
+            return result.asArray(Float.self)
         }
     }
 

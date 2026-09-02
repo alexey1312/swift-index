@@ -25,7 +25,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 ## System Requirements
 
 - **macOS 14 (Sonoma)** or later
-- **Swift 6.1+** (Xcode 16+). Swift 6.2.3 recommended.
+- **Swift 6.1+** (Xcode 16+). Swift 6.3.3 recommended.
 - **Apple Silicon** (M1/M2/M3/M4) — required for MLX embeddings
 
 ## Installation

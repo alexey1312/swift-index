@@ -217,23 +217,25 @@ check_indexing_status(task_id="abc-123")
 
 ### Key Dependencies
 
-| Package                | Version | Purpose                       |
-| ---------------------- | ------- | ----------------------------- |
-| SwiftSyntax            | 600.0.0 | Swift AST parsing             |
-| swift-tree-sitter      | 0.9.0   | Multi-language parsing        |
-| mlx-swift              | 0.30.0  | Apple Silicon embeddings      |
-| mlx-swift-lm           | main    | MLX language model support    |
-| swift-embeddings       | 0.0.25  | Text embedding models         |
-| swift-transformers     | 1.1.6   | HuggingFace model integration |
-| GRDB.swift             | 7.9.0   | SQLite + FTS5                 |
-| usearch                | 2.23.0  | Vector index (HNSW)           |
-| swift-toml             | 2.0.0   | Configuration                 |
-| toon-swift             | 0.3.0   | Token-optimized output format |
-| swift-argument-parser  | 1.7.0   | CLI argument parsing          |
-| swift-log              | 1.9.0   | Structured logging            |
-| swift-async-algorithms | 1.1.0   | Async sequence utilities      |
-| swift-crypto           | 4.0.0   | Cryptographic operations      |
-| swift-nio              | 2.62.0  | Signal handling (shutdown)    |
+| Package               | Version | Purpose                       |
+| --------------------- | ------- | ----------------------------- |
+| SwiftSyntax           | 603.0.2 | Swift AST parsing             |
+| swift-tree-sitter     | 0.25.0  | Multi-language parsing        |
+| mlx-swift             | 0.31.6  | Apple Silicon embeddings      |
+| mlx-swift-lm          | 3.31.4  | MLX language model support    |
+| swift-embeddings      | 0.0.26  | Text embedding models         |
+| swift-transformers    | 1.1.6   | HuggingFace model integration |
+| GRDB.swift            | 7.11.1  | SQLite + FTS5                 |
+| usearch               | 2.26.2  | Vector index (HNSW)           |
+| swift-toml            | 2.0.0   | Configuration                 |
+| toon-swift            | 0.4.0   | Token-optimized output format |
+| swift-argument-parser | 1.7.2   | CLI argument parsing          |
+| swift-log             | 1.15.0  | Structured logging            |
+| swift-collections     | 1.6.0   | OrderedDictionary (MCP tools) |
+| swift-yyjson          | 0.6.0   | JSON codec (JSONCodec)        |
+| Noora                 | 0.57.0  | Terminal UI components        |
+| swift-crypto          | 4.5.2   | Cryptographic operations      |
+| swift-nio             | 2.102.0 | Signal handling (shutdown)    |
 
 ### USearch Library Notes
 

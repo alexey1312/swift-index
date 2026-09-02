@@ -78,6 +78,18 @@ struct ProgressLogHandler: LogHandler, @unchecked Sendable {
         set { metadata[key] = newValue }
     }
 
+    func log(event: LogEvent) {
+        log(
+            level: event.level,
+            message: event.message,
+            metadata: event.metadata,
+            source: event.source,
+            file: event.file,
+            function: event.function,
+            line: event.line
+        )
+    }
+
     // swiftlint:disable:next function_parameter_count
     func log(
         level: Logger.Level,

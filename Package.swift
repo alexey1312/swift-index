@@ -23,47 +23,51 @@ let package = Package(
     ],
     dependencies: [
         // Parsing - SwiftSyntax for Swift files
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0"),
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "603.0.2"),
 
         // Parsing - Tree-sitter core (grammars added separately)
-        .package(url: "https://github.com/tree-sitter/swift-tree-sitter.git", from: "0.9.0"),
+        .package(url: "https://github.com/tree-sitter/swift-tree-sitter.git", from: "0.25.0"),
 
         // Embeddings
-        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.30.6"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "2.30.3"),
-        .package(url: "https://github.com/jkrukowski/swift-embeddings.git", from: "0.0.25"),
-        .package(url: "https://github.com/huggingface/swift-transformers.git", from: "1.1.6"),
+        .package(url: "https://github.com/ml-explore/mlx-swift.git", from: "0.31.6"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.31.4"),
+        // swift-transformers >= 1.1.7 links ibireme/yyjson, which duplicates the yyjson.c
+        // symbols vendored by swift-yyjson (Cyyjson) and fails the link. Stay on 1.1.6
+        // until swift-yyjson depends on the upstream yyjson package instead of vendoring.
+        // swift-embeddings 0.1.0 requires swift-transformers >= 1.3.3, so it is capped too.
+        .package(url: "https://github.com/jkrukowski/swift-embeddings.git", "0.0.25" ..< "0.1.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers.git", exact: "1.1.6"),
 
         // Storage
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.9.0"),
-        .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.23.0"),
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1"),
+        .package(url: "https://github.com/unum-cloud/usearch.git", from: "2.26.2"),
 
         // Configuration
         .package(url: "https://github.com/mattt/swift-toml.git", from: "2.0.0"),
 
         // Output format
-        .package(url: "https://github.com/toon-format/toon-swift.git", from: "0.3.0"),
+        .package(url: "https://github.com/toon-format/toon-swift.git", from: "0.4.0"),
 
         // CLI
-        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.0"),
-        .package(url: "https://github.com/apple/swift-log.git", from: "1.9.0"),
-        .package(url: "https://github.com/tuist/Noora.git", from: "0.54.0"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.7.2"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.15.0"),
+        .package(url: "https://github.com/tuist/Noora.git", from: "0.57.0"),
 
         // Collections
-        .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
+        .package(url: "https://github.com/apple/swift-collections.git", from: "1.6.0"),
 
         // Crypto (for file hashing)
-        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.0.0"),
+        .package(url: "https://github.com/apple/swift-crypto.git", from: "4.5.2"),
 
         // JSON codec (faster than Foundation, RFC 8259 strict mode)
         .package(
             url: "https://github.com/mattt/swift-yyjson.git",
-            from: "0.3.0",
+            from: "0.6.0",
             traits: ["strictStandardJSON"]
         ),
 
         // Signal handling
-        .package(url: "https://github.com/apple/swift-nio.git", from: "2.62.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.102.0"),
     ],
     targets: [
         // MARK: - Core Library
