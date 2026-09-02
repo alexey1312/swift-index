@@ -47,80 +47,6 @@ enum DescriptionGeneratorFactory {
     }
 }
 
-// MARK: - File Collection
-
-enum FileCollector {
-    static func collectFiles(
-        at path: String,
-        config: Config,
-        parser: HybridParser,
-        logger: Logger
-    ) throws -> [String] {
-        var files: [String] = []
-        let fileManager = FileManager.default
-
-        guard let enumerator = fileManager.enumerator(
-            at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            throw ValidationError("Could not enumerate directory: \(path)")
-        }
-
-        for case let fileURL as URL in enumerator {
-            let filePath = fileURL.path
-
-            // Check exclusion patterns
-            var shouldExclude = false
-            for pattern in config.excludePatterns {
-                if filePath.contains(pattern) {
-                    shouldExclude = true
-                    break
-                }
-            }
-
-            if shouldExclude {
-                continue
-            }
-
-            // Check if regular file
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-                  let isRegularFile = resourceValues.isRegularFile,
-                  isRegularFile
-            else {
-                continue
-            }
-
-            // Check file size
-            if let fileSize = resourceValues.fileSize, fileSize > config.maxFileSize {
-                logger.debug("Skipping large file: \(filePath) (\(fileSize) bytes)")
-                continue
-            }
-
-            // Check extension
-            let ext = fileURL.pathExtension.lowercased()
-
-            // If include extensions is specified, check against it
-            if !config.includeExtensions.isEmpty {
-                guard config.includeExtensions.contains(ext) ||
-                    config.includeExtensions.contains(".\(ext)")
-                else {
-                    continue
-                }
-            } else {
-                // Otherwise, check if parser supports the extension
-                guard parser.supportedExtensions.contains(ext) else {
-                    continue
-                }
-            }
-
-            files.append(filePath)
-        }
-
-        return files.sorted()
-    }
-}
-
 // MARK: - File Indexer
 
 enum FileIndexer {
@@ -267,7 +193,9 @@ enum FileIndexer {
                     tokenCount: chunk.tokenCount,
                     language: chunk.language,
                     contentHash: chunk.contentHash,
-                    generatedDescription: description
+                    generatedDescription: description,
+                    conformances: chunk.conformances,
+                    isTypeDeclaration: chunk.isTypeDeclaration
                 )
             }
             return chunk

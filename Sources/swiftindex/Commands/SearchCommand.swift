@@ -137,14 +137,8 @@ struct SearchCommand: AsyncParsableCommand {
                 from: config,
                 projectDirectory: resolvedPath,
                 logger: logger,
-                requireInitialization: true
+                requireInitialization: false
             )
-        } catch ConfigError.notInitialized {
-            print("No configuration found.")
-            print("")
-            print("Run 'swiftindex init' first to create a configuration file,")
-            print("then 'swiftindex index' to build the index.")
-            throw ExitCode.failure
         }
 
         // Calculate effective values (CLI overrides config defaults)

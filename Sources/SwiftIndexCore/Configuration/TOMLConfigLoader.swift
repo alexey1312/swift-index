@@ -187,6 +187,7 @@ private struct TOMLConfig: Codable {
         var chunk_size: Int?
         var chunk_overlap: Int?
         var max_concurrent_tasks: Int?
+        var respect_gitignore: Bool?
     }
 
     struct StorageSection: Codable {
@@ -269,6 +270,7 @@ private struct TOMLConfig: Codable {
             config.chunkSize = indexing.chunk_size
             config.chunkOverlap = indexing.chunk_overlap
             config.maxConcurrentTasks = indexing.max_concurrent_tasks
+            config.respectGitignore = indexing.respect_gitignore
         }
 
         // Storage section
@@ -308,7 +310,9 @@ public extension TOMLConfigLoader {
     ///   - envConfig: Configuration from environment variables.
     ///   - projectDirectory: Path to the project root directory.
     ///   - globalConfigDirectory: Optional global config directory path. If nil, uses `~/.config/swiftindex`.
-    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config files exist.
+    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config
+    ///     files exist. Defaults to false: the built-in defaults are a supported
+    ///     configuration, so commands run without any config file.
     /// - Returns: Complete merged configuration.
     /// - Throws: `ConfigError.notInitialized` if `requireInitialization` is true and no config files exist.
     static func loadLayered(
@@ -316,7 +320,7 @@ public extension TOMLConfigLoader {
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
         globalConfigDirectory: String? = nil,
-        requireInitialization: Bool = true
+        requireInitialization: Bool = false
     ) throws -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
         var hasConfigFile = false

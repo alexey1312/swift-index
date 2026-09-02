@@ -140,7 +140,7 @@ public actor IncrementalIndexer {
         let fileWatcher = FileWatcher(
             path: resolvedPath,
             debounceMs: config.watchDebounceMs,
-            extensions: watchedExtensions(),
+            extensions: FileCollector.indexableExtensions(config: config, parser: parser),
             excludePatterns: config.excludePatterns,
             logger: logger
         )
@@ -204,21 +204,6 @@ public actor IncrementalIndexer {
     }
 
     // MARK: - Private Methods
-
-    /// Extensions the watcher should emit events for.
-    ///
-    /// `config.includeExtensions` is empty by default, which `FileWatcher` interprets
-    /// as "watch everything" — that would fire on build artifacts and binaries the
-    /// indexer cannot parse. Fall back to the parser's supported set so the watcher
-    /// and the indexer agree on scope.
-    private func watchedExtensions() -> Set<String> {
-        let configured = Set(
-            config.includeExtensions
-                .map { $0.trimmingCharacters(in: CharacterSet(charactersIn: ".")).lowercased() }
-                .filter { !$0.isEmpty }
-        )
-        return configured.isEmpty ? parser.supportedExtensions : configured
-    }
 
     private func handleEvent(_ event: FileWatcher.Event) async throws {
         switch event {

@@ -90,7 +90,7 @@ struct IndexCommand: AsyncParsableCommand {
         let startTime = Date()
 
         let resolvedPath = try resolvePath(logger: logger)
-        let configuration = try await loadConfigurationWithInitFallback(
+        let configuration = try loadConfiguration(
             projectDirectory: FileManager.default.currentDirectoryPath,
             logger: logger
         )
@@ -300,67 +300,6 @@ struct IndexCommand: AsyncParsableCommand {
         return resolvedPath
     }
 
-    private func loadConfigurationWithInitFallback(
-        projectDirectory: String,
-        logger: Logger
-    ) async throws -> Config {
-        do {
-            return try loadConfiguration(projectDirectory: projectDirectory, logger: logger)
-        } catch ConfigError.notInitialized {
-            // No config file exists - offer to initialize
-            return try await handleNotInitialized(projectDirectory: projectDirectory, logger: logger)
-        }
-    }
-
-    private func handleNotInitialized(
-        projectDirectory: String,
-        logger: Logger
-    ) async throws -> Config {
-        let ui = Noora()
-        let isInteractive = isatty(STDIN_FILENO) == 1
-
-        print("No configuration found.")
-        print("")
-        print("SwiftIndex requires a configuration file to determine embedding")
-        print("provider, model settings, and indexing options.")
-        print("")
-
-        if isInteractive {
-            let runInit = ui.yesOrNoChoicePrompt(
-                question: "Would you like to initialize configuration now?",
-                defaultAnswer: true,
-                description: "This will run 'swiftindex init' to create .swiftindex.toml"
-            )
-
-            if !runInit {
-                print("")
-                print("To initialize manually, run: swiftindex init")
-                throw ExitCode.failure
-            }
-
-            print("")
-
-            // Run init command
-            var initCommand = InitCommand()
-            try await initCommand.run()
-
-            print("")
-            print("Continuing with indexing...")
-            print("")
-
-            // Reload configuration after init
-            return try loadConfiguration(projectDirectory: projectDirectory, logger: logger)
-        } else {
-            // Non-interactive mode - just show error
-            print("Run 'swiftindex init' to create a configuration file.")
-            print("")
-            print("Example:")
-            print("  swiftindex init              # Interactive setup")
-            print("  swiftindex init --provider mlx  # Use MLX defaults")
-            throw ExitCode.failure
-        }
-    }
-
     private func loadConfiguration(
         projectDirectory: String,
         logger: Logger
@@ -369,7 +308,7 @@ struct IndexCommand: AsyncParsableCommand {
             from: config,
             projectDirectory: projectDirectory,
             logger: logger,
-            requireInitialization: true
+            requireInitialization: false
         )
         logger.debug("Configuration loaded", metadata: [
             "provider": "\(configuration.embeddingProvider)",

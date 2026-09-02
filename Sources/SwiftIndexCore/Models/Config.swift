@@ -70,6 +70,9 @@ public struct Config: Sendable, Equatable {
     /// Maximum file size to index (bytes).
     public var maxFileSize: Int
 
+    /// Whether the project's root `.gitignore` also excludes files from indexing.
+    public var respectGitignore: Bool
+
     /// Target chunk size in characters.
     public var chunkSize: Int
 
@@ -140,6 +143,7 @@ public struct Config: Sendable, Equatable {
         excludePatterns: [String] = Config.defaultExcludePatterns,
         includeExtensions: [String] = [],
         maxFileSize: Int = 1_000_000,
+        respectGitignore: Bool = true,
         chunkSize: Int = 1500,
         chunkOverlap: Int = 200,
         indexPath: String = ".swiftindex",
@@ -172,6 +176,7 @@ public struct Config: Sendable, Equatable {
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
+        self.respectGitignore = respectGitignore
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
         self.indexPath = indexPath
@@ -320,6 +325,7 @@ public extension Config {
         applyIfPresent(partial.excludePatterns, to: \.excludePatterns)
         applyIfPresent(partial.includeExtensions, to: \.includeExtensions)
         applyIfPresent(partial.maxFileSize, to: \.maxFileSize)
+        applyIfPresent(partial.respectGitignore, to: \.respectGitignore)
         applyIfPresent(partial.chunkSize, to: \.chunkSize)
         applyIfPresent(partial.chunkOverlap, to: \.chunkOverlap)
         applyIfPresent(partial.indexPath, to: \.indexPath)

@@ -62,20 +62,9 @@ struct ServeCommand: AsyncParsableCommand {
             _ = try CLIUtils.loadConfig(
                 from: config,
                 logger: logger,
-                requireInitialization: true
+                requireInitialization: false
             )
             logger.debug("Configuration loaded for MCP server")
-        } catch ConfigError.notInitialized {
-            FileHandle.standardError.write(
-                Data("No configuration found.\n".utf8)
-            )
-            FileHandle.standardError.write(
-                Data("\n".utf8)
-            )
-            FileHandle.standardError.write(
-                Data("Run 'swiftindex init' first to create a configuration file.\n".utf8)
-            )
-            throw ExitCode.failure
         }
 
         // Output startup info to stderr

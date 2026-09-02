@@ -33,6 +33,7 @@ public enum TOMLConfigValidator {
             "chunk_size",
             "chunk_overlap",
             "max_concurrent_tasks",
+            "respect_gitignore",
         ],
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
