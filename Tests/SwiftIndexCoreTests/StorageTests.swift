@@ -930,6 +930,33 @@ struct USearchVectorStoreTests {
         #expect(count == 3)
     }
 
+    @Test("Vectors can be added after loading a persisted index")
+    func addAfterLoad() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let path = tempDir.appendingPathComponent("vectors.usearch").path
+        let store = try USearchVectorStore(dimension: 8, path: path)
+        try await store.add(id: "first", vector: [Float](repeating: 0.1, count: 8))
+        try await store.save()
+
+        // Re-open and keep indexing, which is what every incremental reindex does.
+        // load() restores trackedCapacity from the mapping without reserving it on
+        // the underlying index, so this used to fail with USearch error 15.
+        let reloaded = try USearchVectorStore(dimension: 8, path: path)
+        try await reloaded.load()
+        try await reloaded.addBatch(
+            (0 ..< 5).map { (id: "added-\($0)", vector: [Float](repeating: Float($0), count: 8)) }
+        )
+
+        let count = try await reloaded.count()
+        #expect(count == 6)
+        let present = try await reloaded.contains(id: "added-4")
+        #expect(present)
+    }
+
     @Test("deleteIndex removes both files")
     func deleteIndexRemovesBothFiles() async throws {
         let tempDir = FileManager.default.temporaryDirectory

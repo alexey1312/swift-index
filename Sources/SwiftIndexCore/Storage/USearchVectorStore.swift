@@ -379,6 +379,13 @@ public actor USearchVectorStore: VectorStore {
         }
         nextKey = mapping.nextKey
         trackedCapacity = mapping.capacity ?? max(Self.initialCapacity, UInt32(idToKey.count) * 2)
+
+        // Re-reserve after load. `load()` sizes the underlying index to the data it
+        // read, but `trackedCapacity` is restored from the mapping — so `addBatch`
+        // would see spare capacity that the index does not actually have and skip
+        // reserving, and the next insert would fail with USearch error 15. This
+        // mirrors the re-reserve `clear()` already performs for the same reason.
+        try index.reserve(trackedCapacity)
     }
 
     public func clear() async throws {

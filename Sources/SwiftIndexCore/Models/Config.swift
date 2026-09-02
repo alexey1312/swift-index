@@ -215,8 +215,14 @@ public struct SearchEnhancementConfig: Sendable, Equatable {
     /// Configuration for deep synthesis operations.
     public var synthesis: LLMTierConfig
 
+    /// - Note: Disabled by default. Enhancement runs an LLM (MLX by default), which
+    ///   needs a multi-gigabyte model and, on Apple Silicon, the Metal libraries
+    ///   beside the binary. Enabling it by default made a plain `swiftindex index`
+    ///   abort with "Failed to load the default metallib" on any machine without
+    ///   them — the opposite of running on built-in defaults. The documentation and
+    ///   `SearchEnhancementConfig.default` both already described it as opt-in.
     public init(
-        enabled: Bool = true,
+        enabled: Bool = false,
         utility: LLMTierConfig = .defaultUtility,
         synthesis: LLMTierConfig = .defaultSynthesis
     ) {

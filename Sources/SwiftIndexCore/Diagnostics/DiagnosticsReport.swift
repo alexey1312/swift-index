@@ -181,9 +181,23 @@ public enum DiagnosticsCollector {
         // Open with the index's own dimension where known, so merely inspecting a
         // mismatched index does not fail.
         let effectiveDimension = metadata?.dimension ?? dimension
-        guard let manager = try? IndexManager(directory: path, dimension: effectiveDimension),
-              let stats = try? await manager.statistics()
-        else {
+        guard let manager = try? IndexManager(directory: path, dimension: effectiveDimension) else {
+            return DiagnosticsReport.IndexStatus(
+                exists: true,
+                path: path,
+                chunkCount: 0,
+                vectorCount: 0,
+                fileCount: 0,
+                isConsistent: false,
+                metadata: metadata
+            )
+        }
+
+        // The vector index lives on disk; without loading it, statistics would report
+        // zero vectors for a perfectly healthy index and call it inconsistent.
+        try? await manager.load()
+
+        guard let stats = try? await manager.statistics() else {
             return DiagnosticsReport.IndexStatus(
                 exists: true,
                 path: path,
