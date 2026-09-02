@@ -58,4 +58,11 @@ jobs:
       - name: Test
         run: |
           set -o pipefail
-          swift test --skip Performance --verbose 2>&1 | xcsift
+          swift test --skip Performance --verbose 2>&1 | tee test-output.log | xcsift
+
+      # xcsift summarizes XCTest results only, so a swift-testing failure shows
+      # up as a non-zero exit with an otherwise successful-looking summary.
+      - name: Show test failures
+        if: failure()
+        run: |
+          grep -E '✘|recorded an issue|Fatal error|Test run with' test-output.log | head -60 || true
