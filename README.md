@@ -25,7 +25,7 @@ A semantic code search engine for Swift codebases, available as both a CLI tool 
 ## System Requirements
 
 - **macOS 14 (Sonoma)** or later
-- **Swift 6.1+** (Xcode 16+). Swift 6.2.3 recommended.
+- **Swift 6.1+** (Xcode 16+). Swift 6.3.3 recommended.
 - **Apple Silicon** (M1/M2/M3/M4) — required for MLX embeddings
 
 ## Installation
@@ -456,10 +456,14 @@ Configuration is loaded from multiple sources with the following priority (highe
 | ------------------------------- | -------------------------------- |
 | `SWIFTINDEX_EMBEDDING_PROVIDER` | Embedding provider               |
 | `SWIFTINDEX_EMBEDDING_MODEL`    | Embedding model name             |
+| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory            |
 | `SWIFTINDEX_LIMIT`              | Default search limit             |
 | `OPENAI_API_KEY`                | API key for OpenAI embeddings    |
 | `GEMINI_API_KEY`                | API key for Gemini embeddings    |
 | `VOYAGE_API_KEY`                | API key for Voyage AI embeddings |
+
+Downloaded models are cached in `~/.cache/huggingface` (or `$XDG_CACHE_HOME/huggingface`).
+Set `SWIFTINDEX_MODEL_CACHE` to keep them elsewhere, for example on an external volume.
 
 ## Search Enhancement
 
@@ -954,7 +958,7 @@ SwiftIndex is designed specifically for Swift developers on macOS. Here's how it
 | Feature           | SwiftIndex            | [mgrep](https://github.com/mixedbread-ai/mgrep) | [ChunkHound](https://github.com/chunkhound/chunkhound) |
 | ----------------- | --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
 | **Privacy**       | ✅ Local-first (MLX)  | ❌ Cloud-only                                   | ✅ Local-first                                         |
-| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                          |
+| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                         |
 | **Apple Silicon** | ✅ MLX optimized      | ❌                                              | ❌                                                     |
 | **Search Method** | BM25 + Semantic + RRF | Semantic + reranking                            | Multi-hop semantic                                     |
 | **MCP Server**    | ✅ Native             | ✅ Agent support                                | ❌                                                     |

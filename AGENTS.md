@@ -217,23 +217,25 @@ check_indexing_status(task_id="abc-123")
 
 ### Key Dependencies
 
-| Package                | Version | Purpose                       |
-| ---------------------- | ------- | ----------------------------- |
-| SwiftSyntax            | 600.0.0 | Swift AST parsing             |
-| swift-tree-sitter      | 0.9.0   | Multi-language parsing        |
-| mlx-swift              | 0.30.0  | Apple Silicon embeddings      |
-| mlx-swift-lm           | main    | MLX language model support    |
-| swift-embeddings       | 0.0.25  | Text embedding models         |
-| swift-transformers     | 1.1.6   | HuggingFace model integration |
-| GRDB.swift             | 7.9.0   | SQLite + FTS5                 |
-| usearch                | 2.23.0  | Vector index (HNSW)           |
-| swift-toml             | 2.0.0   | Configuration                 |
-| toon-swift             | 0.3.0   | Token-optimized output format |
-| swift-argument-parser  | 1.7.0   | CLI argument parsing          |
-| swift-log              | 1.9.0   | Structured logging            |
-| swift-async-algorithms | 1.1.0   | Async sequence utilities      |
-| swift-crypto           | 4.0.0   | Cryptographic operations      |
-| swift-nio              | 2.62.0  | Signal handling (shutdown)    |
+| Package               | Version | Purpose                       |
+| --------------------- | ------- | ----------------------------- |
+| SwiftSyntax           | 603.0.2 | Swift AST parsing             |
+| swift-tree-sitter     | 0.25.0  | Multi-language parsing        |
+| mlx-swift             | 0.31.6  | Apple Silicon embeddings      |
+| mlx-swift-lm          | 3.31.4  | MLX language model support    |
+| swift-embeddings      | 0.0.26  | Text embedding models         |
+| swift-transformers    | 1.1.6   | HuggingFace model integration |
+| GRDB.swift            | 7.11.1  | SQLite + FTS5                 |
+| usearch               | 2.26.2  | Vector index (HNSW)           |
+| swift-toml            | 2.0.0   | Configuration                 |
+| toon-swift            | 0.4.0   | Token-optimized output format |
+| swift-argument-parser | 1.7.2   | CLI argument parsing          |
+| swift-log             | 1.15.0  | Structured logging            |
+| swift-collections     | 1.6.0   | OrderedDictionary (MCP tools) |
+| swift-yyjson          | 0.6.0   | JSON codec (JSONCodec)        |
+| Noora                 | 0.57.0  | Terminal UI components        |
+| swift-crypto          | 4.5.2   | Cryptographic operations      |
+| swift-nio             | 2.102.0 | Signal handling (shutdown)    |
 
 ### USearch Library Notes
 
@@ -330,6 +332,9 @@ let object = try JSONCodec.deserialize(data)
 
 ### MLX Release Artifacts
 
+- MLX needs `default.metallib`; without it MLX-C's error handler calls `exit(-1)` and
+  kills the process. `MLXRuntime.isMetalLibraryAvailable` checks for it first, so a
+  build without one reports MLX as unavailable and falls back to Swift Embeddings.
 - `./bin/mise run build:release` runs `scripts/build-mlx-metallib` to create
   `default.metallib` and `mlx.metallib` next to the release binary.
 - Release builds disable Whole-Module Optimization to avoid swift-frontend
@@ -440,13 +445,19 @@ _General-Purpose:_
 - `mlx-community/Llama-3.2-1B-Instruct-4bit` — compact, good for simple tasks
 - `mlx-community/Llama-3.2-3B-Instruct-4bit` — larger, better quality
 
-First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~/.cache/huggingface/`.
+First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~/.cache/huggingface/`
+(`$XDG_CACHE_HOME/huggingface` when set, or `SWIFTINDEX_MODEL_CACHE` to point anywhere else).
+swift-transformers' own default is `~/Documents/huggingface`, which iCloud Drive syncs when
+"Desktop & Documents Folders" is enabled; `ModelCacheLocation` overrides it for every provider and
+moves an existing `~/Documents/huggingface` into the cache directory once, so no model is
+re-downloaded.
 
 ### Environment Variables
 
 | Variable                        | Description                               |
 | ------------------------------- | ----------------------------------------- |
 | `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai               |
+| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory override            |
 | `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (highest priority)      |
 | `CLAUDE_CODE_OAUTH_TOKEN`       | OAuth token (auto-set by Claude Code CLI) |
 | `ANTHROPIC_API_KEY`             | Anthropic API key (fallback)              |

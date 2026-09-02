@@ -100,10 +100,7 @@ public actor HubModelManager {
 
     /// Hub API instance for downloads.
     private var hubApi: HubApi {
-        if let cacheDir = customCacheDirectory {
-            return HubApi(downloadBase: cacheDir)
-        }
-        return HubApi()
+        HubApi(downloadBase: customCacheDirectory ?? ModelCacheLocation.base)
     }
 
     // MARK: - Initialization
@@ -210,7 +207,7 @@ public actor HubModelManager {
         _ huggingFaceId: String,
         cacheDirectory: URL? = nil
     ) -> Bool {
-        let hubApi = cacheDirectory.map { HubApi(downloadBase: $0) } ?? HubApi()
+        let hubApi = HubApi(downloadBase: cacheDirectory ?? ModelCacheLocation.base)
         let repoDir = hubApi.localRepoLocation(Hub.Repo(id: huggingFaceId))
         let configPath = repoDir.appendingPathComponent("config.json")
         return FileManager.default.fileExists(atPath: configPath.path)

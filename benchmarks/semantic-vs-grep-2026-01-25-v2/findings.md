@@ -63,7 +63,7 @@
 | Цель proposal                        | Статус           |
 | ------------------------------------ | ---------------- |
 | RRF hybrid scoring                   | ✓ Работает       |
-| Conformance indexing                 | ⚠️ Частично       |
+| Conformance indexing                 | ⚠️ Частично      |
 | Description в FTS5                   | ✓ Работает       |
 | Semantic re-ranking для conformances | ✓ Boost работает |
 

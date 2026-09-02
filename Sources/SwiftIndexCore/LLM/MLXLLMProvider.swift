@@ -123,6 +123,12 @@ public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
     // MARK: - LLMProvider
 
     public func isAvailable() async -> Bool {
+        // Without a Metal library any MLX call exits the process, so report
+        // unavailable and let the provider chain move on.
+        guard MLXRuntime.isMetalLibraryAvailable else {
+            return false
+        }
+
         // Verify MLX can load the model
         do {
             _ = try await modelManager.ensureModelLoaded(modelId: defaultModelId)
@@ -139,6 +145,13 @@ public final class MLXLLMProvider: LLMProvider, @unchecked Sendable {
     ) async throws -> String {
         guard !messages.isEmpty else {
             throw LLMError.invalidInput("Messages cannot be empty")
+        }
+
+        guard MLXRuntime.isMetalLibraryAvailable else {
+            throw LLMError.notAvailable(
+                reason: "MLX has no Metal library. Build one with scripts/build-mlx-metallib "
+                    + "or use the released binary, which ships it."
+            )
         }
 
         let modelId = model ?? defaultModelId
@@ -186,6 +199,8 @@ private actor MLXLLMModelManager {
 
         let configuration = ModelConfiguration(id: modelId)
         let container = try await LLMModelFactory.shared.loadContainer(
+            from: MLXModelLoading.downloader,
+            using: MLXModelLoading.tokenizerLoader,
             configuration: configuration
         )
         loadedContainers[modelId] = container

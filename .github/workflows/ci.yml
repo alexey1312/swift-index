@@ -15,9 +15,9 @@ jobs:
     name: Lint
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
 
@@ -33,7 +33,7 @@ jobs:
     needs: lint
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache SPM dependencies
         uses: actions/cache@v5
@@ -43,7 +43,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-spm-
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           experimental: true
 
@@ -51,7 +51,29 @@ jobs:
         run: swift --version
 
       - name: Build
-        run: swift build 2>&1 | xcsift
+        run: |
+          set -o pipefail
+          swift build 2>&1 | xcsift
 
       - name: Test
-        run: swift test --skip Performance --verbose 2>&1 | xcsift
+        run: |
+          set -o pipefail
+          swift test --skip Performance --verbose 2>&1 | tee test-output.log | xcsift
+
+      # xcsift summarizes XCTest results only, so a swift-testing failure shows
+      # up as a non-zero exit with an otherwise successful-looking summary.
+      - name: Show test failures
+        if: failure()
+        run: |
+          echo "--- last 200 lines ---"
+          tail -200 test-output.log
+          echo "--- failure markers ---"
+          grep -nE '✘|recorded an issue|Fatal error|error:|Crashed|Abort|Signal|exited abnormally' \
+            test-output.log | tail -60 || true
+
+      - name: Upload test output
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-output
+          path: test-output.log
