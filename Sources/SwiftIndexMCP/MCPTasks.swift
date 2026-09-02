@@ -17,12 +17,23 @@ public enum TaskStatus: String, Codable, Sendable {
 
 /// MCP task representation.
 public struct MCPTask: Codable, Sendable {
+    /// Poll interval used when a caller does not specify one.
+    ///
+    /// Defined once so the task and the status tool cannot disagree — the tool
+    /// carried its own, larger fallback that could never be reached, because
+    /// `createTask` had already substituted a value.
+    public static let defaultPollIntervalMs = 1000
+
     public let taskId: String
     public var status: TaskStatus
     public var statusMessage: String?
     public let createdAt: String
     public var lastUpdatedAt: String
     public var ttl: Int?
+    /// How long a client should wait before polling again, in milliseconds.
+    ///
+    /// Always populated by `TaskManager.createTask`; the property stays optional only
+    /// so a task can be constructed without one.
     public var pollInterval: Int?
 
     public init(
@@ -231,7 +242,7 @@ public actor TaskManager {
             taskId: taskId,
             status: .working,
             ttl: ttl,
-            pollInterval: pollInterval ?? 1000 // Default 1 second
+            pollInterval: pollInterval ?? MCPTask.defaultPollIntervalMs
         )
         tasks[taskId] = task
 

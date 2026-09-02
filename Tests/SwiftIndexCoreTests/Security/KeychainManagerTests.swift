@@ -16,8 +16,12 @@ import XCTest
 /// - Platform guard: only runs on Apple platforms with Security.framework
 final class KeychainManagerTests: XCTestCase {
     // Test-specific service name to avoid conflicts with production keychain items
+    // Unique per test: swift-testing creates a fresh suite instance for each
+    // test and runs them in parallel, so a shared Keychain entry meant tests
+    // saved and deleted the same item concurrently — one test's cleanup made
+    // another's "no token stored" precondition fail.
     let testServiceName = "com.swiftindex.oauth.test"
-    let testAccountName = "claude-code-oauth-token-test"
+    let testAccountName = "claude-code-oauth-token-test-\(UUID().uuidString)"
 
     override func tearDown() async throws {
         try await super.tearDown()

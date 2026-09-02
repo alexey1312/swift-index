@@ -66,7 +66,7 @@ public struct CheckIndexingStatusTool: MCPToolHandler, Sendable {
         case .completed:
             // Get the final result
             if let result = await taskManager.getResult(taskId) {
-                return result
+                return Self.annotatingCompletion(result, taskId: taskId)
             }
             return formatCompletedResponse(task: task, progress: progress)
 
@@ -83,11 +83,38 @@ public struct CheckIndexingStatusTool: MCPToolHandler, Sendable {
 
     // MARK: - Private
 
+    /// Adds the task envelope to a stored result.
+    ///
+    /// The stored result is the indexing payload alone, with no `status` or
+    /// `task_id`. A client polling this tool then had no way to tell completion from
+    /// any other response — it had to infer it from the *absence* of a status field —
+    /// even though the documented protocol says a finished task reports
+    /// `"status": "completed"`.
+    static func annotatingCompletion(_ result: ToolCallResult, taskId: String) -> ToolCallResult {
+        guard case let .text(content) = result.content.first,
+              let data = content.text.data(using: .utf8),
+              var payload = try? JSONCodec.deserialize(data) as? [String: Any]
+        else {
+            return result
+        }
+
+        payload["task_id"] = taskId
+        payload["status"] = "completed"
+
+        guard let encoded = try? JSONCodec.serialize(payload, options: [.prettyPrinted, .sortedKeys]),
+              let text = String(data: encoded, encoding: .utf8)
+        else {
+            return result
+        }
+
+        return ToolCallResult(content: [.text(TextContent(text: text))], isError: result.isError)
+    }
+
     private func formatWorkingResponse(task: MCPTask, progress: IndexingProgress?) -> ToolCallResult {
         var response: [String: Any] = [
             "task_id": task.taskId,
             "status": "working",
-            "retry_after_ms": task.pollInterval ?? 10000, // Use task's poll interval
+            "retry_after_ms": task.pollInterval ?? MCPTask.defaultPollIntervalMs,
         ]
 
         if let progress {

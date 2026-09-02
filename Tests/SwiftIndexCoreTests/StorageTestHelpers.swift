@@ -63,3 +63,16 @@ func makeSnippet(
         fileHash: fileHash
     )
 }
+
+/// FNV-1a over the text's UTF-8 bytes.
+///
+/// `String.hashValue` is seeded per process, so embeddings derived from it change
+/// between runs and make ranking assertions non-reproducible.
+func stableTestHash(_ text: String) -> UInt64 {
+    var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+    for byte in text.utf8 {
+        hash ^= UInt64(byte)
+        hash = hash &* 0x1000_0000_01B3
+    }
+    return hash
+}

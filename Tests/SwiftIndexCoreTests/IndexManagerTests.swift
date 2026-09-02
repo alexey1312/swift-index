@@ -91,6 +91,30 @@ struct IndexManagerTests {
         #expect(needsIndexing3 == true) // New path, not yet indexed
     }
 
+    @Test("Reindex reuses vectors for unchanged content")
+    func reindexReusesUnchangedChunks() async throws {
+        let manager = try await makeIndexManager()
+        let chunk = makeChunk(id: "stable-1", path: "/test/file.swift", fileHash: "hash-1")
+        try await manager.indexBatch([(chunk, [0.1, 0.2, 0.3, 0.4])])
+        try await manager.recordIndexed(fileHash: "hash-1", path: "/test/file.swift")
+
+        // Same content, new file hash: the point of per-chunk change detection is
+        // that only genuinely changed chunks are re-embedded.
+        var embedCalls = 0
+        let result = try await manager.reindexWithChangeDetection(
+            path: "/test/file.swift",
+            newChunks: [makeChunk(id: "stable-2", path: "/test/file.swift", fileHash: "hash-2")]
+        ) { chunks in
+            embedCalls += chunks.count
+            return chunks.map { _ in [Float](repeating: 0.9, count: 4) }
+        }
+
+        #expect(result.totalChunks == 1)
+        #expect(result.reusedChunks == 1)
+        #expect(result.embeddedChunks == 0)
+        #expect(embedCalls == 0, "unchanged content must not reach the embedder")
+    }
+
     @Test("Reindex file")
     func reindex() async throws {
         let manager = try await makeIndexManager()
@@ -102,8 +126,16 @@ struct IndexManagerTests {
         ])
         try await manager.recordIndexed(fileHash: "old-hash", path: "/test/file.swift")
 
-        // Reindex with new chunks using change detection
-        let newChunk = makeChunk(id: "new-1", path: "/test/file.swift", fileHash: "new-hash")
+        // Reindex with new chunks using change detection. The content must actually
+        // differ: makeChunk's default body is identical for every chunk, so a
+        // "new" chunk built from it hashes the same as the old ones and is correctly
+        // reused rather than re-embedded.
+        let newChunk = makeChunk(
+            id: "new-1",
+            path: "/test/file.swift",
+            content: "func changedFunction() { print(\"changed\") }",
+            fileHash: "new-hash"
+        )
         let result = try await manager.reindexWithChangeDetection(
             path: "/test/file.swift",
             newChunks: [newChunk]
@@ -114,7 +146,8 @@ struct IndexManagerTests {
 
         // Verify reindex result
         #expect(result.totalChunks == 1)
-        #expect(result.embeddedChunks == 1) // New chunk required embedding
+        #expect(result.embeddedChunks == 1) // Changed content required embedding
+        #expect(result.reusedChunks == 0)
 
         // Verify old chunks removed, new chunks present
         let oldChunk1 = try await manager.getChunk(id: "old-1")

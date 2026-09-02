@@ -10,8 +10,12 @@ import Testing
 @Suite("Claude Code OAuth E2E")
 struct ClaudeCodeOAuthE2ETests {
     // Test-specific service/account to avoid Keychain prompts
+    // Unique per test: swift-testing creates a fresh suite instance for each
+    // test and runs them in parallel, so a shared Keychain entry meant tests
+    // saved and deleted the same item concurrently — one test's cleanup made
+    // another's "no token stored" precondition fail.
     private let testService = "com.swiftindex.oauth.e2e-test"
-    private let testAccount = "claude-code-oauth-e2e-test"
+    private let testAccount = "claude-code-oauth-e2e-test-\(UUID().uuidString)"
 
     // MARK: - Test Cleanup
 

@@ -242,7 +242,7 @@ actor SearchTestMockEmbeddingProvider: EmbeddingProvider {
 
         // Generate deterministic embedding based on text hash
         var vector = [Float](repeating: 0, count: dimension)
-        let hash = text.hashValue
+        let hash = stableTestHash(text)
         for i in 0 ..< dimension {
             vector[i] = Float((hash &+ i * 31) % 1000) / 1000.0
         }

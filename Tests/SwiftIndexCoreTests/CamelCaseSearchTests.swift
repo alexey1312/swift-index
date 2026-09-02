@@ -11,23 +11,26 @@ struct CamelCaseSearchTests {
     @Test("isCamelCaseIdentifier detects valid CamelCase")
     func detectsValidCamelCase() {
         // These should be detected as CamelCase
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("USearchError") == true)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("CodeChunk") == true)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("HybridSearchEngine") == true)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("GRDBChunkStore") == true)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("FTS5") == true)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("iOS16") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("USearchError") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("CodeChunk") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("HybridSearchEngine") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("GRDBChunkStore") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("FTS5") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("iOS16") == true)
+        // Acronym identifiers: all caps plus a digit.
+        #expect(BM25Search.isCamelCaseIdentifier("UTF8") == true)
+        #expect(BM25Search.isCamelCaseIdentifier("SHA256") == true)
     }
 
     @Test("isCamelCaseIdentifier rejects non-CamelCase")
     func rejectsNonCamelCase() {
         // These should NOT be detected as CamelCase
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("search") == false)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("SEARCH") == false)
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("AB") == false) // Too short
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("123") == false) // No letters
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("hello world") == false) // Has space
-        #expect(BM25SearchTestHelper.isCamelCaseIdentifier("") == false) // Empty
+        #expect(BM25Search.isCamelCaseIdentifier("search") == false)
+        #expect(BM25Search.isCamelCaseIdentifier("SEARCH") == false)
+        #expect(BM25Search.isCamelCaseIdentifier("AB") == false) // Too short
+        #expect(BM25Search.isCamelCaseIdentifier("123") == false) // No letters
+        #expect(BM25Search.isCamelCaseIdentifier("hello world") == false) // Has space
+        #expect(BM25Search.isCamelCaseIdentifier("") == false) // Empty
     }
 
     // MARK: - BM25 Query Preparation Tests
@@ -288,19 +291,7 @@ struct CamelCaseSearchTests {
 
 // MARK: - Test Helpers
 
-/// Helper to expose BM25Search's private isCamelCaseIdentifier for testing.
-enum BM25SearchTestHelper {
-    static func isCamelCaseIdentifier(_ term: String) -> Bool {
-        guard term.count >= 3,
-              term.first?.isLetter == true,
-              !term.contains(" ")
-        else {
-            return false
-        }
-        return term.contains(where: \.isUppercase) &&
-            term.contains(where: \.isLowercase)
-    }
-}
+// Helper to expose BM25Search's private isCamelCaseIdentifier for testing.
 
 /// Helper to expose GRDBChunkStore's private isPreparedFTSQuery for testing.
 enum GRDBChunkStoreTestHelper {
@@ -536,12 +527,24 @@ actor MockEmbeddingProviderForCamelCase: EmbeddingProvider {
     }
 
     private nonisolated static func generateEmbedding(_ text: String, dimension: Int) -> [Float] {
-        // Generate deterministic embedding based on text hash
+        // Swift seeds String.hashValue per process, so vectors built from it differ
+        // between runs. Ranking then changed run to run, which is what made the
+        // content-boost test pass sometimes and fail others. FNV-1a is stable.
         var vector = [Float](repeating: 0, count: dimension)
-        let hash = text.hashValue
+        let hash = stableHash(text)
         for i in 0 ..< dimension {
-            vector[i] = Float((hash &+ i * 31) % 1000) / 1000.0
+            vector[i] = Float((hash &+ UInt64(i) &* 31) % 1000) / 1000.0
         }
         return vector
+    }
+
+    /// FNV-1a over the text's UTF-8 bytes: identical on every run and platform.
+    private nonisolated static func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 0xCBF2_9CE4_8422_2325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x1000_0000_01B3
+        }
+        return hash
     }
 }

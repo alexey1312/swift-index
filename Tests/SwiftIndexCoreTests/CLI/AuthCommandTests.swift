@@ -8,8 +8,12 @@ import XCTest
 /// Uses test-specific Keychain service/account to avoid interactive prompts in CI.
 final class AuthCommandTests: XCTestCase {
     // Test-specific service/account to avoid Keychain prompts
+    // Unique per test: swift-testing creates a fresh suite instance for each
+    // test and runs them in parallel, so a shared Keychain entry meant tests
+    // saved and deleted the same item concurrently — one test's cleanup made
+    // another's "no token stored" precondition fail.
     let testService = "com.swiftindex.oauth.test"
-    let testAccount = "claude-code-oauth-token-test"
+    let testAccount = "claude-code-oauth-token-test-\(UUID().uuidString)"
 
     // MARK: - Test Setup
 

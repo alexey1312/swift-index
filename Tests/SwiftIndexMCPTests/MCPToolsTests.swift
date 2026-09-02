@@ -41,6 +41,11 @@ private func prepareIndexedFixtures() async throws -> URL {
     let result = try await tool.execute(arguments: .object([
         "path": .string(dir.path),
         "force": true,
+        // index_codebase is asynchronous by default: it returns a task_id and
+        // indexes in the background. Callers that searched straight afterwards were
+        // racing an index that did not exist yet, which is why these tests failed
+        // under parallel execution but passed when run alone.
+        "async": false,
     ]))
     if result.isError == true {
         throw NSError(domain: "MCPToolsTests", code: 1)
@@ -126,12 +131,18 @@ struct MCPToolsTests {
             let fixtureDir = try await prepareIndexedFixtures()
             defer { cleanupFixtures(fixtureDir) }
 
+            // `indexed_files` only appears in the synchronous response; the default
+            // asynchronous mode returns a task_id, which the task tests cover.
             let result = try await tool.execute(
-                arguments: .object(["path": .string(fixtureDir.path)])
+                arguments: .object([
+                    "path": .string(fixtureDir.path),
+                    "async": false,
+                ])
             )
 
+            #expect(result.isError != true)
             if case let .text(content) = result.content.first {
-                #expect(content.text.contains("indexed_files") || content.text.contains("path"))
+                #expect(content.text.contains("indexed_files"))
             }
         }
 
@@ -311,10 +322,14 @@ struct MCPToolsTests {
 
             #expect(statusResult.isError != true)
             if case let .text(statusContent) = statusResult.content.first {
+                // Whatever state the task is in, the response must identify it —
+                // a client polling this cannot otherwise tell completion from
+                // progress.
+                #expect(statusContent.text.contains("task_id"))
                 #expect(
-                    statusContent.text.contains("working") ||
-                        statusContent.text.contains("completed") ||
-                        statusContent.text.contains("task_id")
+                    statusContent.text.contains("\"working\"") ||
+                        statusContent.text.contains("\"completed\""),
+                    "response should report a status, got: \(statusContent.text.prefix(200))"
                 )
             }
         }
@@ -359,7 +374,7 @@ struct MCPToolsTests {
             }
         }
 
-        @Test("retry_after_ms defaults to 10000 when pollInterval is nil")
+        @Test("retry_after_ms falls back to the shared default poll interval")
         func retryAfterMsDefaultsTo10000() async throws {
             // Create a task directly without poll interval
             let taskManager = MCPContext.shared.taskManager
@@ -375,7 +390,9 @@ struct MCPToolsTests {
             #expect(statusResult.isError != true)
             if case let .text(statusContent) = statusResult.content.first {
                 if let retryAfter = extractRetryAfterMs(from: statusContent.text) {
-                    #expect(retryAfter == 10000)
+                    // createTask substitutes the default, so the tool's own fallback
+                    // is unreachable; both now name the same constant.
+                    #expect(retryAfter == MCPTask.defaultPollIntervalMs)
                 }
             }
         }
