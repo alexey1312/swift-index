@@ -108,7 +108,8 @@ struct IndexCommand: AsyncParsableCommand {
         )
 
         // Create embedding provider chain
-        let embeddingProvider = try EmbeddingProviderFactory.createProvider(config: configuration, logger: logger)
+        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+        let embeddingProvider = resolved.chain
 
         // Check provider availability
         try await ensureEmbeddingProviderAvailable(embeddingProvider, quiet: quietFlag)
@@ -116,7 +117,7 @@ struct IndexCommand: AsyncParsableCommand {
         // Create index manager
         let indexManager = try await createIndexManager(
             indexPath: indexPath,
-            embeddingProvider: embeddingProvider,
+            dimension: resolved.dimension,
             quiet: quietFlag
         )
 
@@ -212,6 +213,10 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Flush any remaining embedding requests
         try await embeddingBatcher.flush()
+
+        // Record how this index was built so a later provider change produces an
+        // actionable message rather than a raw dimension mismatch.
+        try writeIndexMetadata(indexPath: indexPath, resolved: resolved)
 
         // Save index
         try await indexManager.save()
@@ -466,22 +471,36 @@ struct IndexCommand: AsyncParsableCommand {
         }
     }
 
+    /// Persists the index sidecar describing the provider that built it.
+    private func writeIndexMetadata(indexPath: String, resolved: ResolvedEmbedding) throws {
+        let existing = IndexMetadata.load(fromIndexDirectory: indexPath)
+        let metadata = IndexMetadata(
+            providerID: resolved.providerID,
+            modelID: resolved.modelID,
+            dimension: resolved.dimension,
+            createdAt: existing?.createdAt ?? Date(),
+            lastIndexedAt: Date(),
+            swiftindexVersion: SwiftIndexVersion.current
+        )
+        try metadata.save(toIndexDirectory: indexPath)
+    }
+
     private func createIndexManager(
         indexPath: String,
-        embeddingProvider: EmbeddingProviderChain,
+        dimension: Int,
         quiet: Bool = false
     ) async throws -> IndexManager {
         // Check for dimension mismatch on --force to prevent segfault from incompatible USearch index
         if force {
             let vectorPath = (indexPath as NSString).appendingPathComponent("vectors.usearch")
-            if let old = USearchVectorStore.existingDimension(at: vectorPath), old != embeddingProvider.dimension {
+            if let old = USearchVectorStore.existingDimension(at: vectorPath), old != dimension {
                 if !quiet {
-                    print("Dimension changed (\(old) → \(embeddingProvider.dimension)), recreating index...")
+                    print("Dimension changed (\(old) → \(dimension)), recreating index...")
                 }
                 try USearchVectorStore.deleteIndex(at: vectorPath)
             }
         }
-        let indexManager = try IndexManager(directory: indexPath, dimension: embeddingProvider.dimension)
+        let indexManager = try IndexManager(directory: indexPath, dimension: dimension)
         if !force {
             try await indexManager.load()
         } else {

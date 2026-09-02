@@ -17,6 +17,9 @@ public actor MCPContext {
     // MARK: - Properties
 
     private var indexManagers: [String: IndexManager] = [:]
+
+    /// Cached resolution of the embedding provider, including its dimension.
+    private var resolvedEmbedding: ResolvedEmbedding?
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
     private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
@@ -78,91 +81,23 @@ public actor MCPContext {
             return existing
         }
 
-        let provider = try createEmbeddingProvider(config: config)
-        embeddingProvider = provider
-        return provider
+        let resolved = try await EmbeddingProviderFactory.resolve(config: config, logger: logger)
+        resolvedEmbedding = resolved
+        embeddingProvider = resolved.chain
+        return resolved.chain
     }
 
-    private func createEmbeddingProvider(config: Config) throws -> EmbeddingProviderChain {
-        switch config.embeddingProvider.lowercased() {
-        case "mock":
-            logger.debug("Creating mock embedding provider")
-            return EmbeddingProviderChain(
-                providers: [MockEmbeddingProvider()],
-                id: "mock-chain",
-                name: "Mock Embeddings"
-            )
-
-        case "mlx":
-            logger.debug("Creating MLX embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    MLXEmbeddingProvider(
-                        huggingFaceId: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "mlx-chain",
-                name: "MLX with Swift Embeddings fallback"
-            )
-
-        case "swift-embeddings", "swift", "swiftembeddings":
-            logger.debug("Creating Swift Embeddings provider")
-            return EmbeddingProviderChain.softwareOnly
-
-        case "ollama":
-            logger.debug("Creating Ollama embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    OllamaEmbeddingProvider(
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "ollama-chain",
-                name: "Ollama with fallback"
-            )
-
-        case "voyage":
-            logger.debug("Creating Voyage AI embedding provider")
-            if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        VoyageProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "voyage-chain",
-                    name: "Voyage AI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
-            }
-
-        case "openai":
-            logger.debug("Creating OpenAI embedding provider")
-            if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        OpenAIProvider(apiKey: apiKey),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "openai-chain",
-                    name: "OpenAI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "OpenAI")
-            }
-
-        default:
-            logger.debug("Using default provider chain")
-            return EmbeddingProviderChain.default
+    /// Get the fully resolved embedding selection (provider id, model, dimension).
+    public func getResolvedEmbedding(config: Config) async throws -> ResolvedEmbedding {
+        if let resolvedEmbedding {
+            return resolvedEmbedding
         }
+        _ = try await getEmbeddingProvider(config: config)
+        // `getEmbeddingProvider` populates the cache.
+        guard let resolvedEmbedding else {
+            throw ProviderError.notAvailable(reason: "Embedding provider could not be resolved")
+        }
+        return resolvedEmbedding
     }
 
     // MARK: - Index Manager

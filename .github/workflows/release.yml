@@ -42,6 +42,7 @@ jobs:
           VERSION="${VERSION#v}"
           sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/swiftindex/SwiftIndexApp.swift
           sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/SwiftIndexMCP/MCPServer.swift
+          sed -i '' "s/VERSION_PLACEHOLDER/$VERSION/g" Sources/SwiftIndexCore/SwiftIndexCore.swift
 
       - name: Build release binary (arm64)
         run: |

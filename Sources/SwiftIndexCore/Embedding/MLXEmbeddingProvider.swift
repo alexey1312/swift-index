@@ -120,6 +120,15 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         #endif
     }
 
+    public func isReady() async -> Bool {
+        #if arch(arm64) && os(macOS) && canImport(MLX) && canImport(MLXEmbedders)
+            // No model load, so no download: just check the model is already cached.
+            return HubModelManager.isRepoCached(modelId)
+        #else
+            return false
+        #endif
+    }
+
     public func embed(_ text: String) async throws -> [Float] {
         guard !text.isEmpty else {
             throw ProviderError.invalidInput("Text cannot be empty")

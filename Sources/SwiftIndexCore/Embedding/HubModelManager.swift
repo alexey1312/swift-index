@@ -196,6 +196,26 @@ public actor HubModelManager {
         return fileManager.fileExists(atPath: configPath.path)
     }
 
+    /// Reports whether an arbitrary HuggingFace repo appears to be cached locally.
+    ///
+    /// Unlike `isModelCached(_:)` this is not limited to the known `Model` cases, so
+    /// it can answer "is this configured model already downloaded?" for any provider.
+    /// It performs no network I/O — that is the whole point: callers use it to decide
+    /// whether a provider is usable *without* triggering a multi-hundred-megabyte
+    /// download as a side effect of asking.
+    ///
+    /// - Parameter huggingFaceId: The repo id, e.g. `mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ`.
+    /// - Returns: `true` if the repo's snapshot appears present on disk.
+    public nonisolated static func isRepoCached(
+        _ huggingFaceId: String,
+        cacheDirectory: URL? = nil
+    ) -> Bool {
+        let hubApi = cacheDirectory.map { HubApi(downloadBase: $0) } ?? HubApi()
+        let repoDir = hubApi.localRepoLocation(Hub.Repo(id: huggingFaceId))
+        let configPath = repoDir.appendingPathComponent("config.json")
+        return FileManager.default.fileExists(atPath: configPath.path)
+    }
+
     /// Returns the local path for a cached model.
     ///
     /// - Parameter model: The model to get path for.

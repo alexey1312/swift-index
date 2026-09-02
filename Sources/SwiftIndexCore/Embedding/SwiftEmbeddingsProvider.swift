@@ -33,7 +33,7 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
     public let name: String = "Swift Embeddings"
     public let dimension: Int
 
-    private let modelName: String
+    public let modelName: String
     private let maxBatchSize: Int
     private let huggingFaceId: String
 
@@ -109,6 +109,12 @@ public final class SwiftEmbeddingsProvider: EmbeddingProvider, @unchecked Sendab
         } catch {
             return false
         }
+    }
+
+    public func isReady() async -> Bool {
+        guard #available(macOS 15.0, *) else { return false }
+        // No model load, so no download.
+        return HubModelManager.isRepoCached(huggingFaceId)
     }
 
     public func embed(_ text: String) async throws -> [Float] {

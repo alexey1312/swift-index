@@ -196,17 +196,31 @@ struct SearchCommand: AsyncParsableCommand {
         }
 
         // Create embedding provider chain
-        let embeddingProvider = try createEmbeddingProvider(config: configuration, logger: logger)
+        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+        let embeddingProvider = resolved.chain
 
         // Check provider availability
         guard await embeddingProvider.isAvailable() else {
             throw ValidationError("No embedding provider available. Check your configuration.")
         }
 
-        // Create index manager and load index
+        // Explain a provider change in terms of providers rather than letting the
+        // vector store fail with a bare dimension mismatch.
+        if let metadata = IndexMetadata.load(fromIndexDirectory: indexPath),
+           let reason = metadata.incompatibilityReason(
+               providerID: resolved.providerID,
+               modelID: resolved.modelID,
+               dimension: resolved.dimension
+           )
+        {
+            throw ValidationError(reason)
+        }
+
+        // Create index manager and load index. The dimension comes from the resolved
+        // provider, not from the head of a fallback chain.
         let indexManager = try IndexManager(
             directory: indexPath,
-            dimension: embeddingProvider.dimension
+            dimension: resolved.dimension
         )
         try await indexManager.load()
 
@@ -417,95 +431,6 @@ struct SearchCommand: AsyncParsableCommand {
     }
 
     // MARK: - Private Helpers
-
-    private func createEmbeddingProvider(
-        config: Config,
-        logger: Logger
-    ) throws -> EmbeddingProviderChain {
-        switch config.embeddingProvider.lowercased() {
-        case "mock":
-            logger.debug("Using mock embedding provider")
-            return EmbeddingProviderChain(
-                providers: [MockEmbeddingProvider()],
-                id: "mock-chain",
-                name: "Mock Embeddings"
-            )
-
-        case "mlx":
-            logger.debug("Using MLX embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    MLXEmbeddingProvider(
-                        huggingFaceId: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "mlx-chain",
-                name: "MLX with Swift Embeddings fallback"
-            )
-
-        case "swift-embeddings", "swift", "swiftembeddings":
-            logger.debug("Using Swift Embeddings provider")
-            return EmbeddingProviderChain.softwareOnly
-
-        case "ollama":
-            logger.debug("Using Ollama embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    OllamaEmbeddingProvider(
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "ollama-chain",
-                name: "Ollama with fallback"
-            )
-
-        case "voyage":
-            logger.debug("Using Voyage AI embedding provider")
-            if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        VoyageProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "voyage-chain",
-                    name: "Voyage AI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
-            }
-
-        case "openai":
-            logger.debug("Using OpenAI embedding provider")
-            if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        OpenAIProvider(apiKey: apiKey),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "openai-chain",
-                    name: "OpenAI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "OpenAI")
-            }
-
-        case "auto":
-            logger.debug("Using auto provider selection")
-            return EmbeddingProviderChain.default
-
-        default:
-            logger.debug("Unknown provider '\(config.embeddingProvider)', using default chain")
-            return EmbeddingProviderChain.default
-        }
-    }
 
     private func outputJSON(
         results: [SearchResult],

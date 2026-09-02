@@ -114,12 +114,24 @@ struct SearchDocsCommand: AsyncParsableCommand {
 
         // Create embedding provider chain (needed for IndexManager, though not used for doc search which uses BM25/FTS)
         // We reuse the logic from SearchCommand to ensure correct initialization
-        let embeddingProvider = try createEmbeddingProvider(config: configuration, logger: logger)
+        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+
+        // Explain a provider change in terms of providers rather than letting the
+        // vector store fail with a bare dimension mismatch.
+        if let metadata = IndexMetadata.load(fromIndexDirectory: indexPath),
+           let reason = metadata.incompatibilityReason(
+               providerID: resolved.providerID,
+               modelID: resolved.modelID,
+               dimension: resolved.dimension
+           )
+        {
+            throw ValidationError(reason)
+        }
 
         // Create index manager and load index
         let indexManager = try IndexManager(
             directory: indexPath,
-            dimension: embeddingProvider.dimension
+            dimension: resolved.dimension
         )
         try await indexManager.load()
 
@@ -129,7 +141,7 @@ struct SearchDocsCommand: AsyncParsableCommand {
         let searchEngine = HybridSearchEngine(
             chunkStore: chunkStore,
             vectorStore: vectorStore,
-            embeddingProvider: embeddingProvider,
+            embeddingProvider: resolved.chain,
             rrfK: configuration.rrfK
         )
 
@@ -161,89 +173,6 @@ struct SearchDocsCommand: AsyncParsableCommand {
     }
 
     // MARK: - Helpers
-
-    private func createEmbeddingProvider(
-        config: Config,
-        logger: Logger
-    ) throws -> EmbeddingProviderChain {
-        // Reuse logic from SearchCommand via duplication for now to avoid refactoring shared code
-        // Ideally this should be in a shared utility
-        switch config.embeddingProvider.lowercased() {
-        case "mock":
-            return EmbeddingProviderChain(
-                providers: [MockEmbeddingProvider()],
-                id: "mock-chain",
-                name: "Mock Embeddings"
-            )
-
-        case "mlx":
-            return EmbeddingProviderChain(
-                providers: [
-                    MLXEmbeddingProvider(
-                        huggingFaceId: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "mlx-chain",
-                name: "MLX with Swift Embeddings fallback"
-            )
-
-        case "swift-embeddings", "swift", "swiftembeddings":
-            return EmbeddingProviderChain.softwareOnly
-
-        case "ollama":
-            return EmbeddingProviderChain(
-                providers: [
-                    OllamaEmbeddingProvider(
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "ollama-chain",
-                name: "Ollama with fallback"
-            )
-
-        case "voyage":
-            if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        VoyageProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "voyage-chain",
-                    name: "Voyage AI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
-            }
-
-        case "openai":
-            if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        OpenAIProvider(apiKey: apiKey),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "openai-chain",
-                    name: "OpenAI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "OpenAI")
-            }
-
-        case "auto":
-            return EmbeddingProviderChain.default
-
-        default:
-            return EmbeddingProviderChain.default
-        }
-    }
 
     // MARK: - Output Formatters
 
