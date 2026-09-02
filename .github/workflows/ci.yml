@@ -51,7 +51,11 @@ jobs:
         run: swift --version
 
       - name: Build
-        run: swift build 2>&1 | xcsift
+        run: |
+          set -o pipefail
+          swift build 2>&1 | xcsift
 
       - name: Test
-        run: swift test --skip Performance --verbose 2>&1 | xcsift
+        run: |
+          set -o pipefail
+          swift test --skip Performance --verbose 2>&1 | xcsift
