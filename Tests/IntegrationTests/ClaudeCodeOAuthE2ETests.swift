@@ -1,9 +1,8 @@
 // MARK: - Claude Code OAuth E2E Tests
 
 import Foundation
-import Testing
-
 @testable import SwiftIndexCore
+import Testing
 
 /// End-to-end tests for Claude Code OAuth integration.
 ///
@@ -23,7 +22,7 @@ struct ClaudeCodeOAuthE2ETests {
     // MARK: - Full OAuth Flow Tests
 
     @Test("OAuth flow: Token save and retrieval")
-    func tokenSaveAndRetrieval() async throws {
+    func tokenSaveAndRetrieval() throws {
         defer { cleanup() }
 
         // Given: No existing token
@@ -41,7 +40,7 @@ struct ClaudeCodeOAuthE2ETests {
     }
 
     @Test("OAuth flow: Manual token input with validation")
-    func manualTokenInputFlow() async throws {
+    func manualTokenInputFlow() throws {
         defer { cleanup() }
 
         // Given: Manual input mode
@@ -57,7 +56,7 @@ struct ClaudeCodeOAuthE2ETests {
     }
 
     @Test("OAuth flow: New format token (sk-ant-oat01-)")
-    func newFormatToken() async throws {
+    func newFormatToken() throws {
         defer { cleanup() }
 
         // Given: New format token
@@ -73,7 +72,7 @@ struct ClaudeCodeOAuthE2ETests {
     }
 
     @Test("OAuth flow: Invalid token format rejected")
-    func invalidTokenFormatRejected() async throws {
+    func invalidTokenFormatRejected() throws {
         // Given: Invalid token format
         let invalidToken = "not-a-valid-oauth-token"
 
@@ -84,7 +83,7 @@ struct ClaudeCodeOAuthE2ETests {
     }
 
     @Test("OAuth flow: Token update (overwrite)")
-    func tokenUpdate() async throws {
+    func tokenUpdate() throws {
         defer { cleanup() }
 
         // Given: Existing token
@@ -103,7 +102,7 @@ struct ClaudeCodeOAuthE2ETests {
     // MARK: - Token Lifecycle Tests
 
     @Test("OAuth lifecycle: Save, retrieve, delete")
-    func tokenLifecycle() async throws {
+    func tokenLifecycle() throws {
         defer { cleanup() }
 
         let token = "sk-ant-oauth-lifecycle-token-123456789"
@@ -123,7 +122,7 @@ struct ClaudeCodeOAuthE2ETests {
     }
 
     @Test("OAuth lifecycle: Multiple save operations")
-    func multipleSaveOperations() async throws {
+    func multipleSaveOperations() throws {
         defer { cleanup() }
 
         // First save
@@ -165,7 +164,7 @@ struct ClaudeCodeOAuthE2ETests {
         // Then: One token should be saved (last one wins with advisory lock)
         let final = try? KeychainManager.getToken(service: testService, account: testAccount)
         #expect(final != nil)
-        #expect(tokens.contains(final!))
+        #expect(try tokens.contains(#require(final)))
     }
 
     // MARK: - Token Parsing Tests

@@ -470,7 +470,7 @@ public actor HybridSearchEngine: SearchEngine {
 
     /// Extracts meaningful terms from a query for boost calculations.
     private func extractQueryTerms(from query: String) -> [String] {
-        let stopWords: Set<String> = [
+        let stopWords: Set = [
             "the", "a", "an", "is", "are", "was", "were", "what", "how", "where",
             "when", "why", "which", "who", "that", "this", "to", "for", "of", "in",
             "on", "at", "by", "with", "from", "implements", "conforms", "types",
@@ -656,7 +656,9 @@ public extension HybridSearchEngine {
         public let expandedQuery: ExpandedQuery?
 
         /// Whether query expansion was performed.
-        public var wasExpanded: Bool { expandedQuery != nil }
+        public var wasExpanded: Bool {
+            expandedQuery != nil
+        }
     }
 
     /// Performs a search with optional LLM-powered query expansion.

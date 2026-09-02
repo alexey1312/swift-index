@@ -166,8 +166,12 @@ private func isVersionGreater(_ lhs: [Int], than rhs: [Int]) -> Bool {
     for i in 0 ..< maxLength {
         let left = i < lhs.count ? lhs[i] : 0
         let right = i < rhs.count ? rhs[i] : 0
-        if left > right { return true }
-        if left < right { return false }
+        if left > right {
+            return true
+        }
+        if left < right {
+            return false
+        }
     }
     return false
 }

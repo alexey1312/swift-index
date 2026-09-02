@@ -5,7 +5,7 @@ import Testing
 @Suite("HybridParser Benchmark Tests")
 struct HybridParserBenchmarkTests {
     @Test("Measure supportedExtensions access performance", .tags(.benchmark))
-    func measureSupportedExtensionsPerformance() async throws {
+    func measureSupportedExtensionsPerformance() {
         let parser = HybridParser()
         let iterations = 100_000
 
@@ -27,7 +27,7 @@ struct HybridParserBenchmarkTests {
     }
 }
 
-// Helper to define benchmark tag
+/// Helper to define benchmark tag
 private extension Tag {
     @available(macOS 13.0, *)
     @Tag static var benchmark: Tag

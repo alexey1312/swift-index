@@ -210,7 +210,7 @@ struct CamelCaseSearchTests {
     // MARK: - Prepared FTS Query Detection Tests
 
     @Test("GRDBChunkStore preserves prepared FTS queries")
-    func preservesPreparedFTSQueries() async throws {
+    func preservesPreparedFTSQueries() {
         // Verify that prepared queries (quoted terms) are recognized and not re-sanitized
         #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"USearchError\"") == true)
         #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("\"search\"*") == true)
@@ -220,7 +220,7 @@ struct CamelCaseSearchTests {
     }
 
     @Test("GRDBChunkStore sanitizes raw queries")
-    func sanitizesRawQueries() async throws {
+    func sanitizesRawQueries() {
         // Raw queries without quotes should be sanitized
         #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("USearchError") == false)
         #expect(GRDBChunkStoreTestHelper.isPreparedFTSQuery("search query") == false)
@@ -527,7 +527,9 @@ actor MockEmbeddingProviderForCamelCase: EmbeddingProvider {
     nonisolated let name = "Mock CamelCase Provider"
     nonisolated let dimension = 384
 
-    nonisolated func isAvailable() async -> Bool { true }
+    nonisolated func isAvailable() async -> Bool {
+        true
+    }
 
     func embed(_ text: String) async throws -> [Float] {
         Self.generateEmbedding(text, dimension: dimension)

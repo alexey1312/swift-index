@@ -135,9 +135,15 @@ public actor QueryExpander {
 
             // Distribute terms across categories
             let chunks = allTerms.chunked(into: 3)
-            if !chunks.isEmpty { synonyms = Array(chunks[0].prefix(5)) }
-            if chunks.count > 1 { relatedConcepts = Array(chunks[1].prefix(5)) }
-            if chunks.count > 2 { variations = Array(chunks[2].prefix(5)) }
+            if !chunks.isEmpty {
+                synonyms = Array(chunks[0].prefix(5))
+            }
+            if chunks.count > 1 {
+                relatedConcepts = Array(chunks[1].prefix(5))
+            }
+            if chunks.count > 2 {
+                variations = Array(chunks[2].prefix(5))
+            }
         }
 
         return ExpandedQuery(

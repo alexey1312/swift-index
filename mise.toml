@@ -33,20 +33,20 @@ run = "git config core.hooksPath .githooks 2>/dev/null || true"
 
 [tools]
 # --- Swift Development ---
-swift = "6.2.3"        # Swift compiler and toolchain
-xcsift = "1.1.0"       # A Swift parses output
-swiftformat = "0.58.7" # Swift code formatting
-swiftlint = "0.63.1"   # Swift linting
+swift = "6.3.3"        # Swift compiler and toolchain
+xcsift = "1.4.2"       # A Swift parses output
+swiftformat = "0.63.0" # Swift code formatting
+swiftlint = "0.65.1"   # Swift linting
 
 # --- Documentation & Formatting ---
-dprint = "0.51.1" # MD/JSON/YAML formatting (Rust, fast)
+dprint = "0.57.0" # MD/JSON/YAML formatting (Rust, fast)
 
 # --- Git & CI ---
-hk = "1.32.0"         # Git hooks manager
-actionlint = "1.7.10" # GitHub Actions linting
+hk = "1.57.0"         # Git hooks manager
+actionlint = "1.7.12" # GitHub Actions linting
 
 # --- Configuration ---
-pkl = "0.30.2" # Configuration language (for hk.pkl)
+pkl = "0.32.1" # Configuration language (for hk.pkl)
 
 # =============================================================================
 # Tasks
@@ -109,9 +109,12 @@ run = "hk fix --all 2>&1 | grep -E '^(✔|✗|hk )' || true"
 
 [tasks.format-check]
 description = "Check all formatting (CI)"
+# No output filtering: when a check fails, the tool's diagnostics are the
+# whole point, and grepping them away leaves CI logs saying only that
+# something failed.
 run = """
 set -o pipefail
-hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
+hk check --all
 """
 
 [tasks.setup]

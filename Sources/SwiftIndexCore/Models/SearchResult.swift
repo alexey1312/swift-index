@@ -58,7 +58,9 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
 
     // MARK: - Identifiable
 
-    public var id: String { chunk.id }
+    public var id: String {
+        chunk.id
+    }
 
     // MARK: - Relevance Percentage
 

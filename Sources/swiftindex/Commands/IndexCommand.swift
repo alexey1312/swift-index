@@ -124,7 +124,9 @@ struct IndexCommand: AsyncParsableCommand {
         let parser = HybridParser()
 
         // Collect files to index
-        if !quietFlag { print("\nScanning files...") }
+        if !quietFlag {
+            print("\nScanning files...")
+        }
         let files = try FileCollector.collectFiles(
             at: resolvedPath,
             config: configuration,
@@ -132,7 +134,9 @@ struct IndexCommand: AsyncParsableCommand {
             logger: logger
         )
 
-        if !quietFlag { print("Found \(files.count) files to process") }
+        if !quietFlag {
+            print("Found \(files.count) files to process")
+        }
 
         // Prepare indexing pipeline
         let descriptionGenerator = DescriptionGeneratorFactory.create(config: configuration, logger: logger)
@@ -154,7 +158,9 @@ struct IndexCommand: AsyncParsableCommand {
 
         let stats = AtomicIndexingStats()
         let maxConcurrentTasks = configuration.maxConcurrentTasks
-        if !quietFlag { print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks") }
+        if !quietFlag {
+            print("Parallel indexing with \(maxConcurrentTasks) concurrent tasks")
+        }
 
         // Use TaskGroup for parallel processing with bounded concurrency
         // Capture force as local constant to avoid capturing self
@@ -386,7 +392,9 @@ struct IndexCommand: AsyncParsableCommand {
         quiet: Bool,
         logger: Logger
     ) {
-        if quiet { return }
+        if quiet {
+            return
+        }
         print("Indexing: \(resolvedPath)")
         print("Index path: \(indexPath)")
         print("Provider: \(configuration.embeddingProvider)")
@@ -474,7 +482,11 @@ struct IndexCommand: AsyncParsableCommand {
             }
         }
         let indexManager = try IndexManager(directory: indexPath, dimension: embeddingProvider.dimension)
-        if !force { try await indexManager.load() } else { try await indexManager.clear() }
+        if !force {
+            try await indexManager.load()
+        } else {
+            try await indexManager.clear()
+        }
         return indexManager
     }
 

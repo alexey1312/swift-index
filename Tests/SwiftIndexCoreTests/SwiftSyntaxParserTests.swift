@@ -792,7 +792,7 @@ struct SwiftSyntaxParserTests {
     }
 
     @Test("Calculate token count")
-    func calculateTokenCount() {
+    func calculateTokenCount() throws {
         let content = """
         func test() {
             let x = 1
@@ -811,8 +811,8 @@ struct SwiftSyntaxParserTests {
         #expect(chunk != nil)
         #expect(chunk?.tokenCount ?? 0 > 0)
         // Token count is approximately content.count / 4
-        let expectedApprox = chunk!.content.count / 4
-        #expect(abs(chunk!.tokenCount - expectedApprox) <= 1)
+        let expectedApprox = try #require(chunk?.content.count) / 4
+        #expect(try abs(#require(chunk?.tokenCount) - expectedApprox) <= 1)
     }
 
     @Test("Detect Swift language")
@@ -831,7 +831,7 @@ struct SwiftSyntaxParserTests {
     // MARK: - Type Declaration Chunk Tests
 
     @Test("Create type declaration chunk for actor with conformances")
-    func createTypeDeclarationChunkForActor() {
+    func createTypeDeclarationChunkForActor() throws {
         let content = """
         /// SQLite-based chunk storage.
         public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
@@ -849,7 +849,7 @@ struct SwiftSyntaxParserTests {
         let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
         #expect(typeDeclarationChunks.count == 1, "Should have 1 type declaration chunk")
 
-        let declChunk = typeDeclarationChunks.first!
+        let declChunk = try #require(typeDeclarationChunks.first)
         #expect(declChunk.kind == .actor)
         #expect(declChunk.symbols.contains("GRDBChunkStore"))
         #expect(declChunk.conformances.contains("ChunkStore"))
@@ -860,7 +860,7 @@ struct SwiftSyntaxParserTests {
     }
 
     @Test("Create type declaration chunk for struct with conformances")
-    func createTypeDeclarationChunkForStruct() {
+    func createTypeDeclarationChunkForStruct() throws {
         let content = """
         struct SearchResult: Sendable, Equatable {
             let id: String
@@ -876,14 +876,14 @@ struct SwiftSyntaxParserTests {
         let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
         #expect(typeDeclarationChunks.count == 1)
 
-        let declChunk = typeDeclarationChunks.first!
+        let declChunk = try #require(typeDeclarationChunks.first)
         #expect(declChunk.conformances.contains("Sendable"))
         #expect(declChunk.conformances.contains("Equatable"))
         #expect(declChunk.isTypeDeclaration == true)
     }
 
     @Test("Create type declaration chunk for extension with conformance")
-    func createTypeDeclarationChunkForExtension() {
+    func createTypeDeclarationChunkForExtension() throws {
         let content = """
         extension User: Sendable {
             var displayName: String { name }
@@ -900,7 +900,7 @@ struct SwiftSyntaxParserTests {
         let typeDeclarationChunks = chunks.filter(\.isTypeDeclaration)
         #expect(typeDeclarationChunks.count == 1)
 
-        let declChunk = typeDeclarationChunks.first!
+        let declChunk = try #require(typeDeclarationChunks.first)
         #expect(declChunk.kind == .extension)
         #expect(declChunk.conformances.contains("Sendable"))
     }

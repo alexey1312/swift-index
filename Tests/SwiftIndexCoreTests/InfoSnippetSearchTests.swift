@@ -110,7 +110,7 @@ struct InfoSnippetSearchTests {
     }
 
     @Test("Info snippet search result properties")
-    func infoSnippetResultProperties() async throws {
+    func infoSnippetResultProperties() {
         let snippet = InfoSnippet(
             id: "test-snippet",
             path: "/README.md",

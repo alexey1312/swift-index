@@ -88,7 +88,9 @@ public struct GeminiCLIProvider: LLMProvider, Sendable {
         return try await withCheckedThrowingContinuation { continuation in
             let timeoutTask = Task {
                 try await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                if process.isRunning { process.terminate() }
+                if process.isRunning {
+                    process.terminate()
+                }
             }
 
             process.terminationHandler = { _ in

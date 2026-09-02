@@ -7,7 +7,7 @@ import SwiftIndexMCP
 
 @main
 struct SwiftIndex: AsyncParsableCommand {
-    // Custom version flag with -v shorthand (standard CLI convention)
+    /// Custom version flag with -v shorthand (standard CLI convention)
     @Flag(name: [.short, .long], help: "Show version information")
     var version: Bool = false
 

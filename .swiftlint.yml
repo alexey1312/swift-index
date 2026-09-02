@@ -56,7 +56,9 @@ type_name:
     - iOS
 
 function_body_length:
-  warning: 120
+  # Raised from 120 in swiftlint 0.65: the rule's line counting changed and
+  # flagged IndexCommand.run() at 125 lines without the code changing.
+  warning: 130
   error: 250
 
 type_body_length:

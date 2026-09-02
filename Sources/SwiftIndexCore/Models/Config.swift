@@ -356,5 +356,7 @@ private protocol OptionalProtocol {
 }
 
 extension Optional: OptionalProtocol {
-    var isNil: Bool { self == nil }
+    var isNil: Bool {
+        self == nil
+    }
 }

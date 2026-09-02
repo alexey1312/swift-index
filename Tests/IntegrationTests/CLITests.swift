@@ -1,7 +1,6 @@
 import Foundation
-import Testing
-
 @testable import SwiftIndexCore
+import Testing
 
 /// Tests for CLI commands.
 ///

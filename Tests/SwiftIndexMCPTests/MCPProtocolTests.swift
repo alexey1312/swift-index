@@ -15,14 +15,14 @@ struct MCPProtocolTests {
         @Test("Decode null")
         func decodeNull() throws {
             let json = "null"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .null)
         }
 
         @Test("Decode bool true")
         func decodeBoolTrue() throws {
             let json = "true"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .bool(true))
             #expect(value.boolValue == true)
         }
@@ -30,7 +30,7 @@ struct MCPProtocolTests {
         @Test("Decode bool false")
         func decodeBoolFalse() throws {
             let json = "false"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .bool(false))
             #expect(value.boolValue == false)
         }
@@ -38,7 +38,7 @@ struct MCPProtocolTests {
         @Test("Decode integer")
         func decodeInteger() throws {
             let json = "42"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .int(42))
             #expect(value.intValue == 42)
         }
@@ -50,7 +50,7 @@ struct MCPProtocolTests {
             // which causes .int(3) to be returned instead of .double(3.14).
             // This is expected behavior for our JSONValue implementation.
             let json = "3.14"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             // Verify we can access as double (either directly or via intValue conversion)
             let numericValue = value.doubleValue ?? Double(value.intValue ?? 0)
             #expect(numericValue >= 3.0)
@@ -61,7 +61,7 @@ struct MCPProtocolTests {
         @Test("Decode string")
         func decodeString() throws {
             let json = "\"hello world\""
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .string("hello world"))
             #expect(value.stringValue == "hello world")
         }
@@ -69,7 +69,7 @@ struct MCPProtocolTests {
         @Test("Decode array")
         func decodeArray() throws {
             let json = "[1, 2, 3]"
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value == .array([.int(1), .int(2), .int(3)]))
             #expect(value.arrayValue?.count == 3)
             #expect(value[0] == .int(1))
@@ -80,7 +80,7 @@ struct MCPProtocolTests {
             let json = """
             {"name": "test", "value": 42}
             """
-            let value = try JSONCodec.decode(JSONValue.self, from: json.data(using: .utf8)!)
+            let value = try JSONCodec.decode(JSONValue.self, from: #require(json.data(using: .utf8)))
             #expect(value["name"] == .string("test"))
             #expect(value["value"] == .int(42))
         }
@@ -132,14 +132,14 @@ struct MCPProtocolTests {
         @Test("Decode string ID")
         func decodeStringID() throws {
             let json = "\"abc-123\""
-            let id = try JSONCodec.decode(RequestID.self, from: json.data(using: .utf8)!)
+            let id = try JSONCodec.decode(RequestID.self, from: #require(json.data(using: .utf8)))
             #expect(id == .string("abc-123"))
         }
 
         @Test("Decode number ID")
         func decodeNumberID() throws {
             let json = "42"
-            let id = try JSONCodec.decode(RequestID.self, from: json.data(using: .utf8)!)
+            let id = try JSONCodec.decode(RequestID.self, from: #require(json.data(using: .utf8)))
             #expect(id == .number(42))
         }
 
@@ -182,7 +182,7 @@ struct MCPProtocolTests {
             """
             let request = try JSONCodec.decode(
                 JSONRPCRequest.self,
-                from: json.data(using: .utf8)!
+                from: #require(json.data(using: .utf8))
             )
 
             #expect(request.jsonrpc == "2.0")
@@ -201,7 +201,7 @@ struct MCPProtocolTests {
             """
             let request = try JSONCodec.decode(
                 JSONRPCRequest.self,
-                from: json.data(using: .utf8)!
+                from: #require(json.data(using: .utf8))
             )
 
             #expect(request.jsonrpc == "2.0")
@@ -219,7 +219,7 @@ struct MCPProtocolTests {
             )
 
             let data = try JSONCodec.encodeSorted(request)
-            let json = String(data: data, encoding: .utf8)!
+            let json = try #require(String(data: data, encoding: .utf8))
 
             #expect(json.contains("\"jsonrpc\":\"2.0\""))
             #expect(json.contains("\"id\":1"))
@@ -233,7 +233,7 @@ struct MCPProtocolTests {
     @Suite("JSONRPCResponse")
     struct JSONRPCResponseTests {
         @Test("Create success response")
-        func createSuccessResponse() throws {
+        func createSuccessResponse() {
             let response = JSONRPCResponse(
                 id: .number(1),
                 result: .object(["status": .string("ok")])
@@ -246,7 +246,7 @@ struct MCPProtocolTests {
         }
 
         @Test("Create error response")
-        func createErrorResponse() throws {
+        func createErrorResponse() {
             let response = JSONRPCResponse(
                 id: .number(1),
                 error: .methodNotFound("unknown_method")
@@ -267,7 +267,7 @@ struct MCPProtocolTests {
             )
 
             let data = try JSONCodec.encode(response)
-            let json = String(data: data, encoding: .utf8)!
+            let json = try #require(String(data: data, encoding: .utf8))
 
             #expect(json.contains("\"jsonrpc\":\"2.0\""))
             #expect(json.contains("\"id\":\"test\""))
@@ -379,7 +379,7 @@ struct MCPProtocolTests {
         }
 
         @Test("ToolCallResult text helper")
-        func toolCallResultText() throws {
+        func toolCallResultText() {
             let result = ToolCallResult.text("Hello, world!")
 
             #expect(result.content.count == 1)
@@ -394,7 +394,7 @@ struct MCPProtocolTests {
         }
 
         @Test("ToolCallResult error helper")
-        func toolCallResultError() throws {
+        func toolCallResultError() {
             let result = ToolCallResult.error("Something went wrong")
 
             #expect(result.content.count == 1)
@@ -408,7 +408,7 @@ struct MCPProtocolTests {
         }
 
         @Test("ToolCallResult structured helper")
-        func toolCallResultStructured() throws {
+        func toolCallResultStructured() {
             let result = ToolCallResult.structured(
                 "Found 5 results",
                 data: .object(["count": .int(5), "items": .array([])])
@@ -518,7 +518,7 @@ struct MCPProtocolTests {
                 "params": {"protocolVersion": "2024-11-05"}
             }
             """
-            let data = validJSON.data(using: .utf8)!
+            let data = try #require(validJSON.data(using: .utf8))
             let request = try JSONCodec.decode(JSONRPCRequest.self, from: data)
 
             #expect(request.method == "initialize")
@@ -535,7 +535,7 @@ struct MCPProtocolTests {
                 "method": "test"
             }
             """
-            let data = jsonWithComments.data(using: .utf8)!
+            let data = try #require(jsonWithComments.data(using: .utf8))
 
             #expect(throws: (any Error).self) {
                 _ = try JSONCodec.decode(JSONRPCRequest.self, from: data)
@@ -553,7 +553,7 @@ struct MCPProtocolTests {
                 "method": "test"
             }
             """
-            let data = jsonWithComments.data(using: .utf8)!
+            let data = try #require(jsonWithComments.data(using: .utf8))
 
             #expect(throws: (any Error).self) {
                 _ = try JSONCodec.decode(JSONRPCRequest.self, from: data)
@@ -569,7 +569,7 @@ struct MCPProtocolTests {
                 "method": "test",
             }
             """
-            let data = jsonWithTrailingComma.data(using: .utf8)!
+            let data = try #require(jsonWithTrailingComma.data(using: .utf8))
 
             #expect(throws: (any Error).self) {
                 _ = try JSONCodec.decode(JSONRPCRequest.self, from: data)
@@ -586,7 +586,7 @@ struct MCPProtocolTests {
                 "params": {"items": [1, 2, 3,]}
             }
             """
-            let data = jsonWithTrailingComma.data(using: .utf8)!
+            let data = try #require(jsonWithTrailingComma.data(using: .utf8))
 
             #expect(throws: (any Error).self) {
                 _ = try JSONCodec.decode(JSONRPCRequest.self, from: data)
@@ -622,7 +622,7 @@ struct MCPProtocolTests {
                 "key": "value", // trailing comma
             }
             """
-            let data = invalidJSON.data(using: .utf8)!
+            let data = try #require(invalidJSON.data(using: .utf8))
 
             #expect(throws: (any Error).self) {
                 _ = try JSONCodec.deserialize(data)
@@ -634,7 +634,7 @@ struct MCPProtocolTests {
             let validJSON = """
             {"key": "value", "number": 42, "array": [1, 2, 3]}
             """
-            let data = validJSON.data(using: .utf8)!
+            let data = try #require(validJSON.data(using: .utf8))
 
             let result = try JSONCodec.deserialize(data)
             let dict = result as? [String: Any]
@@ -739,7 +739,7 @@ struct MCPProtocolTests {
         }
 
         @Test("TaskManager creates and tracks tasks")
-        func taskManagerBasics() async throws {
+        func taskManagerBasics() async {
             let manager = TaskManager()
 
             let task = await manager.createTask(ttl: 60000, pollInterval: 1000)
@@ -752,7 +752,7 @@ struct MCPProtocolTests {
         }
 
         @Test("TaskManager updates status")
-        func taskManagerUpdateStatus() async throws {
+        func taskManagerUpdateStatus() async {
             let manager = TaskManager()
 
             let task = await manager.createTask()
@@ -764,7 +764,7 @@ struct MCPProtocolTests {
         }
 
         @Test("TaskManager stores and retrieves results")
-        func taskManagerResults() async throws {
+        func taskManagerResults() async {
             let manager = TaskManager()
 
             let task = await manager.createTask()
@@ -783,7 +783,7 @@ struct MCPProtocolTests {
         }
 
         @Test("TaskManager cancels tasks")
-        func taskManagerCancel() async throws {
+        func taskManagerCancel() async {
             let manager = TaskManager()
 
             let task = await manager.createTask()
@@ -796,7 +796,7 @@ struct MCPProtocolTests {
         }
 
         @Test("TaskManager lists tasks with pagination")
-        func taskManagerList() async throws {
+        func taskManagerList() async {
             let manager = TaskManager()
 
             // Create 3 tasks

@@ -202,7 +202,7 @@ private actor MLXLLMModelManager {
         // Build prompt from messages using chat format
         let prompt = buildChatPrompt(from: messages)
 
-        let result = try await container.perform { context in
+        return try await container.perform { context in
             let userInput = UserInput(prompt: prompt)
             let lmInput = try await context.processor.prepare(input: userInput)
 
@@ -233,8 +233,6 @@ private actor MLXLLMModelManager {
 
             return fullText
         }
-
-        return result
     }
 
     /// Builds a chat-style prompt from LLM messages.
