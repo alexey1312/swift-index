@@ -47,6 +47,48 @@ enum DescriptionGeneratorFactory {
     }
 }
 
+// MARK: - Graph Recording
+
+extension FileIndexer {
+    /// Records a file's symbols and references for the call graph.
+    static func recordGraphFacts(
+        path: String,
+        content: String,
+        fileHash: String,
+        chunks: [CodeChunk],
+        context: IndexingContext
+    ) async throws {
+        guard let graphBuilder = context.graphBuilder, path.hasSuffix(".swift") else { return }
+
+        let facts = SwiftGraphFactsExtractor.extract(
+            content: content,
+            path: path,
+            fileHash: fileHash,
+            module: GraphBuilder.inferModule(path: path, projectRoot: context.projectPath)
+        )
+        try await graphBuilder.record(facts: facts, chunks: chunks)
+    }
+
+    /// Records graph facts for a file whose chunks are already current.
+    static func backfillGraphIfNeeded(
+        path: String,
+        content: String,
+        fileHash: String,
+        context: IndexingContext
+    ) async throws {
+        guard let graphBuilder = context.graphBuilder, path.hasSuffix(".swift") else { return }
+        guard await graphBuilder.needsBackfill(path: path) else { return }
+
+        try await recordGraphFacts(
+            path: path,
+            content: content,
+            fileHash: fileHash,
+            chunks: [],
+            context: context
+        )
+    }
+}
+
 // MARK: - File Indexer
 
 enum FileIndexer {
@@ -68,6 +110,11 @@ enum FileIndexer {
         if !force {
             let needsIndexing = try await context.indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
+                // Chunks are current, but the graph may not be: turning the graph on
+                // for an existing index would otherwise leave it empty until someone
+                // ran --force. Backfilling is cheap because it re-parses only files
+                // with no symbols recorded yet.
+                try await backfillGraphIfNeeded(path: path, content: content, fileHash: fileHash, context: context)
                 context.logger.debug("Skipping unchanged file: \(path)")
                 return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: true)
             }
@@ -104,6 +151,16 @@ enum FileIndexer {
             let contents = chunksToEmbed.map(\.content)
             return try await context.embeddingBatcher.embed(contents)
         }
+
+        // Record graph facts in the same pass that produced the chunks. Edges are
+        // written unresolved; names are resolved once the whole symbol table exists.
+        try await recordGraphFacts(
+            path: path,
+            content: content,
+            fileHash: fileHash,
+            chunks: chunks,
+            context: context
+        )
 
         // Index info snippets (documentation) if present
         let snippets = parseResult.snippets

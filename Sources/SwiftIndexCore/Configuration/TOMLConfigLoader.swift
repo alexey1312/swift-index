@@ -142,6 +142,7 @@ private struct TOMLConfig: Codable {
     var search: SearchSection?
     var indexing: IndexingSection?
     var auto_index: AutoIndexSection?
+    var graph: GraphSection?
     var storage: StorageSection?
     var watch: WatchSection?
     var logging: LoggingSection?
@@ -195,6 +196,50 @@ private struct TOMLConfig: Codable {
         var enabled: Bool?
         var reconcile_on_connect: Bool?
         var sync_threshold: Int?
+    }
+
+    /// Builds the auto-index settings from its TOML section.
+    static func makeAutoIndexConfig(_ section: AutoIndexSection) -> AutoIndexConfig {
+        var config = AutoIndexConfig()
+        if let enabled = section.enabled {
+            config.enabled = enabled
+        }
+        if let reconcile = section.reconcile_on_connect {
+            config.reconcileOnConnect = reconcile
+        }
+        if let threshold = section.sync_threshold {
+            config.syncThreshold = threshold
+        }
+        return config
+    }
+
+    /// Builds the graph settings from its TOML section.
+    static func makeGraphConfig(_ section: GraphSection) -> GraphConfig {
+        var config = GraphConfig()
+        if let enabled = section.enabled {
+            config.enabled = enabled
+        }
+        if let fanout = section.max_fanout {
+            config.maxFanout = fanout
+        }
+        if let witness = section.max_witness_fanout {
+            config.maxWitnessFanout = witness
+        }
+        if let enabled = section.witness_fanout_enabled {
+            config.witnessFanoutEnabled = enabled
+        }
+        if let confidence = section.min_confidence {
+            config.minConfidence = confidence
+        }
+        return config
+    }
+
+    struct GraphSection: Codable {
+        var enabled: Bool?
+        var max_fanout: Int?
+        var max_witness_fanout: Int?
+        var witness_fanout_enabled: Bool?
+        var min_confidence: Double?
     }
 
     struct StorageSection: Codable {
@@ -280,20 +325,8 @@ private struct TOMLConfig: Codable {
             config.respectGitignore = indexing.respect_gitignore
         }
 
-        // Auto-index section
-        if let autoIndex = auto_index {
-            var section = AutoIndexConfig()
-            if let enabled = autoIndex.enabled {
-                section.enabled = enabled
-            }
-            if let reconcile = autoIndex.reconcile_on_connect {
-                section.reconcileOnConnect = reconcile
-            }
-            if let threshold = autoIndex.sync_threshold {
-                section.syncThreshold = threshold
-            }
-            config.autoIndex = section
-        }
+        config.autoIndex = auto_index.map(Self.makeAutoIndexConfig)
+        config.graph = graph.map(Self.makeGraphConfig)
 
         // Storage section
         if let storage {

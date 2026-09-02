@@ -128,6 +128,16 @@ struct StatusCommand: AsyncParsableCommand {
         }
         lines.append("")
 
+        if let graph = report.graph, graph.symbols > 0 {
+            lines.append("Symbol graph")
+            lines.append("  symbols:   \(graph.symbols)")
+            lines.append("  edges:     \(graph.edges) (\(graph.resolvedPercentage)% resolved)")
+            if graph.isDirty {
+                lines.append("  state:     incomplete — a resolution pass did not finish")
+            }
+            lines.append("")
+        }
+
         if let freshness = report.freshness {
             lines.append("Freshness")
             if freshness.isClean {
@@ -177,6 +187,15 @@ struct StatusCommand: AsyncParsableCommand {
             ],
             "warnings": report.warnings,
         ]
+
+        if let graph = report.graph {
+            payload["graph"] = [
+                "symbols": graph.symbols,
+                "edges": graph.edges,
+                "resolved": graph.resolved,
+                "dirty": graph.isDirty,
+            ]
+        }
 
         if let freshness = report.freshness {
             payload["freshness"] = [

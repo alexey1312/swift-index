@@ -83,6 +83,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerTypeDeclarationMigration(&migrator)
         registerTokenizerFixMigration(&migrator)
         registerFileStatPrefilterMigration(&migrator)
+        registerSymbolGraphMigration(&migrator)
 
         try migrator.migrate(dbWriter)
     }

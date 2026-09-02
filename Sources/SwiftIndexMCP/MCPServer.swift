@@ -80,6 +80,7 @@ public actor MCPServer {
         tools["check_indexing_status"] = CheckIndexingStatusTool()
         tools["search_code"] = SearchCodeTool()
         tools["search_docs"] = SearchDocsTool()
+        tools["code_graph"] = CodeGraphTool()
         tools["code_research"] = CodeResearchTool()
         tools["parse_tree"] = ParseTreeTool()
     }

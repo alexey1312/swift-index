@@ -28,6 +28,17 @@ public struct DiagnosticsReport: Sendable {
         public let metadata: IndexMetadata?
     }
 
+    public struct GraphStatus: Sendable {
+        public let symbols: Int
+        public let edges: Int
+        public let resolved: Int
+        public let isDirty: Bool
+
+        public var resolvedPercentage: Int {
+            edges > 0 ? resolved * 100 / edges : 0
+        }
+    }
+
     public struct FreshnessStatus: Sendable {
         public let added: Int
         public let modified: Int
@@ -46,6 +57,7 @@ public struct DiagnosticsReport: Sendable {
     public let providers: [ProviderStatus]
     public let index: IndexStatus
     public let freshness: FreshnessStatus?
+    public let graph: GraphStatus?
     public let warnings: [String]
 
     /// Whether everything needed for a working search is in place.
@@ -107,6 +119,11 @@ public enum DiagnosticsCollector {
             warnings.append(reason)
         }
 
+        var graphStatus: DiagnosticsReport.GraphStatus?
+        if indexStatus.exists, config.graph.enabled {
+            graphStatus = await inspectGraph(at: indexPath, dimension: dimension)
+        }
+
         var freshness: DiagnosticsReport.FreshnessStatus?
         if indexStatus.exists, indexStatus.chunkCount > 0 {
             freshness = await measureFreshness(
@@ -128,6 +145,7 @@ public enum DiagnosticsCollector {
             providers: providers,
             index: indexStatus,
             freshness: freshness,
+            graph: graphStatus,
             warnings: warnings
         )
     }
@@ -217,6 +235,24 @@ public enum DiagnosticsCollector {
             fileCount: stats.fileCount,
             isConsistent: stats.isConsistent,
             metadata: metadata
+        )
+    }
+
+    private static func inspectGraph(
+        at path: String,
+        dimension: Int
+    ) async -> DiagnosticsReport.GraphStatus? {
+        guard let manager = try? IndexManager(directory: path, dimension: dimension),
+              let stats = try? await manager.chunkStore.graphStatistics()
+        else {
+            return nil
+        }
+        let dirty = try? await manager.chunkStore.graphMetaValue("dirty")
+        return DiagnosticsReport.GraphStatus(
+            symbols: stats.symbols,
+            edges: stats.edges,
+            resolved: stats.resolved,
+            isDirty: dirty == "1"
         )
     }
 

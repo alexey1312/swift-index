@@ -36,6 +36,13 @@ public enum TOMLConfigValidator {
             "respect_gitignore",
         ],
         "auto_index": ["enabled", "reconcile_on_connect", "sync_threshold"],
+        "graph": [
+            "enabled",
+            "max_fanout",
+            "max_witness_fanout",
+            "witness_fanout_enabled",
+            "min_confidence",
+        ],
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
         "logging": ["level"],

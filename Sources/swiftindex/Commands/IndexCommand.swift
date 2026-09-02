@@ -144,6 +144,12 @@ struct IndexCommand: AsyncParsableCommand {
         await DescriptionGeneratorFactory.checkAvailability(descriptionGenerator, logger: logger)
 
         let embeddingBatcher = createEmbeddingBatcher(config: configuration, provider: embeddingProvider)
+        let graphBuilder = await makeGraphBuilder(
+            configuration: configuration,
+            indexManager: indexManager,
+            logger: logger
+        )
+
         let indexingContext = createIndexingContext(from: IndexingContextParams(
             indexManager: indexManager,
             parser: parser,
@@ -153,6 +159,7 @@ struct IndexCommand: AsyncParsableCommand {
             progressRenderer: progressRenderer,
             terminal: terminal,
             projectPath: resolvedPath,
+            graphBuilder: graphBuilder,
             quiet: quietFlag,
             logger: logger
         ))
@@ -170,33 +177,16 @@ struct IndexCommand: AsyncParsableCommand {
         var fatalError: Error?
 
         // Register shutdown handler to cancel indexing
-        let indexingTask = Task { () -> Error? in
-            var taskResult: Error?
-            try await ui.progressBarStep(
-                message: "Indexing files",
-                successMessage: "Indexing completed",
-                errorMessage: "Indexing failed",
-                renderer: progressRenderer
-            ) { updateProgress in
-                taskResult = try await IndexCommand.runIndexingTasks(
-                    files: files,
-                    config: IndexingTaskConfig(
-                        context: indexingContext,
-                        stats: stats,
-                        maxConcurrentTasks: maxConcurrentTasks,
-                        forceReindex: forceReindex,
-                        logger: logger,
-                        reportProgress: { processed, inFlight, total in
-                            let safeTotal = max(total, 1)
-                            // Count in-flight files as 50% done to show clear immediate activity
-                            let effectiveProcessed = Double(processed) + (Double(inFlight) * 0.5)
-                            updateProgress(min(effectiveProcessed / Double(safeTotal), 1.0))
-                        }
-                    )
-                )
-            }
-            return taskResult
-        }
+        let indexingTask = makeIndexingTask(IndexingTaskParams(
+            files: files,
+            context: indexingContext,
+            stats: stats,
+            maxConcurrentTasks: maxConcurrentTasks,
+            forceReindex: forceReindex,
+            ui: ui,
+            progressRenderer: progressRenderer,
+            logger: logger
+        ))
 
         await shutdownManager.onShutdown {
             indexingTask.cancel()
@@ -213,6 +203,8 @@ struct IndexCommand: AsyncParsableCommand {
 
         // Flush any remaining embedding requests
         try await embeddingBatcher.flush()
+
+        try await resolveGraph(graphBuilder, quiet: quietFlag)
 
         // Record how this index was built so a later provider change produces an
         // actionable message rather than a raw dimension mismatch.
@@ -361,6 +353,7 @@ struct IndexCommand: AsyncParsableCommand {
         let progressRenderer: StickyProgressRenderer
         let terminal: Terminaling
         let projectPath: String
+        let graphBuilder: GraphBuilder?
         let quiet: Bool
         let logger: Logger
     }
@@ -389,6 +382,7 @@ struct IndexCommand: AsyncParsableCommand {
             descriptionState: params.descriptionState,
             descriptionProgress: descriptionProgress,
             projectPath: params.projectPath,
+            graphBuilder: params.graphBuilder,
             logger: params.logger
         )
     }
@@ -407,6 +401,86 @@ struct IndexCommand: AsyncParsableCommand {
             } else if let firstAvailable = await embeddingProvider.firstAvailableProvider() {
                 print("Embedding provider: \(firstAvailable.name) (dimension: \(firstAvailable.dimension))")
             }
+        }
+    }
+
+    private struct IndexingTaskParams {
+        let files: [String]
+        let context: IndexingContext
+        let stats: AtomicIndexingStats
+        let maxConcurrentTasks: Int
+        let forceReindex: Bool
+        let ui: Noora
+        let progressRenderer: StickyProgressRenderer
+        let logger: Logger
+    }
+
+    /// Wraps the bounded-concurrency indexing run in a progress bar.
+    private func makeIndexingTask(_ params: IndexingTaskParams) -> Task<Error?, Error> {
+        let files = params.files
+        let context = params.context
+        let stats = params.stats
+        let maxConcurrentTasks = params.maxConcurrentTasks
+        let forceReindex = params.forceReindex
+        let ui = params.ui
+        let progressRenderer = params.progressRenderer
+        let logger = params.logger
+
+        return Task { () -> Error? in
+            var taskResult: Error?
+            try await ui.progressBarStep(
+                message: "Indexing files",
+                successMessage: "Indexing completed",
+                errorMessage: "Indexing failed",
+                renderer: progressRenderer
+            ) { updateProgress in
+                taskResult = try await IndexCommand.runIndexingTasks(
+                    files: files,
+                    config: IndexingTaskConfig(
+                        context: context,
+                        stats: stats,
+                        maxConcurrentTasks: maxConcurrentTasks,
+                        forceReindex: forceReindex,
+                        logger: logger,
+                        reportProgress: { processed, inFlight, total in
+                            let safeTotal = max(total, 1)
+                            // Count in-flight files as 50% done to show clear immediate activity
+                            let effectiveProcessed = Double(processed) + (Double(inFlight) * 0.5)
+                            updateProgress(min(effectiveProcessed / Double(safeTotal), 1.0))
+                        }
+                    )
+                )
+            }
+            return taskResult
+        }
+    }
+
+    /// Creates the graph builder, or nil when graph building is disabled.
+    ///
+    /// The symbol graph is populated alongside chunks; names are resolved afterwards,
+    /// once every file's symbols are known.
+    private func makeGraphBuilder(
+        configuration: Config,
+        indexManager: IndexManager,
+        logger: Logger
+    ) async -> GraphBuilder? {
+        guard configuration.graph.enabled else { return nil }
+        return await GraphBuilder(
+            chunkStore: indexManager.chunkStore,
+            config: configuration.graph,
+            logger: logger
+        )
+    }
+
+    /// Runs the cross-file name resolution pass.
+    private func resolveGraph(_ graphBuilder: GraphBuilder?, quiet: Bool) async throws {
+        guard let graphBuilder else { return }
+        if !quiet {
+            print("Resolving symbol graph...")
+        }
+        let resolved = try await graphBuilder.resolve()
+        if !quiet {
+            print("Graph edges resolved: \(resolved)")
         }
     }
 

@@ -76,6 +76,9 @@ public struct Config: Sendable, Equatable {
     /// Automatic index freshness settings.
     public var autoIndex: AutoIndexConfig
 
+    /// Symbol graph settings.
+    public var graph: GraphConfig
+
     /// Target chunk size in characters.
     public var chunkSize: Int
 
@@ -148,6 +151,7 @@ public struct Config: Sendable, Equatable {
         maxFileSize: Int = 1_000_000,
         respectGitignore: Bool = true,
         autoIndex: AutoIndexConfig = AutoIndexConfig(),
+        graph: GraphConfig = GraphConfig(),
         chunkSize: Int = 1500,
         chunkOverlap: Int = 200,
         indexPath: String = ".swiftindex",
@@ -182,6 +186,7 @@ public struct Config: Sendable, Equatable {
         self.maxFileSize = maxFileSize
         self.respectGitignore = respectGitignore
         self.autoIndex = autoIndex
+        self.graph = graph
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
         self.indexPath = indexPath
@@ -338,6 +343,7 @@ public extension Config {
         applyIfPresent(partial.maxFileSize, to: \.maxFileSize)
         applyIfPresent(partial.respectGitignore, to: \.respectGitignore)
         applyIfPresent(partial.autoIndex, to: \.autoIndex)
+        applyIfPresent(partial.graph, to: \.graph)
         applyIfPresent(partial.chunkSize, to: \.chunkSize)
         applyIfPresent(partial.chunkOverlap, to: \.chunkOverlap)
         applyIfPresent(partial.indexPath, to: \.indexPath)
