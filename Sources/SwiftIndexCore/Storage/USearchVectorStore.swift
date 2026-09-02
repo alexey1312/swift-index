@@ -293,8 +293,14 @@ public actor USearchVectorStore: VectorStore {
             throw VectorStoreError.noPersistencePath
         }
 
-        // Save the HNSW index
-        try index.save(path: indexPath)
+        // Stage both payloads before publishing either, so a crash mid-write cannot
+        // leave a truncated index or mapping in place. Incremental indexing saves
+        // after every burst of edits, so this window is hit far more often than it
+        // was when saving happened only at shutdown.
+        let indexTemp = indexPath + ".tmp"
+        let mappingTemp = mappingPath + ".tmp"
+
+        try index.save(path: indexTemp)
 
         // Save ID mappings (including dimension for validation on load)
         let mapping = VectorStoreMapping(
@@ -306,7 +312,29 @@ public actor USearchVectorStore: VectorStore {
         )
 
         let data = try JSONCodec.encodePretty(mapping)
-        try data.write(to: URL(fileURLWithPath: mappingPath))
+        try data.write(to: URL(fileURLWithPath: mappingTemp), options: .atomic)
+
+        // Publish by rename. The two renames are not one atomic unit, but the gap is
+        // two metadata operations rather than two full writes. Mapping is published
+        // first deliberately: a new mapping with an old index only makes some vectors
+        // temporarily unresolvable (repairable via `verifyConsistency`/`repair`),
+        // whereas an old mapping with a new index rewinds `nextKey` and causes silent
+        // key collisions.
+        try Self.publish(mappingTemp, to: mappingPath)
+        try Self.publish(indexTemp, to: indexPath)
+    }
+
+    /// Atomically moves a staged file over its destination.
+    private static func publish(_ source: String, to destination: String) throws {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: destination) {
+            _ = try fileManager.replaceItemAt(
+                URL(fileURLWithPath: destination),
+                withItemAt: URL(fileURLWithPath: source)
+            )
+        } else {
+            try fileManager.moveItem(atPath: source, toPath: destination)
+        }
     }
 
     public func load() async throws {

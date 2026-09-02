@@ -276,9 +276,11 @@ public actor FileWatcher {
             }
         }
 
-        // Check extension filter
+        // Check extension filter. Lowercased to match how the indexer collects files
+        // (`FileCollector`) and how parsers declare `supportedExtensions`; otherwise
+        // `README.MD` would be indexed but never watched.
         if !extensions.isEmpty {
-            let ext = (path as NSString).pathExtension
+            let ext = (path as NSString).pathExtension.lowercased()
             if !extensions.contains(ext) {
                 return
             }
