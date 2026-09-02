@@ -105,39 +105,14 @@ public struct IgnoreRules: Sendable {
         character == "*" || character == "?" || character == "["
     }
 
-    /// Compiles a glob into an anchored regular expression.
+    /// Compiles a glob against the full relative path.
     ///
-    /// `**` crosses directory separators, `*` does not, `?` is a single non-separator.
+    /// Uses `.fullPath` anchoring, unlike search's `GlobMatcher`: ignore patterns are
+    /// matched against paths already made relative to the project root, so an
+    /// implicit "any leading directory" prefix would make a rule far broader than
+    /// written. Callers that need containment walk ancestor prefixes explicitly.
     static func compileGlob(_ pattern: String) -> NSRegularExpression? {
-        var regex = "^"
-        var index = pattern.startIndex
-
-        while index < pattern.endIndex {
-            let character = pattern[index]
-            switch character {
-            case "*":
-                let next = pattern.index(after: index)
-                if next < pattern.endIndex, pattern[next] == "*" {
-                    regex += ".*"
-                    index = pattern.index(after: next)
-                    // Swallow a following slash so `**/x` also matches a bare `x`.
-                    if index < pattern.endIndex, pattern[index] == "/" {
-                        regex += "/?"
-                        index = pattern.index(after: index)
-                    }
-                    continue
-                }
-                regex += "[^/]*"
-            case "?":
-                regex += "[^/]"
-            default:
-                regex += NSRegularExpression.escapedPattern(for: String(character))
-            }
-            index = pattern.index(after: index)
-        }
-
-        regex += "$"
-        return try? NSRegularExpression(pattern: regex)
+        GlobPattern.compile(pattern, anchoring: .fullPath)
     }
 
     /// Parses the root `.gitignore`, ignoring comments and blank lines.
