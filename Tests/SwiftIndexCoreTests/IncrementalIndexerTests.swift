@@ -44,7 +44,7 @@ private struct CountingEmbeddingProvider: EmbeddingProvider {
         }
         // Deterministic, content-dependent vector so distinct chunks differ.
         return texts.map { text in
-            let seed = Float(abs(text.hashValue % 1000)) / 1000.0
+            let seed = Float(stableTestHash(text) % 1000) / 1000.0
             return (0 ..< dimension).map { Float($0) * 0.01 + seed }
         }
     }

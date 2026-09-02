@@ -4,295 +4,154 @@ import Foundation
 @testable import SwiftIndexCore
 import Testing
 
+/// Tests for reading configuration out of environment variables.
+///
+/// Each test supplies its own variables rather than calling `setenv`. The previous
+/// approach mutated the process environment, which is global: tests running in
+/// parallel overwrote each other's variables, and results depended on whatever the
+/// developer had exported in their shell — a real `ANTHROPIC_API_KEY` would make a
+/// "no key set" assertion fail.
 @Suite("EnvironmentConfigLoader Tests")
 struct EnvironmentConfigLoaderTests {
-    // MARK: - Test Helpers
-
-    /// Saves the current environment variables that we'll modify in tests.
-    private struct SavedEnvironment: ~Copyable {
-        private let keys: [String]
-        private let savedValues: [String: String?]
-
-        init(keys: [String]) {
-            self.keys = keys
-            var saved: [String: String?] = [:]
-            for key in keys {
-                saved[key] = ProcessInfo.processInfo.environment[key]
-            }
-            savedValues = saved
-        }
-
-        deinit {
-            for key in keys {
-                if let originalValue = savedValues[key] {
-                    if let value = originalValue {
-                        setenv(key, value, 1)
-                    } else {
-                        unsetenv(key)
-                    }
-                }
-            }
-        }
+    private func load(_ environment: [String: String]) throws -> PartialConfig {
+        // Keychain lookup is a fallback when no Anthropic variable is present; it is
+        // system state, so tests opt out of it explicitly.
+        var variables = environment
+        variables["SWIFTINDEX_SKIP_KEYCHAIN"] = "1"
+        return try EnvironmentConfigLoader(environment: variables).load()
     }
 
-    // MARK: - Anthropic API Key Tests
+    // MARK: - Embedding
+
+    @Test("Loads embedding provider and model")
+    func loadEmbeddingSettings() throws {
+        let config = try load([
+            "SWIFTINDEX_EMBEDDING_PROVIDER": "ollama",
+            "SWIFTINDEX_EMBEDDING_MODEL": "nomic-embed-text",
+        ])
+
+        #expect(config.embeddingProvider == "ollama")
+        #expect(config.embeddingModel == "nomic-embed-text")
+    }
+
+    // MARK: - Anthropic priority chain
 
     @Test("Loads SWIFTINDEX_ANTHROPIC_API_KEY from environment")
     func loadAnthropicKeyFromSwiftIndexVar() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-        ])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_ANTHROPIC_API_KEY", "swiftindex-anthropic-key", 1)
-        unsetenv("ANTHROPIC_API_KEY")
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
+        let config = try load(["SWIFTINDEX_ANTHROPIC_API_KEY": "swiftindex-anthropic-key"])
         #expect(config.anthropicAPIKey == "swiftindex-anthropic-key")
     }
 
     @Test("Falls back to ANTHROPIC_API_KEY when SWIFTINDEX_ not set")
     func fallbackToAnthropicKey() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-        ])
-        _ = savedEnv
-
-        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-        setenv("ANTHROPIC_API_KEY", "fallback-anthropic-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
+        let config = try load(["ANTHROPIC_API_KEY": "fallback-anthropic-key"])
         #expect(config.anthropicAPIKey == "fallback-anthropic-key")
     }
 
     @Test("SWIFTINDEX_ANTHROPIC_API_KEY takes priority over ANTHROPIC_API_KEY")
     func swiftIndexKeyHasPriority() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
+        let config = try load([
+            "SWIFTINDEX_ANTHROPIC_API_KEY": "priority-key",
+            "ANTHROPIC_API_KEY": "fallback-key",
         ])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_ANTHROPIC_API_KEY", "priority-key", 1)
-        setenv("ANTHROPIC_API_KEY", "fallback-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
         #expect(config.anthropicAPIKey == "priority-key")
+    }
+
+    @Test("CLAUDE_CODE_OAUTH_TOKEN sits between the two Anthropic keys")
+    func oauthTokenPriority() throws {
+        // Below the project-specific override...
+        let overridden = try load([
+            "SWIFTINDEX_ANTHROPIC_API_KEY": "override",
+            "CLAUDE_CODE_OAUTH_TOKEN": "oauth",
+        ])
+        #expect(overridden.anthropicAPIKey == "override")
+
+        // ...and above the plain API key.
+        let preferred = try load([
+            "CLAUDE_CODE_OAUTH_TOKEN": "oauth",
+            "ANTHROPIC_API_KEY": "plain",
+        ])
+        #expect(preferred.anthropicAPIKey == "oauth")
     }
 
     @Test("Returns nil when no Anthropic key is set")
     func noAnthropicKey() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-        ])
-        _ = savedEnv
-
-        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-        unsetenv("ANTHROPIC_API_KEY")
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
+        let config = try load([:])
         #expect(config.anthropicAPIKey == nil)
     }
 
-    // MARK: - Voyage API Key Tests
+    // MARK: - Provider keys and their fallbacks
 
-    @Test("SWIFTINDEX_VOYAGE_API_KEY takes priority over VOYAGE_API_KEY")
-    func voyageKeyPriority() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_VOYAGE_API_KEY",
-            "VOYAGE_API_KEY",
-        ])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_VOYAGE_API_KEY", "priority-voyage-key", 1)
-        setenv("VOYAGE_API_KEY", "fallback-voyage-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.voyageAPIKey == "priority-voyage-key")
+    @Test("Loads SWIFTINDEX_OPENAI_API_KEY and falls back to OPENAI_API_KEY")
+    func openAIKeyChain() throws {
+        #expect(try load(["SWIFTINDEX_OPENAI_API_KEY": "primary"]).openAIAPIKey == "primary")
+        #expect(try load(["OPENAI_API_KEY": "fallback"]).openAIAPIKey == "fallback")
+        #expect(
+            try load([
+                "SWIFTINDEX_OPENAI_API_KEY": "primary",
+                "OPENAI_API_KEY": "fallback",
+            ]).openAIAPIKey == "primary"
+        )
     }
 
-    @Test("Falls back to VOYAGE_API_KEY when SWIFTINDEX_ not set")
-    func voyageKeyFallback() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_VOYAGE_API_KEY",
-            "VOYAGE_API_KEY",
-        ])
-        _ = savedEnv
-
-        unsetenv("SWIFTINDEX_VOYAGE_API_KEY")
-        setenv("VOYAGE_API_KEY", "fallback-voyage-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.voyageAPIKey == "fallback-voyage-key")
+    @Test("Loads SWIFTINDEX_VOYAGE_API_KEY and falls back to VOYAGE_API_KEY")
+    func voyageKeyChain() throws {
+        #expect(try load(["SWIFTINDEX_VOYAGE_API_KEY": "primary"]).voyageAPIKey == "primary")
+        #expect(try load(["VOYAGE_API_KEY": "fallback"]).voyageAPIKey == "fallback")
+        #expect(
+            try load([
+                "SWIFTINDEX_VOYAGE_API_KEY": "primary",
+                "VOYAGE_API_KEY": "fallback",
+            ]).voyageAPIKey == "primary"
+        )
     }
 
-    // MARK: - OpenAI API Key Tests
-
-    @Test("SWIFTINDEX_OPENAI_API_KEY takes priority over OPENAI_API_KEY")
-    func openAIKeyPriority() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_OPENAI_API_KEY",
-            "OPENAI_API_KEY",
-        ])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_OPENAI_API_KEY", "priority-openai-key", 1)
-        setenv("OPENAI_API_KEY", "fallback-openai-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.openAIAPIKey == "priority-openai-key")
+    @Test("Loads SWIFTINDEX_GEMINI_API_KEY and falls back to GEMINI_API_KEY")
+    func geminiKeyChain() throws {
+        #expect(try load(["SWIFTINDEX_GEMINI_API_KEY": "primary"]).geminiAPIKey == "primary")
+        #expect(try load(["GEMINI_API_KEY": "fallback"]).geminiAPIKey == "fallback")
+        #expect(
+            try load([
+                "SWIFTINDEX_GEMINI_API_KEY": "primary",
+                "GEMINI_API_KEY": "fallback",
+            ]).geminiAPIKey == "primary"
+        )
     }
 
-    @Test("Falls back to OPENAI_API_KEY when SWIFTINDEX_ not set")
-    func openAIKeyFallback() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_OPENAI_API_KEY",
-            "OPENAI_API_KEY",
-        ])
-        _ = savedEnv
-
-        unsetenv("SWIFTINDEX_OPENAI_API_KEY")
-        setenv("OPENAI_API_KEY", "fallback-openai-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.openAIAPIKey == "fallback-openai-key")
-    }
-
-    // MARK: - Gemini API Key Tests
-
-    @Test("SWIFTINDEX_GEMINI_API_KEY takes priority over GEMINI_API_KEY")
-    func geminiKeyPriority() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_GEMINI_API_KEY",
-            "GEMINI_API_KEY",
-        ])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_GEMINI_API_KEY", "priority-gemini-key", 1)
-        setenv("GEMINI_API_KEY", "fallback-gemini-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.geminiAPIKey == "priority-gemini-key")
-    }
-
-    @Test("Falls back to GEMINI_API_KEY when SWIFTINDEX_ not set")
-    func geminiKeyFallback() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_GEMINI_API_KEY",
-            "GEMINI_API_KEY",
-        ])
-        _ = savedEnv
-
-        unsetenv("SWIFTINDEX_GEMINI_API_KEY")
-        setenv("GEMINI_API_KEY", "fallback-gemini-key", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.geminiAPIKey == "fallback-gemini-key")
-    }
-
-    // MARK: - Other Environment Variable Tests
-
-    @Test("Loads embedding provider from environment")
-    func loadEmbeddingProvider() throws {
-        let savedEnv = SavedEnvironment(keys: ["SWIFTINDEX_EMBEDDING_PROVIDER"])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_EMBEDDING_PROVIDER", "voyage", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.embeddingProvider == "voyage")
-    }
-
-    @Test("Loads embedding model from environment")
-    func loadEmbeddingModel() throws {
-        let savedEnv = SavedEnvironment(keys: ["SWIFTINDEX_EMBEDDING_MODEL"])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_EMBEDDING_MODEL", "all-MiniLM-L6-v2", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.embeddingModel == "all-MiniLM-L6-v2")
-    }
+    // MARK: - Logging
 
     @Test("Loads log level from environment")
     func loadLogLevel() throws {
-        let savedEnv = SavedEnvironment(keys: ["SWIFTINDEX_LOG_LEVEL"])
-        _ = savedEnv
-
-        setenv("SWIFTINDEX_LOG_LEVEL", "debug", 1)
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
-
-        #expect(config.logLevel == "debug")
+        #expect(try load(["SWIFTINDEX_LOG_LEVEL": "debug"]).logLevel == "debug")
     }
+
+    // MARK: - Empty environment
 
     @Test("Returns empty config when no environment variables set")
     func emptyEnvironment() throws {
-        let savedEnv = SavedEnvironment(keys: [
-            "SWIFTINDEX_EMBEDDING_PROVIDER",
-            "SWIFTINDEX_EMBEDDING_MODEL",
-            "SWIFTINDEX_VOYAGE_API_KEY",
-            "VOYAGE_API_KEY",
-            "SWIFTINDEX_OPENAI_API_KEY",
-            "OPENAI_API_KEY",
-            "SWIFTINDEX_GEMINI_API_KEY",
-            "GEMINI_API_KEY",
-            "SWIFTINDEX_ANTHROPIC_API_KEY",
-            "ANTHROPIC_API_KEY",
-            "SWIFTINDEX_LOG_LEVEL",
-        ])
-        _ = savedEnv
-
-        // Unset all environment variables
-        unsetenv("SWIFTINDEX_EMBEDDING_PROVIDER")
-        unsetenv("SWIFTINDEX_EMBEDDING_MODEL")
-        unsetenv("SWIFTINDEX_VOYAGE_API_KEY")
-        unsetenv("VOYAGE_API_KEY")
-        unsetenv("SWIFTINDEX_OPENAI_API_KEY")
-        unsetenv("OPENAI_API_KEY")
-        unsetenv("SWIFTINDEX_GEMINI_API_KEY")
-        unsetenv("GEMINI_API_KEY")
-        unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-        unsetenv("ANTHROPIC_API_KEY")
-        unsetenv("SWIFTINDEX_LOG_LEVEL")
-
-        let loader = EnvironmentConfigLoader()
-        let config = try loader.load()
+        let config = try load([:])
 
         #expect(config.embeddingProvider == nil)
         #expect(config.embeddingModel == nil)
-        #expect(config.voyageAPIKey == nil)
         #expect(config.openAIAPIKey == nil)
+        #expect(config.voyageAPIKey == nil)
         #expect(config.geminiAPIKey == nil)
         #expect(config.anthropicAPIKey == nil)
         #expect(config.logLevel == nil)
+    }
+
+    @Test("An unrelated variable is ignored")
+    func unrelatedVariablesIgnored() throws {
+        let config = try load(["PATH": "/usr/bin", "HOME": "/Users/test"])
+        #expect(config == .empty)
+    }
+
+    // MARK: - Process environment
+
+    @Test("The default initializer reads the process environment")
+    func defaultInitializerUsesProcessEnvironment() throws {
+        // The injectable initializer must not change what production code sees.
+        let loader = EnvironmentConfigLoader()
+        _ = try loader.load()
     }
 }

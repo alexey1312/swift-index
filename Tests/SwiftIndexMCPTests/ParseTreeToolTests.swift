@@ -374,13 +374,39 @@ struct ParseTreeVisualizerTests {
 
     @Test("Directory enumeration failure throws error")
     func directoryEnumerationFailureThrowsError() async {
-        // Non-existent directory should trigger enumeration failure
-        // Note: FileManager.enumerator returns nil for non-existent paths
+        // FileManager.enumerator(at:) returns a *non-nil* enumerator for a path that
+        // does not exist — it just yields nothing — so this has to be checked before
+        // enumerating, or a typo'd path reports "no files matched" instead of an error.
         let nonExistentPath = "/nonexistent/path/\(UUID().uuidString)"
 
-        await #expect(throws: ParseTreeError.self) {
+        await #expect(throws: ParseTreeError.directoryNotFound(path: nonExistentPath)) {
             _ = try await visualizer.visualizeDirectory(at: nonExistentPath)
         }
+    }
+
+    @Test("Pointing at a regular file reports that it is not a directory")
+    func regularFileIsNotADirectory() async throws {
+        // Same root cause: enumerating a regular file also succeeds and yields
+        // nothing, so the caller would otherwise be told the directory was empty.
+        let tempDir = try createTempDirectory(with: ["only.swift": "struct Only {}"])
+        defer { cleanup(tempDir) }
+        let filePath = tempDir.appendingPathComponent("only.swift").path
+
+        await #expect(throws: ParseTreeError.notADirectory(path: filePath)) {
+            _ = try await visualizer.visualizeDirectory(at: filePath)
+        }
+    }
+
+    @Test("An empty directory succeeds with no files")
+    func emptyDirectoryIsNotAnError() async throws {
+        // The distinction that matters: a directory that exists but contains nothing
+        // is a valid, empty result — not a failure.
+        let tempDir = try createTempDirectory(with: [:])
+        defer { cleanup(tempDir) }
+
+        let result = try await visualizer.visualizeDirectory(at: tempDir.path)
+        #expect(result.totalFiles == 0)
+        #expect(result.files.isEmpty)
     }
 
     @Test("formatTOON includes skipped files section")

@@ -162,10 +162,13 @@ struct SwiftSyntaxParserTests {
             return
         }
 
-        let enumChunk = chunks.first { $0.kind == .enum }
+        // The declaration chunk holds only the signature line; the body chunk is the
+        // one that carries the leading doc comment.
+        let enumChunk = chunks.first { $0.kind == .enum && !$0.isTypeDeclaration }
         #expect(enumChunk != nil)
         #expect(enumChunk?.symbols.contains("Result") == true)
         #expect(enumChunk?.content.contains("Result type for operations") == true)
+        #expect(enumChunk?.docComment?.contains("Result type for operations") == true)
     }
 
     // MARK: - Protocol Parsing
@@ -269,8 +272,9 @@ struct SwiftSyntaxParserTests {
             return
         }
 
-        // Should have outer struct, inner struct, and enum
-        let structs = chunks.filter { $0.kind == .struct }
+        // Every type yields two chunks — a declaration and the full body — so count
+        // declarations to get one entry per declared type.
+        let structs = chunks.filter { $0.kind == .struct && $0.isTypeDeclaration }
         #expect(structs.count == 2)
 
         let innerStruct = chunks.first { $0.symbols.contains("Outer.Inner") }
@@ -555,12 +559,13 @@ struct SwiftSyntaxParserTests {
             return
         }
 
-        // Verify we found all major declarations
-        let protocols = chunks.filter { $0.kind == .protocol }
-        let classes = chunks.filter { $0.kind == .class }
-        let structs = chunks.filter { $0.kind == .struct }
-        let enums = chunks.filter { $0.kind == .enum }
-        let actors = chunks.filter { $0.kind == .actor }
+        // Verify we found all major declarations. Types produce a declaration chunk
+        // in addition to the body chunk, so count declarations for one per type.
+        let protocols = chunks.filter { $0.kind == .protocol && $0.isTypeDeclaration }
+        let classes = chunks.filter { $0.kind == .class && $0.isTypeDeclaration }
+        let structs = chunks.filter { $0.kind == .struct && $0.isTypeDeclaration }
+        let enums = chunks.filter { $0.kind == .enum && $0.isTypeDeclaration }
+        let actors = chunks.filter { $0.kind == .actor && $0.isTypeDeclaration }
         let extensions = chunks.filter { $0.kind == .extension }
         let functions = chunks.filter { $0.kind == .function }
         let methods = chunks.filter { $0.kind == .method }

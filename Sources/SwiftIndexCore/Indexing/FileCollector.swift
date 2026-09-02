@@ -56,6 +56,19 @@ public enum FileCollector {
 
         let allowedExtensions = indexableExtensions(config: config, parser: parser)
 
+        // `enumerator(at:)` returns a non-nil enumerator for a missing path or a
+        // regular file and simply yields nothing, so the nil check below cannot catch
+        // either. Without this an unreadable project reports "0 files to index"
+        // instead of saying the path is wrong. Callers in this repository validate
+        // first, but this is a public API and should not depend on that.
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: rootPath, isDirectory: &isDirectory) else {
+            throw ParseError.parsingFailed("Directory does not exist: \(path)")
+        }
+        guard isDirectory.boolValue else {
+            throw ParseError.parsingFailed("Not a directory: \(path)")
+        }
+
         guard let enumerator = FileManager.default.enumerator(
             at: root,
             includingPropertiesForKeys: [

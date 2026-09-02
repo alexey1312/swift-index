@@ -423,7 +423,12 @@ private struct InitWizard {
         return InitSelections(
             embeddingProvider: validatedProvider,
             embeddingModel: finalModel,
-            llmProvider: .mlx // Default to MLX for LLM enhancement
+            // No LLM provider unless one is asked for. Selecting MLX here wrote
+            // `enabled = true` into every non-interactively generated config, and an
+            // enabled MLX enhancement aborts the process outright on a machine without
+            // the Metal libraries beside the binary. It also contradicted the library
+            // default, which treats enhancement as opt-in.
+            llmProvider: nil
         )
     }
 

@@ -174,6 +174,44 @@ struct FileCollectorTests {
         #expect(entries[0].modifiedNanoseconds > 0)
     }
 
+    // MARK: - Invalid roots
+
+    @Test("A missing directory is reported rather than returning no files")
+    func missingDirectoryThrows() throws {
+        // enumerator(at:) succeeds for a nonexistent path and yields nothing, so
+        // without an explicit check this silently reported an empty project.
+        let missing = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("swiftindex-missing-\(UUID().uuidString)")
+
+        #expect(throws: (any Error).self) {
+            try FileCollector.collect(at: missing.path, config: Config(), parser: HybridParser())
+        }
+    }
+
+    @Test("A regular file is reported rather than returning no files")
+    func regularFileThrows() throws {
+        let project = try Project()
+        defer { project.cleanup() }
+        let file = try project.write("Sources/App.swift")
+
+        #expect(throws: (any Error).self) {
+            try FileCollector.collect(at: file, config: Config(), parser: HybridParser())
+        }
+    }
+
+    @Test("An empty directory yields no files without failing")
+    func emptyDirectoryIsValid() throws {
+        let project = try Project()
+        defer { project.cleanup() }
+
+        let entries = try FileCollector.collect(
+            at: project.root.path,
+            config: Config(),
+            parser: HybridParser()
+        )
+        #expect(entries.isEmpty)
+    }
+
     // MARK: - Watcher / collector agreement
 
     @Test("The watcher and the indexer exclude the same files")

@@ -139,7 +139,7 @@ public actor BM25Search: SearchEngine {
 
                 // CamelCase identifiers should use exact matching (no wildcard)
                 // to prevent "USearchError" from matching just "Search"
-                if isCamelCaseIdentifier(escaped) {
+                if Self.isCamelCaseIdentifier(escaped) {
                     return "\"\(escaped)\""
                 }
 
@@ -157,7 +157,15 @@ public actor BM25Search: SearchEngine {
     ///
     /// - Parameter term: The term to check.
     /// - Returns: True if the term is a CamelCase identifier.
-    private nonisolated func isCamelCaseIdentifier(_ term: String) -> Bool {
+    /// Whether a term looks like a distinctive code identifier worth boosting.
+    ///
+    /// Exposed rather than private so tests exercise this exact function. The test
+    /// helper used to hold its own copy of these rules, so it verified the copy and
+    /// could drift from what search actually did.
+    ///
+    /// - Parameter term: The query term.
+    /// - Returns: `true` for identifiers like `CodeChunk`, `iOS16` or `FTS5`.
+    nonisolated static func isCamelCaseIdentifier(_ term: String) -> Bool {
         // Minimum 3 characters, starts with letter, no spaces
         guard term.count >= 3,
               term.first?.isLetter == true,
@@ -165,8 +173,19 @@ public actor BM25Search: SearchEngine {
         else {
             return false
         }
-        // Must contain both uppercase and lowercase letters
-        return term.contains(where: \.isUppercase) &&
-            term.contains(where: \.isLowercase)
+
+        let hasUppercase = term.contains(where: \.isUppercase)
+        let hasLowercase = term.contains(where: \.isLowercase)
+
+        // Mixed case is the usual shape: CodeChunk, iOS16, GRDBChunkStore.
+        if hasUppercase, hasLowercase {
+            return true
+        }
+
+        // An all-caps name with a digit is an acronym identifier — FTS5, UTF8,
+        // SHA256. These are exactly the rare, technical terms the boost exists for,
+        // and requiring a lowercase letter excluded every one of them. A plain
+        // all-caps word like SEARCH stays excluded.
+        return hasUppercase && term.contains(where: \.isNumber)
     }
 }

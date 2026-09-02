@@ -4,48 +4,67 @@ import Foundation
 import Logging
 
 /// Loads configuration from environment variables.
+///
+/// The environment is injected rather than read from the process on every lookup, so
+/// callers — tests especially — can supply an exact set of variables. Reading the
+/// process directly made behaviour depend on whatever the developer happened to have
+/// exported, and forced tests to mutate global state with `setenv`, which races when
+/// they run in parallel.
 public struct EnvironmentConfigLoader: ConfigLoader {
     private let logger = Logger(label: "com.swiftindex.config.environment")
 
-    public init() {}
+    /// The variables this loader reads.
+    private let environment: [String: String]
+
+    /// Creates a loader over the current process environment.
+    public init() {
+        self.init(environment: ProcessInfo.processInfo.environment)
+    }
+
+    /// Creates a loader over an explicit set of variables.
+    ///
+    /// - Parameter environment: Variables to read instead of the process environment.
+    public init(environment: [String: String]) {
+        self.environment = environment
+    }
 
     public func load() throws -> PartialConfig {
         var partial = PartialConfig()
 
-        if let provider = ProcessInfo.processInfo.environment["SWIFTINDEX_EMBEDDING_PROVIDER"] {
+        if let provider = environment["SWIFTINDEX_EMBEDDING_PROVIDER"] {
             partial.embeddingProvider = provider
         }
 
-        if let model = ProcessInfo.processInfo.environment["SWIFTINDEX_EMBEDDING_MODEL"] {
+        if let model = environment["SWIFTINDEX_EMBEDDING_MODEL"] {
             partial.embeddingModel = model
         }
 
-        if let voyageKey = ProcessInfo.processInfo.environment["SWIFTINDEX_VOYAGE_API_KEY"] {
+        if let voyageKey = environment["SWIFTINDEX_VOYAGE_API_KEY"] {
             partial.voyageAPIKey = voyageKey
         }
 
         if partial.voyageAPIKey == nil,
-           let voyageKey = ProcessInfo.processInfo.environment["VOYAGE_API_KEY"]
+           let voyageKey = environment["VOYAGE_API_KEY"]
         {
             partial.voyageAPIKey = voyageKey
         }
 
-        if let openAIKey = ProcessInfo.processInfo.environment["SWIFTINDEX_OPENAI_API_KEY"] {
+        if let openAIKey = environment["SWIFTINDEX_OPENAI_API_KEY"] {
             partial.openAIAPIKey = openAIKey
         }
 
         if partial.openAIAPIKey == nil,
-           let openAIKey = ProcessInfo.processInfo.environment["OPENAI_API_KEY"]
+           let openAIKey = environment["OPENAI_API_KEY"]
         {
             partial.openAIAPIKey = openAIKey
         }
 
-        if let geminiKey = ProcessInfo.processInfo.environment["SWIFTINDEX_GEMINI_API_KEY"] {
+        if let geminiKey = environment["SWIFTINDEX_GEMINI_API_KEY"] {
             partial.geminiAPIKey = geminiKey
         }
 
         if partial.geminiAPIKey == nil,
-           let geminiKey = ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
+           let geminiKey = environment["GEMINI_API_KEY"]
         {
             partial.geminiAPIKey = geminiKey
         }
@@ -55,13 +74,13 @@ public struct EnvironmentConfigLoader: ConfigLoader {
         // 2. CLAUDE_CODE_OAUTH_TOKEN (auto-set by Claude Code CLI)
         // 3. ANTHROPIC_API_KEY (standard API key)
         // 4. Keychain OAuth Token (managed via `swiftindex auth`)
-        if let anthropicKey = ProcessInfo.processInfo.environment["SWIFTINDEX_ANTHROPIC_API_KEY"] {
+        if let anthropicKey = environment["SWIFTINDEX_ANTHROPIC_API_KEY"] {
             partial.anthropicAPIKey = anthropicKey
-        } else if let oauthToken = ProcessInfo.processInfo.environment["CLAUDE_CODE_OAUTH_TOKEN"] {
+        } else if let oauthToken = environment["CLAUDE_CODE_OAUTH_TOKEN"] {
             partial.anthropicAPIKey = oauthToken
-        } else if let anthropicKey = ProcessInfo.processInfo.environment["ANTHROPIC_API_KEY"] {
+        } else if let anthropicKey = environment["ANTHROPIC_API_KEY"] {
             partial.anthropicAPIKey = anthropicKey
-        } else if ProcessInfo.processInfo.environment["SWIFTINDEX_SKIP_KEYCHAIN"] == nil {
+        } else if environment["SWIFTINDEX_SKIP_KEYCHAIN"] == nil {
             // Fallback: Check Keychain for OAuth token (only if no env vars set)
             // Set SWIFTINDEX_SKIP_KEYCHAIN=1 to disable Keychain access (for testing)
             do {
@@ -92,7 +111,7 @@ public struct EnvironmentConfigLoader: ConfigLoader {
             }
         }
 
-        if let logLevel = ProcessInfo.processInfo.environment["SWIFTINDEX_LOG_LEVEL"] {
+        if let logLevel = environment["SWIFTINDEX_LOG_LEVEL"] {
             partial.logLevel = logLevel
         }
 

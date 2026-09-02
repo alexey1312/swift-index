@@ -10,8 +10,12 @@ import Testing
 @Suite("Auth Command E2E")
 struct AuthCommandE2ETests {
     // Test-specific service/account to avoid Keychain prompts
+    // Unique per test: swift-testing creates a fresh suite instance for each
+    // test and runs them in parallel, so a shared Keychain entry meant tests
+    // saved and deleted the same item concurrently — one test's cleanup made
+    // another's "no token stored" precondition fail.
     private let testService = "com.swiftindex.oauth.auth-e2e-test"
-    private let testAccount = "claude-code-oauth-auth-e2e-test"
+    private let testAccount = "claude-code-oauth-auth-e2e-test-\(UUID().uuidString)"
 
     // MARK: - Test Cleanup
 
@@ -190,48 +194,36 @@ struct AuthCommandE2ETests {
 
     // MARK: - Environment Variable Tests
 
+    // These supply variables to the loader directly rather than calling setenv. The
+    // process environment is global: mutating it races with tests running in
+    // parallel, and any ANTHROPIC_API_KEY already exported in the developer's shell
+    // outranked the token under test, so these failed locally but passed in CI.
+
     @Test("auth: Environment variable token priority")
     func authEnvironmentTokenPriority() throws {
-        defer {
-            unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-        }
-
-        // Given: Token from env var
         let envToken = "sk-ant-oauth-env-token-123456789"
-        setenv("CLAUDE_CODE_OAUTH_TOKEN", envToken, 1)
+        let loader = EnvironmentConfigLoader(environment: [
+            "CLAUDE_CODE_OAUTH_TOKEN": envToken,
+            "SWIFTINDEX_SKIP_KEYCHAIN": "1",
+        ])
 
-        // When: Load via EnvironmentConfigLoader
-        let loader = EnvironmentConfigLoader()
         let partial = try loader.load()
-        let token = partial.anthropicAPIKey
 
-        // Then: Env token used
-        #expect(token == envToken)
+        #expect(partial.anthropicAPIKey == envToken)
     }
 
     @Test("auth: SWIFTINDEX prefix has highest priority")
     func authSwiftindexPrefixPriority() throws {
-        defer {
-            unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
-            unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
-            unsetenv("ANTHROPIC_API_KEY")
-        }
-
-        // Given: All env vars set
         let projectKey = "project-key-12345"
-        let oauthToken = "sk-ant-oauth-token-12345"
-        let anthropicKey = "standard-key-12345"
+        let loader = EnvironmentConfigLoader(environment: [
+            "SWIFTINDEX_ANTHROPIC_API_KEY": projectKey,
+            "CLAUDE_CODE_OAUTH_TOKEN": "sk-ant-oauth-token-12345",
+            "ANTHROPIC_API_KEY": "standard-key-12345",
+            "SWIFTINDEX_SKIP_KEYCHAIN": "1",
+        ])
 
-        setenv("SWIFTINDEX_ANTHROPIC_API_KEY", projectKey, 1)
-        setenv("CLAUDE_CODE_OAUTH_TOKEN", oauthToken, 1)
-        setenv("ANTHROPIC_API_KEY", anthropicKey, 1)
-
-        // When: Load config
-        let loader = EnvironmentConfigLoader()
         let partial = try loader.load()
-        let token = partial.anthropicAPIKey
 
-        // Then: SWIFTINDEX_ prefix wins
-        #expect(token == projectKey)
+        #expect(partial.anthropicAPIKey == projectKey)
     }
 }

@@ -80,10 +80,24 @@ public struct SearchResult: Sendable, Equatable, Identifiable {
 // MARK: - Comparable
 
 extension SearchResult: Comparable {
+    /// Relevance used for ordering: the semantic score when present, else the score.
+    ///
+    /// Ordering deliberately does *not* use `relevancePercent`. That value is clamped
+    /// to 100 and rounded to an Int for display, so every result scoring above the RRF
+    /// normalization ceiling (~0.0164) collapsed into the same bucket and compared as
+    /// equal — a 0.9 and a 0.8 result sorted arbitrarily.
+    private var relevance: Float {
+        semanticScore ?? score
+    }
+
+    /// Orders results best-first, so `sorted()` yields ranking order directly.
     public static func < (lhs: SearchResult, rhs: SearchResult) -> Bool {
-        // Sort by displayed relevance percentage for consistency with UI
-        // (relevancePercent prefers semanticScore when available)
-        lhs.relevancePercent > rhs.relevancePercent
+        if lhs.relevance != rhs.relevance {
+            return lhs.relevance > rhs.relevance
+        }
+        // Break ties on identity so ordering is deterministic rather than dependent
+        // on the sort's input order.
+        return lhs.chunk.id < rhs.chunk.id
     }
 }
 
