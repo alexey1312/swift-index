@@ -28,7 +28,8 @@ struct InstallCodexCommand: ParsableCommand {
         command = "/path/to/swiftindex"
         args = ["serve"]
         cwd = "/path/to/project"  # Only for project-local installs
-        """
+        """,
+        shouldDisplay: false
     )
 
     // MARK: - Options

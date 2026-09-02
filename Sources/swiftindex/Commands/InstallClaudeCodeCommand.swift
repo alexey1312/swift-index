@@ -33,7 +33,8 @@ struct InstallClaudeCodeCommand: ParsableCommand {
             }
           }
         }
-        """
+        """,
+        shouldDisplay: false
     )
 
     // MARK: - Options

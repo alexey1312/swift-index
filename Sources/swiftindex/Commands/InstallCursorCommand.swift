@@ -33,7 +33,8 @@ struct InstallCursorCommand: ParsableCommand {
             }
           }
         }
-        """
+        """,
+        shouldDisplay: false
     )
 
     // MARK: - Options

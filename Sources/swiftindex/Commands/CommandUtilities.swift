@@ -71,6 +71,16 @@ enum CLIUtils {
     ///
     /// - Parameter explicitPath: Optional explicit path override (from `--binary-path`).
     /// - Returns: Resolved path with metadata about the source and dev build status.
+    /// Whether an executable is reachable on the user's PATH.
+    static func isExecutableOnPath(_ name: String) -> Bool {
+        guard let pathVariable = ProcessInfo.processInfo.environment["PATH"] else { return false }
+        return pathVariable
+            .split(separator: ":")
+            .contains { directory in
+                FileManager.default.isExecutableFile(atPath: "\(directory)/\(name)")
+            }
+    }
+
     static func resolveExecutablePath(explicitPath: String? = nil) -> ExecutablePathResult {
         let fm = FileManager.default
 
