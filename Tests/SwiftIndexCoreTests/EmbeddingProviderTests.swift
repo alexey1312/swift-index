@@ -638,7 +638,7 @@ struct EmbeddingProviderRegistryTests {
 
         #expect(mlx != nil)
         #expect(mlx?.name == "MLX Embeddings")
-        #expect(mlx?.dimension == 768)
+        #expect(mlx?.dimension == 1024) // MLXEmbeddingProvider() defaults to Qwen3-Embedding-0.6B
         #expect(mlx?.providerType == .local)
         #expect(mlx?.modelId != nil)
     }

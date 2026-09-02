@@ -244,7 +244,7 @@ actor SearchTestMockEmbeddingProvider: EmbeddingProvider {
         var vector = [Float](repeating: 0, count: dimension)
         let hash = stableTestHash(text)
         for i in 0 ..< dimension {
-            vector[i] = Float((hash &+ i * 31) % 1000) / 1000.0
+            vector[i] = Float((hash &+ UInt64(i) * 31) % 1000) / 1000.0
         }
         return vector
     }
