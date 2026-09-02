@@ -332,6 +332,9 @@ let object = try JSONCodec.deserialize(data)
 
 ### MLX Release Artifacts
 
+- MLX needs `default.metallib`; without it MLX-C's error handler calls `exit(-1)` and
+  kills the process. `MLXRuntime.isMetalLibraryAvailable` checks for it first, so a
+  build without one reports MLX as unavailable and falls back to Swift Embeddings.
 - `./bin/mise run build:release` runs `scripts/build-mlx-metallib` to create
   `default.metallib` and `mlx.metallib` next to the release binary.
 - Release builds disable Whole-Module Optimization to avoid swift-frontend

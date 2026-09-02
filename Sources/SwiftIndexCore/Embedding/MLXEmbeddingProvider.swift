@@ -108,6 +108,12 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     public func isAvailable() async -> Bool {
         // Check for Apple Silicon
         #if arch(arm64) && os(macOS) && canImport(MLX) && canImport(MLXEmbedders)
+            // Without a Metal library any MLX call exits the process, so treat a
+            // build that lacks one as "MLX unavailable" and fall back instead.
+            guard MLXRuntime.isMetalLibraryAvailable else {
+                return false
+            }
+
             // Verify MLX can be initialized
             do {
                 try await modelManager.ensureModelLoaded()
@@ -122,8 +128,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
 
     public func isReady() async -> Bool {
         #if arch(arm64) && os(macOS) && canImport(MLX) && canImport(MLXEmbedders)
-            // No model load, so no download: just check the model is already cached.
-            return HubModelManager.isRepoCached(modelId)
+            // No model load, so no download: just check the model is already cached
+            // and that MLX has a Metal library to run with.
+            return MLXRuntime.isMetalLibraryAvailable && HubModelManager.isRepoCached(modelId)
         #else
             return false
         #endif
@@ -137,6 +144,7 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         #if !arch(arm64) || !os(macOS) || !canImport(MLX) || !canImport(MLXEmbedders)
             throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS with mlx-swift-lm")
         #else
+            try Self.requireMetalLibrary()
             return try await modelManager.embed(text)
         #endif
     }
@@ -153,8 +161,21 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
         #if !arch(arm64) || !os(macOS) || !canImport(MLX) || !canImport(MLXEmbedders)
             throw ProviderError.notAvailable(reason: "MLX requires Apple Silicon (arm64) on macOS with mlx-swift-lm")
         #else
+            try Self.requireMetalLibrary()
             return try await modelManager.embedBatch(texts, maxBatchSize: maxBatchSize)
         #endif
+    }
+
+    // MARK: - Helpers
+
+    /// Fails before any MLX call when the build has no Metal library to load.
+    private static func requireMetalLibrary() throws {
+        guard MLXRuntime.isMetalLibraryAvailable else {
+            throw ProviderError.notAvailable(
+                reason: "MLX has no Metal library. Build one with scripts/build-mlx-metallib "
+                    + "or use the released binary, which ships it."
+            )
+        }
     }
 }
 
