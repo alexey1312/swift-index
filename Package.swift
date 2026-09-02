@@ -49,9 +49,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.9.0"),
         .package(url: "https://github.com/tuist/Noora.git", from: "0.54.0"),
 
-        // Async utilities
-        .package(url: "https://github.com/apple/swift-async-algorithms.git", from: "1.1.0"),
-
         // Collections
         .package(url: "https://github.com/apple/swift-collections.git", from: "1.1.0"),
 
@@ -105,7 +102,6 @@ let package = Package(
 
                 // Utilities
                 .product(name: "Logging", package: "swift-log"),
-                .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
 
                 // JSON codec
                 .product(name: "YYJSON", package: "swift-yyjson"),
