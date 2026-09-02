@@ -16,7 +16,7 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
     // MARK: - Properties
 
     /// The database writer (can be DatabasePool or DatabaseQueue).
-    private let dbWriter: any DatabaseWriter
+    let dbWriter: any DatabaseWriter
 
     /// The path to the database file.
     public let databasePath: String
@@ -82,8 +82,30 @@ public actor GRDBChunkStore: ChunkStore, InfoSnippetStore {
         registerConformancesMigration(&migrator)
         registerTypeDeclarationMigration(&migrator)
         registerTokenizerFixMigration(&migrator)
+        registerFileStatPrefilterMigration(&migrator)
+        registerSymbolGraphMigration(&migrator)
 
         try migrator.migrate(dbWriter)
+    }
+
+    /// Adds size and mtime to `file_hashes` so reconciliation can skip unchanged
+    /// files without reading them.
+    ///
+    /// Both columns are nullable with no backfill: existing rows read as NULL, which
+    /// the reconciler treats as "must hash", so the first run after upgrading fills
+    /// them in. That avoids a long migration and a forced reindex.
+    private nonisolated func registerFileStatPrefilterMigration(
+        _ migrator: inout DatabaseMigrator
+    ) {
+        migrator.registerMigration("v10_file_stat_prefilter") { db in
+            try db.alter(table: "file_hashes") { table in
+                table.add(column: "size", .integer)
+                // Nanoseconds, not a Double of timeIntervalSince1970: APFS timestamps
+                // are nanosecond-resolution and the rounding would produce spurious
+                // "changed" verdicts on stable files.
+                table.add(column: "mtime_ns", .integer)
+            }
+        }
     }
 
     private nonisolated func registerInitialMigration(

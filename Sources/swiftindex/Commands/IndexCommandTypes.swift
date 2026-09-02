@@ -15,6 +15,8 @@ struct IndexingContext: Sendable {
     let descriptionState: DescriptionGenerationState
     let descriptionProgress: DescriptionProgressCallback?
     let projectPath: String
+    /// Nil when graph building is disabled.
+    let graphBuilder: GraphBuilder?
     let logger: Logger
 }
 

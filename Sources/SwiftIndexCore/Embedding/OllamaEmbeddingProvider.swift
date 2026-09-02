@@ -65,6 +65,24 @@ public struct OllamaEmbeddingProvider: EmbeddingProvider, Sendable {
 
     // MARK: - EmbeddingProvider
 
+    /// Readiness for a local server is a network question, but a *cheap* one.
+    ///
+    /// Kept separate from `isAvailable()` so the timeout can be short: diagnostics
+    /// should not stall for seconds per provider just to report availability.
+    public func isReady() async -> Bool {
+        let versionURL = baseURL.appendingPathComponent("api/version")
+        var request = URLRequest(url: versionURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 1
+
+        guard let (_, response) = try? await session.data(for: request),
+              let httpResponse = response as? HTTPURLResponse
+        else {
+            return false
+        }
+        return httpResponse.statusCode == 200
+    }
+
     public func isAvailable() async -> Bool {
         // Check if Ollama server is running by hitting the API endpoint
         let versionURL = baseURL.appendingPathComponent("api/version")

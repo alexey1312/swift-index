@@ -64,48 +64,43 @@ swiftindex providers  # Check available embedding providers
 ### Install for AI Assistants
 
 ```bash
-# Claude Code (project-local .mcp.json)
-swiftindex install-claude-code
-
-# Claude Code (global ~/.claude.json)
-swiftindex install-claude-code --global
-
-# Gemini CLI (project-local .gemini.json)
-swiftindex install-gemini
-
-# Gemini CLI (global ~/.gemini.json)
-swiftindex install-gemini --global
-
-# Cursor (project-local .cursor/mcp.json)
-swiftindex install-cursor
-
-# Codex (project-local entry in ~/.codex/config.toml with cwd)
-swiftindex install-codex
+swiftindex install            # detect installed agents and configure them all
+swiftindex install --list     # show what was detected, change nothing
+swiftindex install --global   # write user-wide instead of project-local config
+swiftindex install --dry-run  # show what would change
 ```
 
-By default, install commands create a project-local configuration.
-For Cursor, the project-local entry is written to `.cursor/mcp.json`.
-For Codex, the project-local entry is written to `~/.codex/config.toml` with `cwd`.
-Use `--global` to install to the user-wide configuration file instead.
+Supports Claude Code, Cursor, Codex CLI, Gemini CLI, Claude Desktop, VS Code and
+Windsurf. Use `--agent <id>` to pick specific ones, or `--all` to configure every
+known agent whether or not it was detected.
+
+Configuration is project-local by default; `--global` writes the user-wide file.
+Existing configs are backed up to `<path>.swiftindex.bak` before being modified.
 
 ## Quick Start
 
-### 1. Initialize a Project
+No configuration file is needed — SwiftIndex runs on built-in defaults.
+
+### 1. Index the Codebase
 
 ```bash
 cd /path/to/your/swift/project
+swiftindex index
+```
+
+The first run downloads an embedding model (~87 MB for the default CPU provider).
+Run `swiftindex status` at any point to see the resolved provider, index health and
+whether the index has fallen behind the working tree.
+
+### 2. Optional: Write a Config File
+
+```bash
 swiftindex init
 ```
 
-This creates a `.swiftindex.toml` configuration file.
-
-**For Claude Code Pro/Max users**: Select "Claude Code OAuth (Pro/Max)" during init wizard to automatically set up secure OAuth authentication via Keychain.
-
-### 2. Index the Codebase
-
-```bash
-swiftindex index .
-```
+Only needed to pin a provider or override defaults. **For Claude Code Pro/Max
+users**: select "Claude Code OAuth (Pro/Max)" during the wizard to set up OAuth
+authentication via Keychain.
 
 ### 3. Search
 
@@ -388,56 +383,62 @@ Example `CLAUDE.md`:
 
 ## Configuration
 
-SwiftIndex uses TOML configuration files. Create `.swiftindex.toml` in your project root:
+**No configuration is required.** SwiftIndex runs on built-in defaults, so
+`swiftindex index` works in any project without setup. Create `.swiftindex.toml`
+only to override something:
 
 ```toml
-# .swiftindex.toml
-
-[index]
-# Directories to scan
-include = ["Sources", "Tests"]
-
-# Patterns to exclude
-exclude = [
-    ".build",
-    "Pods",
-    "Carthage",
-    "DerivedData"
-]
-
-# File extensions to index
-extensions = ["swift", "m", "mm", "h", "c", "cpp"]
+# .swiftindex.toml — every key is optional
 
 [embedding]
-# Embedding provider: "mlx", "swift" (alias: swift-embeddings), "ollama", "openai", "voyage"
-provider = "mlx"
-
-# Model to use (provider-specific)
-model = "mlx-community/bge-small-en-v1.5-4bit"
-
-# Vector dimension
+# "auto" (default) prefers MLX when it is ready, otherwise swift-embeddings.
+# Also: "mlx", "swift-embeddings", "ollama", "openai", "voyage", "gemini".
+provider = "auto"
+model = "all-MiniLM-L6-v2"
 dimension = 384
 
+[indexing]
+# Extra patterns to exclude. Supports globs (*.xcodeproj) and matches
+# repo-relative paths.
+exclude = [".git", ".build", "DerivedData", "Pods", "*.xcodeproj"]
+
+# Extensions to index. Empty means every extension the parsers support.
+include_extensions = []
+
+# Also honour the project's root .gitignore (default: true).
+respect_gitignore = true
+
+max_file_size = 1000000
+chunk_size = 1500
+chunk_overlap = 200
+
 [search]
-# Default number of results
 limit = 20
-
-# Semantic weight for hybrid search (0.0-1.0)
 semantic_weight = 0.7
-
-# RRF fusion constant
 rrf_k = 60
+output_format = "toon"   # toon (token-optimized), human, or json
 
-# Output format: toon (token-optimized), human, or json
-output_format = "toon"
+[auto_index]
+# Reconcile the index against the working tree on the first tool call of a
+# session, so edits made while no server was running are picked up.
+enabled = true
+reconcile_on_connect = true
+# Above this many changed files, report staleness instead of blocking a search.
+sync_threshold = 25
 
 [storage]
-# Index storage location
-directory = ".swiftindex"
+index_path = ".swiftindex"
+cache_path = "~/.cache/swiftindex"
+
+[watch]
+debounce_ms = 500
 ```
 
+Run `swiftindex status` to see which configuration is actually in effect, which
+provider was resolved, and whether the index is up to date.
+
 API keys for cloud providers are read from environment variables:
-`VOYAGE_API_KEY` and `OPENAI_API_KEY`.
+`VOYAGE_API_KEY`, `OPENAI_API_KEY` and `GEMINI_API_KEY`.
 
 ### Configuration Priority
 

@@ -39,14 +39,15 @@
 | `swiftindex auth status`         | Check OAuth token status                |
 | `swiftindex auth login`          | Set up Claude Code OAuth token          |
 | `swiftindex auth logout`         | Remove OAuth token from Keychain        |
-| `swiftindex install-claude-code` | Configure Claude Code                   |
-| `swiftindex install-cursor`      | Configure Cursor                        |
-| `swiftindex install-codex`       | Configure Codex                         |
+| `swiftindex status`              | Show config, index and freshness status |
+| `swiftindex install`             | Configure all detected AI agents        |
 | `swiftindex parse-tree <PATH>`   | Visualize Swift AST structure           |
 
-**Getting Started**: Run `swiftindex init` first to create `.swiftindex.toml`, then
-`swiftindex index` to build the search index. If you run `index` without a config,
-it will prompt you to initialize first.
+**Getting Started**: No configuration is required — `swiftindex index` runs on
+built-in defaults. `swiftindex init` is optional and only writes a `.swiftindex.toml`
+to pin settings. Use `swiftindex status` to see the resolved configuration, index
+health and freshness, and `swiftindex install` to register the MCP server with any
+installed AI agents.
 
 ### Authentication Commands
 

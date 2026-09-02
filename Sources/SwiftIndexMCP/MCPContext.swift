@@ -17,6 +17,13 @@ public actor MCPContext {
     // MARK: - Properties
 
     private var indexManagers: [String: IndexManager] = [:]
+
+    /// Cached resolution of the embedding provider, including its dimension.
+    private var resolvedEmbedding: ResolvedEmbedding?
+
+    /// Freshness already established for a path this session, so the scan runs once
+    /// per path but its verdict keeps being reported.
+    private var freshnessByPath: [String: StalenessInfo] = [:]
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
     private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
@@ -62,7 +69,7 @@ public actor MCPContext {
         let config = try TOMLConfigLoader.loadLayered(
             env: envConfig,
             projectDirectory: resolvedPath,
-            requireInitialization: true
+            requireInitialization: false
         )
         logger.debug("Loaded config for: \(resolvedPath)")
 
@@ -78,91 +85,23 @@ public actor MCPContext {
             return existing
         }
 
-        let provider = try createEmbeddingProvider(config: config)
-        embeddingProvider = provider
-        return provider
+        let resolved = try await EmbeddingProviderFactory.resolve(config: config, logger: logger)
+        resolvedEmbedding = resolved
+        embeddingProvider = resolved.chain
+        return resolved.chain
     }
 
-    private func createEmbeddingProvider(config: Config) throws -> EmbeddingProviderChain {
-        switch config.embeddingProvider.lowercased() {
-        case "mock":
-            logger.debug("Creating mock embedding provider")
-            return EmbeddingProviderChain(
-                providers: [MockEmbeddingProvider()],
-                id: "mock-chain",
-                name: "Mock Embeddings"
-            )
-
-        case "mlx":
-            logger.debug("Creating MLX embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    MLXEmbeddingProvider(
-                        huggingFaceId: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "mlx-chain",
-                name: "MLX with Swift Embeddings fallback"
-            )
-
-        case "swift-embeddings", "swift", "swiftembeddings":
-            logger.debug("Creating Swift Embeddings provider")
-            return EmbeddingProviderChain.softwareOnly
-
-        case "ollama":
-            logger.debug("Creating Ollama embedding provider")
-            return EmbeddingProviderChain(
-                providers: [
-                    OllamaEmbeddingProvider(
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    ),
-                    SwiftEmbeddingsProvider(),
-                ],
-                id: "ollama-chain",
-                name: "Ollama with fallback"
-            )
-
-        case "voyage":
-            logger.debug("Creating Voyage AI embedding provider")
-            if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        VoyageProvider(
-                            apiKey: apiKey,
-                            modelName: config.embeddingModel,
-                            dimension: config.embeddingDimension
-                        ),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "voyage-chain",
-                    name: "Voyage AI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
-            }
-
-        case "openai":
-            logger.debug("Creating OpenAI embedding provider")
-            if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain(
-                    providers: [
-                        OpenAIProvider(apiKey: apiKey),
-                        SwiftEmbeddingsProvider(),
-                    ],
-                    id: "openai-chain",
-                    name: "OpenAI with fallback"
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "OpenAI")
-            }
-
-        default:
-            logger.debug("Using default provider chain")
-            return EmbeddingProviderChain.default
+    /// Get the fully resolved embedding selection (provider id, model, dimension).
+    public func getResolvedEmbedding(config: Config) async throws -> ResolvedEmbedding {
+        if let resolvedEmbedding {
+            return resolvedEmbedding
         }
+        _ = try await getEmbeddingProvider(config: config)
+        // `getEmbeddingProvider` populates the cache.
+        guard let resolvedEmbedding else {
+            throw ProviderError.notAvailable(reason: "Embedding provider could not be resolved")
+        }
+        return resolvedEmbedding
     }
 
     // MARK: - Index Manager
@@ -362,5 +301,131 @@ public actor MCPContext {
 
         return (FileManager.default.currentDirectoryPath as NSString)
             .appendingPathComponent(path)
+    }
+
+    // MARK: - Freshness
+
+    /// Brings the index for `basePath` in line with the working tree, once per session.
+    ///
+    /// stdio MCP servers are started and killed constantly, and nothing watches the
+    /// tree in between. Without this, edits made while no server was running stay
+    /// invisible until someone reindexes by hand. Running it lazily on the first tool
+    /// call that touches a path keeps the cost off startup.
+    ///
+    /// - Returns: What remains stale after the cheap work has been applied.
+    public func ensureFreshness(for basePath: String, config: Config) async -> StalenessInfo {
+        guard config.autoIndex.enabled, config.autoIndex.reconcileOnConnect else {
+            return .clean
+        }
+
+        let resolvedPath = resolvePath(basePath)
+        // Return the cached verdict rather than `.clean`: a deferred branch-switch
+        // catch-up must keep being reported for the rest of the session, not warned
+        // about exactly once and then silently forgotten.
+        if let cached = freshnessByPath[resolvedPath] {
+            return cached
+        }
+        // Record before the work so a throw cannot cause an unbounded rescan loop.
+        freshnessByPath[resolvedPath] = .clean
+
+        do {
+            let indexManager = try await getIndexManager(for: resolvedPath, config: config)
+            let reconciler = IndexReconciler(logger: logger)
+            let report = try await reconciler.reconcile(
+                path: resolvedPath,
+                config: config,
+                chunkStore: indexManager.chunkStore
+            )
+
+            var info = StalenessInfo()
+
+            // Deletions and stat refreshes are pure database work with no embedding
+            // cost, so they are always applied in full. Stale results pointing at
+            // files that no longer exist are the most misleading failure mode.
+            let removedChunks = try await reconciler.applyDeletionsAndTouches(
+                report,
+                indexManager: indexManager
+            )
+            info.removedFiles = report.deleted.count
+
+            if report.changed.isEmpty {
+                logger.debug("Index is up to date", metadata: [
+                    "path": "\(resolvedPath)",
+                    "scanned": "\(report.scanned)",
+                    "removedChunks": "\(removedChunks)",
+                ])
+                freshnessByPath[resolvedPath] = info
+                return info
+            }
+
+            // A large delta almost always means a branch switch. Re-embedding
+            // hundreds of files inside the first tool call would blow the client's
+            // timeout, so report staleness instead and let an explicit reindex catch
+            // up.
+            guard report.changed.count <= config.autoIndex.syncThreshold else {
+                info.dirtyPaths = Set(report.changed.map(\.path))
+                info.deferredCatchUp = true
+                logger.info("Deferring catch-up for large change set", metadata: [
+                    "path": "\(resolvedPath)",
+                    "changed": "\(report.changed.count)",
+                ])
+                freshnessByPath[resolvedPath] = info
+                return info
+            }
+
+            let resolved = try await getResolvedEmbedding(config: config)
+            let indexer = IncrementalIndexer(
+                indexManager: indexManager,
+                embeddingProvider: resolved.chain,
+                config: config,
+                logger: logger
+            )
+
+            for entry in report.changed {
+                do {
+                    try await indexer.indexFile(at: entry.path)
+
+                    // indexFile returns without error when a file merely fails to
+                    // parse (a mid-edit syntax error), leaving the old chunks in
+                    // place. Confirm the file is genuinely current rather than
+                    // reporting a clean session while serving stale content.
+                    var stillStale = false
+                    if let contents = try? String(contentsOfFile: entry.path, encoding: .utf8) {
+                        stillStale = try await indexManager.needsIndexing(
+                            path: entry.path,
+                            fileHash: FileHasher.hash(contents)
+                        )
+                    }
+
+                    if stillStale {
+                        info.dirtyPaths.insert(entry.path)
+                    } else {
+                        info.refreshedFiles += 1
+                    }
+                } catch {
+                    // Keep going: one unreadable file must not block the session.
+                    info.dirtyPaths.insert(entry.path)
+                    logger.warning("Catch-up failed for file", metadata: [
+                        "path": "\(entry.path)",
+                        "error": "\(error.localizedDescription)",
+                    ])
+                }
+            }
+            await indexer.flushPendingSave()
+
+            freshnessByPath[resolvedPath] = info
+            return info
+        } catch {
+            logger.debug("Freshness check skipped", metadata: [
+                "path": "\(resolvedPath)",
+                "error": "\(error.localizedDescription)",
+            ])
+            return .clean
+        }
+    }
+
+    /// Forgets reconciliation state, so the next tool call rescans.
+    public func resetFreshness() {
+        freshnessByPath.removeAll()
     }
 }

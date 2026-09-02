@@ -53,7 +53,8 @@ public actor FileWatcher {
     public let extensions: Set<String>
 
     /// Paths to exclude from watching.
-    public let excludePatterns: [String]
+    /// Compiled exclusion rules, shared with the indexer's file collection.
+    private let ignoreRules: IgnoreRules
 
     /// Logger for debugging.
     private let logger: Logger
@@ -90,19 +91,30 @@ public actor FileWatcher {
     ///   - path: Directory to watch.
     ///   - debounceMs: Time to wait before emitting events. Default is 500.
     ///   - extensions: File extensions to watch. Empty means all.
-    ///   - excludePatterns: Paths containing these strings are ignored.
+    ///   - excludePatterns: Exclude patterns, compiled into `IgnoreRules`.
+    ///   - respectGitignore: Whether the root `.gitignore` also excludes files.
     ///   - logger: Logger for debugging.
     public init(
         path: String,
         debounceMs: Int = 500,
         extensions: Set<String> = [],
         excludePatterns: [String] = [".git", ".build", "DerivedData"],
+        respectGitignore: Bool = true,
         logger: Logger = Logger(label: "FileWatcher")
     ) {
-        watchPath = (path as NSString).standardizingPath
+        let resolvedPath = FileCollector.canonicalPath((path as NSString).standardizingPath)
+        watchPath = resolvedPath
         self.debounceMs = debounceMs
         self.extensions = extensions
-        self.excludePatterns = excludePatterns
+        // Share the indexer's exclusion semantics. A substring test would both miss
+        // glob patterns and suppress every event for a project rooted under a path
+        // containing an excluded name; worse, any disagreement with FileCollector
+        // makes reconciliation treat watched-but-uncollected files as deleted.
+        ignoreRules = IgnoreRules(
+            patterns: excludePatterns,
+            rootPath: resolvedPath,
+            respectGitignore: respectGitignore
+        )
         self.logger = logger
     }
 
@@ -269,16 +281,17 @@ public actor FileWatcher {
     }
 
     private func handleEvent(path: String, flags: FSEventStreamEventFlags) {
-        // Check if path should be excluded
-        for pattern in excludePatterns {
-            if path.contains(pattern) {
-                return
-            }
+        // Check if path should be excluded, against the repo-relative path.
+        let relative = FileCollector.relativePath(of: URL(fileURLWithPath: path), from: watchPath)
+        if ignoreRules.isIgnored(relativePath: relative, isDirectory: false) {
+            return
         }
 
-        // Check extension filter
+        // Check extension filter. Lowercased to match how the indexer collects files
+        // (`FileCollector`) and how parsers declare `supportedExtensions`; otherwise
+        // `README.MD` would be indexed but never watched.
         if !extensions.isEmpty {
-            let ext = (path as NSString).pathExtension
+            let ext = (path as NSString).pathExtension.lowercased()
             if !extensions.contains(ext) {
                 return
             }

@@ -26,6 +26,18 @@ public protocol EmbeddingProvider: Sendable {
     /// - Model availability
     func isAvailable() async -> Bool
 
+    /// Whether this provider can be used *right now* without any network I/O.
+    ///
+    /// `isAvailable()` is allowed to load — and therefore download — a model as a
+    /// side effect of answering. That makes it unusable for diagnostics: asking
+    /// "which providers work?" must not cost a multi-hundred-megabyte download.
+    /// `isReady()` answers the cheaper question: is the hardware/OS supported and
+    /// is the model already on disk?
+    ///
+    /// Defaults to `isAvailable()` for providers with no local model to cache
+    /// (API-backed providers, mocks).
+    func isReady() async -> Bool
+
     /// Generate an embedding vector for a single text.
     ///
     /// - Parameter text: The text to embed.
@@ -47,6 +59,11 @@ public protocol EmbeddingProvider: Sendable {
 // MARK: - Default Implementation
 
 public extension EmbeddingProvider {
+    /// Providers without a locally cached model are ready whenever they are available.
+    func isReady() async -> Bool {
+        await isAvailable()
+    }
+
     func embed(_ texts: [String]) async throws -> [[Float]] {
         var results: [[Float]] = []
         results.reserveCapacity(texts.count)

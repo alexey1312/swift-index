@@ -20,7 +20,8 @@ struct InstallGeminiCommand: ParsableCommand {
 
         By default, creates a project-local .gemini.json in the current directory.
         Use --global to add to ~/.gemini.json for global availability.
-        """
+        """,
+        shouldDisplay: false
     )
 
     // MARK: - Options

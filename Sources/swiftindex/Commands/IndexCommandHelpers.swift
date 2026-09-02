@@ -5,91 +5,6 @@ import Foundation
 import Logging
 import SwiftIndexCore
 
-// MARK: - Provider Factory
-
-enum EmbeddingProviderFactory {
-    static func createProvider(
-        config: Config,
-        logger: Logger
-    ) throws -> EmbeddingProviderChain {
-        switch config.embeddingProvider.lowercased() {
-        case "mock":
-            logger.debug("Using mock embedding provider")
-            return EmbeddingProviderChain(
-                providers: [MockEmbeddingProvider()],
-                id: "mock-chain",
-                name: "Mock Embeddings"
-            )
-
-        case "mlx":
-            logger.debug("Using MLX embedding provider")
-            return EmbeddingProviderChain.single(
-                MLXEmbeddingProvider(
-                    huggingFaceId: config.embeddingModel,
-                    dimension: config.embeddingDimension
-                )
-            )
-
-        case "swift-embeddings", "swift", "swiftembeddings":
-            logger.debug("Using Swift Embeddings provider")
-            return EmbeddingProviderChain.softwareOnly
-
-        case "ollama":
-            logger.debug("Using Ollama embedding provider")
-            return EmbeddingProviderChain.single(
-                OllamaEmbeddingProvider(
-                    modelName: config.embeddingModel,
-                    dimension: config.embeddingDimension
-                )
-            )
-
-        case "voyage":
-            logger.debug("Using Voyage AI embedding provider")
-            if let apiKey = config.voyageAPIKey {
-                return EmbeddingProviderChain.single(
-                    VoyageProvider(
-                        apiKey: apiKey,
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    )
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Voyage AI")
-            }
-
-        case "openai":
-            logger.debug("Using OpenAI embedding provider")
-            if let apiKey = config.openAIAPIKey {
-                return EmbeddingProviderChain.single(OpenAIProvider(apiKey: apiKey))
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "OpenAI")
-            }
-
-        case "gemini":
-            logger.debug("Using Gemini embedding provider")
-            if let apiKey = config.geminiAPIKey {
-                return EmbeddingProviderChain.single(
-                    GeminiEmbeddingProvider(
-                        apiKey: apiKey,
-                        modelName: config.embeddingModel,
-                        dimension: config.embeddingDimension
-                    )
-                )
-            } else {
-                throw ProviderError.apiKeyMissing(provider: "Gemini")
-            }
-
-        case "auto":
-            logger.debug("Using auto provider selection")
-            return EmbeddingProviderChain.default
-
-        default:
-            logger.debug("Unknown provider '\(config.embeddingProvider)', using default chain")
-            return EmbeddingProviderChain.default
-        }
-    }
-}
-
 // MARK: - Description Generator Factory
 
 enum DescriptionGeneratorFactory {
@@ -132,77 +47,45 @@ enum DescriptionGeneratorFactory {
     }
 }
 
-// MARK: - File Collection
+// MARK: - Graph Recording
 
-enum FileCollector {
-    static func collectFiles(
-        at path: String,
-        config: Config,
-        parser: HybridParser,
-        logger: Logger
-    ) throws -> [String] {
-        var files: [String] = []
-        let fileManager = FileManager.default
+extension FileIndexer {
+    /// Records a file's symbols and references for the call graph.
+    static func recordGraphFacts(
+        path: String,
+        content: String,
+        fileHash: String,
+        chunks: [CodeChunk],
+        context: IndexingContext
+    ) async throws {
+        guard let graphBuilder = context.graphBuilder, path.hasSuffix(".swift") else { return }
 
-        guard let enumerator = fileManager.enumerator(
-            at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            throw ValidationError("Could not enumerate directory: \(path)")
-        }
+        let facts = SwiftGraphFactsExtractor.extract(
+            content: content,
+            path: path,
+            fileHash: fileHash,
+            module: GraphBuilder.inferModule(path: path, projectRoot: context.projectPath)
+        )
+        try await graphBuilder.record(facts: facts, chunks: chunks)
+    }
 
-        for case let fileURL as URL in enumerator {
-            let filePath = fileURL.path
+    /// Records graph facts for a file whose chunks are already current.
+    static func backfillGraphIfNeeded(
+        path: String,
+        content: String,
+        fileHash: String,
+        context: IndexingContext
+    ) async throws {
+        guard let graphBuilder = context.graphBuilder, path.hasSuffix(".swift") else { return }
+        guard await graphBuilder.needsBackfill(path: path) else { return }
 
-            // Check exclusion patterns
-            var shouldExclude = false
-            for pattern in config.excludePatterns {
-                if filePath.contains(pattern) {
-                    shouldExclude = true
-                    break
-                }
-            }
-
-            if shouldExclude {
-                continue
-            }
-
-            // Check if regular file
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-                  let isRegularFile = resourceValues.isRegularFile,
-                  isRegularFile
-            else {
-                continue
-            }
-
-            // Check file size
-            if let fileSize = resourceValues.fileSize, fileSize > config.maxFileSize {
-                logger.debug("Skipping large file: \(filePath) (\(fileSize) bytes)")
-                continue
-            }
-
-            // Check extension
-            let ext = fileURL.pathExtension.lowercased()
-
-            // If include extensions is specified, check against it
-            if !config.includeExtensions.isEmpty {
-                guard config.includeExtensions.contains(ext) ||
-                    config.includeExtensions.contains(".\(ext)")
-                else {
-                    continue
-                }
-            } else {
-                // Otherwise, check if parser supports the extension
-                guard parser.supportedExtensions.contains(ext) else {
-                    continue
-                }
-            }
-
-            files.append(filePath)
-        }
-
-        return files.sorted()
+        try await recordGraphFacts(
+            path: path,
+            content: content,
+            fileHash: fileHash,
+            chunks: [],
+            context: context
+        )
     }
 }
 
@@ -227,6 +110,11 @@ enum FileIndexer {
         if !force {
             let needsIndexing = try await context.indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
+                // Chunks are current, but the graph may not be: turning the graph on
+                // for an existing index would otherwise leave it empty until someone
+                // ran --force. Backfilling is cheap because it re-parses only files
+                // with no symbols recorded yet.
+                try await backfillGraphIfNeeded(path: path, content: content, fileHash: fileHash, context: context)
                 context.logger.debug("Skipping unchanged file: \(path)")
                 return FileIndexResult(chunksIndexed: 0, chunksReused: 0, skipped: true)
             }
@@ -263,6 +151,16 @@ enum FileIndexer {
             let contents = chunksToEmbed.map(\.content)
             return try await context.embeddingBatcher.embed(contents)
         }
+
+        // Record graph facts in the same pass that produced the chunks. Edges are
+        // written unresolved; names are resolved once the whole symbol table exists.
+        try await recordGraphFacts(
+            path: path,
+            content: content,
+            fileHash: fileHash,
+            chunks: chunks,
+            context: context
+        )
 
         // Index info snippets (documentation) if present
         let snippets = parseResult.snippets
@@ -352,7 +250,9 @@ enum FileIndexer {
                     tokenCount: chunk.tokenCount,
                     language: chunk.language,
                     contentHash: chunk.contentHash,
-                    generatedDescription: description
+                    generatedDescription: description,
+                    conformances: chunk.conformances,
+                    isTypeDeclaration: chunk.isTypeDeclaration
                 )
             }
             return chunk

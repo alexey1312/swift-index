@@ -769,3 +769,50 @@ struct TOMLConfigLoaderTests {
         #expect(result == true)
     }
 }
+
+// MARK: - Zero Configuration
+
+@Suite("Zero-config Tests")
+struct ZeroConfigTests {
+    @Test("Loading with no config files anywhere returns built-in defaults")
+    func noConfigFilesUsesDefaults() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("swiftindex-zeroconfig-\(UUID().uuidString)")
+        let project = root.appendingPathComponent("project")
+        let globalDir = root.appendingPathComponent("global")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: globalDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // The built-in defaults are a supported configuration: commands must run
+        // with no .swiftindex.toml at all, matching the configuration spec.
+        let config = try TOMLConfigLoader.loadLayered(
+            projectDirectory: project.path,
+            globalConfigDirectory: globalDir.path
+        )
+
+        #expect(config.embeddingProvider == Config().embeddingProvider)
+        #expect(config.indexPath == Config().indexPath)
+        #expect(config.respectGitignore)
+    }
+
+    @Test("requireInitialization still reports an uninitialized project when asked")
+    func explicitInitializationCheck() throws {
+        let root = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("swiftindex-zeroconfig-\(UUID().uuidString)")
+        let project = root.appendingPathComponent("project")
+        let globalDir = root.appendingPathComponent("global")
+        try FileManager.default.createDirectory(at: project, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: globalDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // Diagnostics still need to distinguish "no config" from "defaults".
+        #expect(throws: (any Error).self) {
+            try TOMLConfigLoader.loadLayered(
+                projectDirectory: project.path,
+                globalConfigDirectory: globalDir.path,
+                requireInitialization: true
+            )
+        }
+    }
+}

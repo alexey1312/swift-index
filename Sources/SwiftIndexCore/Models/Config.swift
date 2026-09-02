@@ -70,6 +70,15 @@ public struct Config: Sendable, Equatable {
     /// Maximum file size to index (bytes).
     public var maxFileSize: Int
 
+    /// Whether the project's root `.gitignore` also excludes files from indexing.
+    public var respectGitignore: Bool
+
+    /// Automatic index freshness settings.
+    public var autoIndex: AutoIndexConfig
+
+    /// Symbol graph settings.
+    public var graph: GraphConfig
+
     /// Target chunk size in characters.
     public var chunkSize: Int
 
@@ -140,6 +149,9 @@ public struct Config: Sendable, Equatable {
         excludePatterns: [String] = Config.defaultExcludePatterns,
         includeExtensions: [String] = [],
         maxFileSize: Int = 1_000_000,
+        respectGitignore: Bool = true,
+        autoIndex: AutoIndexConfig = AutoIndexConfig(),
+        graph: GraphConfig = GraphConfig(),
         chunkSize: Int = 1500,
         chunkOverlap: Int = 200,
         indexPath: String = ".swiftindex",
@@ -172,6 +184,9 @@ public struct Config: Sendable, Equatable {
         self.excludePatterns = excludePatterns
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
+        self.respectGitignore = respectGitignore
+        self.autoIndex = autoIndex
+        self.graph = graph
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
         self.indexPath = indexPath
@@ -205,8 +220,14 @@ public struct SearchEnhancementConfig: Sendable, Equatable {
     /// Configuration for deep synthesis operations.
     public var synthesis: LLMTierConfig
 
+    /// - Note: Disabled by default. Enhancement runs an LLM (MLX by default), which
+    ///   needs a multi-gigabyte model and, on Apple Silicon, the Metal libraries
+    ///   beside the binary. Enabling it by default made a plain `swiftindex index`
+    ///   abort with "Failed to load the default metallib" on any machine without
+    ///   them — the opposite of running on built-in defaults. The documentation and
+    ///   `SearchEnhancementConfig.default` both already described it as opt-in.
     public init(
-        enabled: Bool = true,
+        enabled: Bool = false,
         utility: LLMTierConfig = .defaultUtility,
         synthesis: LLMTierConfig = .defaultSynthesis
     ) {
@@ -320,6 +341,9 @@ public extension Config {
         applyIfPresent(partial.excludePatterns, to: \.excludePatterns)
         applyIfPresent(partial.includeExtensions, to: \.includeExtensions)
         applyIfPresent(partial.maxFileSize, to: \.maxFileSize)
+        applyIfPresent(partial.respectGitignore, to: \.respectGitignore)
+        applyIfPresent(partial.autoIndex, to: \.autoIndex)
+        applyIfPresent(partial.graph, to: \.graph)
         applyIfPresent(partial.chunkSize, to: \.chunkSize)
         applyIfPresent(partial.chunkOverlap, to: \.chunkOverlap)
         applyIfPresent(partial.indexPath, to: \.indexPath)
@@ -358,5 +382,37 @@ private protocol OptionalProtocol {
 extension Optional: OptionalProtocol {
     var isNil: Bool {
         self == nil
+    }
+}
+
+// MARK: - AutoIndexConfig
+
+/// Settings governing automatic index freshness.
+public struct AutoIndexConfig: Sendable, Equatable, Codable {
+    /// Master switch for automatic freshness in the MCP server.
+    public var enabled: Bool
+
+    /// Reconcile the index against the working tree when a session first touches it.
+    ///
+    /// This is what absorbs edits made while no server was running — another editor,
+    /// a branch switch, or simply a gap between sessions.
+    public var reconcileOnConnect: Bool
+
+    /// Maximum number of changed files re-indexed synchronously before the rest are
+    /// reported as stale and left to an explicit reindex.
+    ///
+    /// A large delta almost always means a branch switch. Blocking the first search
+    /// for minutes is worse than answering immediately and saying results may be out
+    /// of date.
+    public var syncThreshold: Int
+
+    public init(
+        enabled: Bool = true,
+        reconcileOnConnect: Bool = true,
+        syncThreshold: Int = 25
+    ) {
+        self.enabled = enabled
+        self.reconcileOnConnect = reconcileOnConnect
+        self.syncThreshold = syncThreshold
     }
 }

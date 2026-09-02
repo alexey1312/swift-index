@@ -894,6 +894,69 @@ struct USearchVectorStoreTests {
         #expect(detectedDimension == 384)
     }
 
+    @Test("Repeated saves round-trip and leave no staging files")
+    func repeatedSavesRoundTrip() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let path = tempDir.appendingPathComponent("vectors.usearch").path
+        let store = try USearchVectorStore(dimension: 8, path: path)
+
+        // Save repeatedly so the publish step exercises the overwrite path, which is
+        // what incremental indexing hits after every burst of edits.
+        for index in 0 ..< 3 {
+            try await store.add(
+                id: "vec-\(index)",
+                vector: (0 ..< 8).map { Float($0) * 0.1 + Float(index) }
+            )
+            try await store.save()
+        }
+
+        // Staging files must not be left behind.
+        #expect(!FileManager.default.fileExists(atPath: path + ".tmp"))
+        #expect(!FileManager.default.fileExists(atPath: path + ".mapping.tmp"))
+
+        // Reload into a fresh store and confirm every vector survived.
+        let reloaded = try USearchVectorStore(dimension: 8, path: path)
+        try await reloaded.load()
+
+        for index in 0 ..< 3 {
+            let present = try await reloaded.contains(id: "vec-\(index)")
+            #expect(present, "vec-\(index) should survive a save/load round-trip")
+        }
+        let count = try await reloaded.count()
+        #expect(count == 3)
+    }
+
+    @Test("Vectors can be added after loading a persisted index")
+    func addAfterLoad() async throws {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let path = tempDir.appendingPathComponent("vectors.usearch").path
+        let store = try USearchVectorStore(dimension: 8, path: path)
+        try await store.add(id: "first", vector: [Float](repeating: 0.1, count: 8))
+        try await store.save()
+
+        // Re-open and keep indexing, which is what every incremental reindex does.
+        // load() restores trackedCapacity from the mapping without reserving it on
+        // the underlying index, so this used to fail with USearch error 15.
+        let reloaded = try USearchVectorStore(dimension: 8, path: path)
+        try await reloaded.load()
+        try await reloaded.addBatch(
+            (0 ..< 5).map { (id: "added-\($0)", vector: [Float](repeating: Float($0), count: 8)) }
+        )
+
+        let count = try await reloaded.count()
+        #expect(count == 6)
+        let present = try await reloaded.contains(id: "added-4")
+        #expect(present)
+    }
+
     @Test("deleteIndex removes both files")
     func deleteIndexRemovesBothFiles() async throws {
         let tempDir = FileManager.default.temporaryDirectory

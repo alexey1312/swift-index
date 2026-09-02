@@ -492,70 +492,92 @@ public actor HybridSearchEngine: SearchEngine {
     ///   - options: Search configuration options.
     ///   - currentDepth: Current hop depth.
     /// - Returns: Additional results from multi-hop traversal.
+    /// Expands results along real graph edges.
+    ///
+    /// This previously ran a BM25 query for *every reference name* of the top results,
+    /// recursively — on the order of a hundred full-text searches plus hundreds of
+    /// point lookups per search. Worse, it was imprecise: any chunk merely containing
+    /// the word `count` was treated as a hop target. Traversing resolved edges is two
+    /// orders of magnitude fewer queries and follows actual call relationships,
+    /// including protocol-witness hops that text search cannot see.
+    ///
+    /// Falls back to no expansion when the graph has not been built, rather than
+    /// reverting to the text-matching behaviour.
     private func performMultiHop(
         initialResults: [SearchResult],
         options: SearchOptions,
         currentDepth: Int
     ) async throws -> [SearchResult] {
-        guard currentDepth <= options.multiHopDepth else {
+        guard currentDepth <= options.multiHopDepth,
+              let store = chunkStore as? GRDBChunkStore
+        else {
             return []
         }
 
+        let seedPaths = initialResults.prefix(5).map(\.chunk.path)
+        guard !seedPaths.isEmpty else { return [] }
+
+        // Symbols declared in the seed chunks are the traversal roots.
+        var rootIDs: [String] = []
+        for result in initialResults.prefix(5) {
+            guard let symbolName = result.chunk.symbols.first, !symbolName.isEmpty else { continue }
+            let symbols = try await store.findSymbols(matching: symbolName, limit: 3)
+            rootIDs.append(contentsOf: symbols.filter { $0.path == result.chunk.path }.map(\.id))
+        }
+        guard !rootIDs.isEmpty else { return [] }
+
+        let edges = try await store.neighbours(
+            of: rootIDs,
+            incoming: false,
+            kinds: [.calls, .initializes],
+            minConfidence: 0.5
+        )
+        guard !edges.isEmpty else { return [] }
+
         var hopResults: [SearchResult] = []
-        let seenIds = Set(initialResults.map(\.chunk.id))
+        let seenIDs = Set(initialResults.map(\.chunk.id))
+        var addedChunkIDs = Set<String>()
 
-        for result in initialResults.prefix(5) { // Limit hop sources
-            // Follow references from this chunk
-            for reference in result.chunk.references {
-                // Search for chunks containing this symbol
-                let refResults = try await bm25Search.searchRaw(
-                    query: reference,
-                    limit: 3
-                )
-
-                for (rank, refResult) in refResults.enumerated() {
-                    guard !seenIds.contains(refResult.id) else {
-                        continue
-                    }
-
-                    guard let chunk = try await chunkStore.get(id: refResult.id) else {
-                        continue
-                    }
-
-                    // Apply filters
-                    if let pathFilter = options.pathFilter {
-                        guard await globMatcher.matches(chunk.path, pattern: pathFilter) else {
-                            continue
-                        }
-                    }
-
-                    // Decay score based on hop depth
-                    let decayFactor = pow(0.7, Float(currentDepth))
-                    let hopScore = refResult.score * decayFactor
-
-                    let hopResult = SearchResult(
-                        chunk: chunk,
-                        score: hopScore,
-                        bm25Score: refResult.score,
-                        semanticScore: nil,
-                        bm25Rank: rank + 1,
-                        semanticRank: nil,
-                        isMultiHop: true,
-                        hopDepth: currentDepth
-                    )
-                    hopResults.append(hopResult)
-                }
+        for edge in edges {
+            guard let targetID = edge.targetID,
+                  let symbol = try await store.symbol(id: targetID),
+                  let chunkID = symbol.chunkID,
+                  !seenIDs.contains(chunkID),
+                  addedChunkIDs.insert(chunkID).inserted,
+                  let chunk = try await store.get(id: chunkID)
+            else {
+                continue
             }
+
+            if let pathFilter = options.pathFilter {
+                guard await globMatcher.matches(chunk.path, pattern: pathFilter) else { continue }
+            }
+
+            // Scaled against the seed's own score rather than used as an absolute.
+            // RRF-fused scores are small (order 0.01-0.3), so emitting a raw decay
+            // factor here would rank every hop above every genuine match.
+            let seedScore = initialResults.first?.score ?? 0.01
+            let decay = seedScore * pow(0.7, Float(currentDepth)) * Float(edge.confidence)
+
+            hopResults.append(SearchResult(
+                chunk: chunk,
+                score: decay,
+                bm25Score: nil,
+                semanticScore: nil,
+                bm25Rank: nil,
+                semanticRank: nil,
+                isMultiHop: true,
+                hopDepth: currentDepth
+            ))
         }
 
-        // Recursively follow more hops if configured
         if currentDepth < options.multiHopDepth, !hopResults.isEmpty {
-            let nextHopResults = try await performMultiHop(
+            let next = try await performMultiHop(
                 initialResults: hopResults,
                 options: options,
                 currentDepth: currentDepth + 1
             )
-            hopResults.append(contentsOf: nextHopResults)
+            hopResults.append(contentsOf: next)
         }
 
         return hopResults

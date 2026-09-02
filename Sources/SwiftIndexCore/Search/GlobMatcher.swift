@@ -25,8 +25,12 @@ import Foundation
 /// - `*` - matches any characters except path separator
 /// - `**` - matches any characters including path separators (recursive)
 /// - `**/` - matches zero or more directories
-/// - `?` - matches any single character
+/// - `?` - matches any single character except the path separator
 /// - `.` - literal dot (escaped automatically)
+///
+/// Patterns are matched against the whole path, but one that is neither absolute nor
+/// prefixed with `**/` may match after any number of leading directories — so
+/// `*.swift` matches `/src/file.swift`. Translation is delegated to `GlobPattern`.
 public actor GlobMatcher {
     /// Cached compiled regular expressions.
     private var cache: [String: NSRegularExpression] = [:]
@@ -82,10 +86,9 @@ public actor GlobMatcher {
             return cached
         }
 
-        // Convert glob to regex
-        let regexPattern = globToRegex(pattern)
-
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else {
+        // Search filters are written against absolute paths, so a bare pattern like
+        // "*.swift" is expected to match a file anywhere in the tree.
+        guard let regex = GlobPattern.compile(pattern, anchoring: .anyDirectoryPrefix) else {
             return nil
         }
 
@@ -100,17 +103,5 @@ public actor GlobMatcher {
         accessOrder.append(pattern)
 
         return regex
-    }
-
-    /// Converts a glob pattern to a regular expression.
-    private func globToRegex(_ pattern: String) -> String {
-        let regexPattern = pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-            .replacingOccurrences(of: "**", with: ".*")
-            .replacingOccurrences(of: "*", with: "[^/]*")
-            .replacingOccurrences(of: "?", with: ".")
-
-        return "^" + regexPattern + "$"
     }
 }

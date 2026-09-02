@@ -28,3 +28,11 @@
 
 @_exported import struct Foundation.Date
 @_exported import struct Foundation.URL
+
+// MARK: - Version
+
+/// The SwiftIndex version, substituted at release build time.
+public enum SwiftIndexVersion {
+    /// Current version string.
+    public static let current = "VERSION_PLACEHOLDER"
+}

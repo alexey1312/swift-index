@@ -417,43 +417,24 @@ public struct ParseTreeVisualizer: Sendable {
 // MARK: - Synchronous Glob Matcher
 
 /// A simple synchronous glob matcher for file filtering.
+/// Matches file paths against a glob, synchronously.
+///
+/// Delegates translation to `GlobPattern`; it previously carried its own converter
+/// built from sequential string substitutions, which rewrote the regex fragments its
+/// own earlier steps had emitted.
 private struct SyncGlobMatcher {
     func matches(_ path: String, pattern: String) throws -> Bool {
-        let regexPattern = globToRegex(pattern)
-        do {
-            let regex = try NSRegularExpression(pattern: regexPattern)
-            let range = NSRange(path.startIndex..., in: path)
-            return regex.firstMatch(in: path, range: range) != nil
-        } catch {
+        // Parse-tree patterns are written against absolute paths, so a bare pattern
+        // should match at any depth — the same convention as search's path filter.
+        guard let regex = GlobPattern.compile(pattern, anchoring: .anyDirectoryPrefix) else {
             throw ParseTreeError.invalidGlobPattern(
                 pattern: pattern,
-                reason: error.localizedDescription
+                reason: "Pattern could not be compiled"
             )
         }
-    }
 
-    private func globToRegex(_ pattern: String) -> String {
-        // Handle **/*.ext pattern specially - should match files at any depth including root
-        var processedPattern = pattern
-
-        // Replace **/ at start with optional path prefix (matches zero or more directories)
-        if processedPattern.hasPrefix("**/") {
-            processedPattern = String(processedPattern.dropFirst(3))
-            // The prefix can be empty (root) or any path
-            let suffix = globToRegexCore(processedPattern)
-            return "^(.*/)?" + suffix + "$"
-        }
-
-        return "^" + globToRegexCore(pattern) + "$"
-    }
-
-    private func globToRegexCore(_ pattern: String) -> String {
-        pattern
-            .replacingOccurrences(of: ".", with: "\\.")
-            .replacingOccurrences(of: "**/", with: "(.*/)?")
-            .replacingOccurrences(of: "**", with: ".*")
-            .replacingOccurrences(of: "*", with: "[^/]*")
-            .replacingOccurrences(of: "?", with: ".")
+        let range = NSRange(path.startIndex ..< path.endIndex, in: path)
+        return regex.firstMatch(in: path, range: range) != nil
     }
 }
 

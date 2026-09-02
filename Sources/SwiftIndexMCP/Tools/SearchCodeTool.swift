@@ -111,16 +111,7 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         do {
             // Get context and configuration
             let context = MCPContext.shared
-            let config: Config
-            do {
-                config = try await context.getConfig(for: path)
-            } catch ConfigError.notInitialized {
-                return .error("""
-                Project not initialized. No .swiftindex.toml found.
-
-                Run 'swiftindex init' in the project directory first.
-                """)
-            }
+            let config = try await context.getConfig(for: path)
 
             // Check if index exists
             guard await context.indexExists(for: path, config: config) else {
@@ -131,6 +122,9 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
                     """
                 )
             }
+
+            // Absorb edits made while nothing was watching, before answering.
+            let staleness = await context.ensureFreshness(for: path, config: config)
 
             // Create search engine
             let searchEngine = try await context.createSearchEngine(for: path, config: config)
@@ -221,11 +215,26 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
 
             let output: String = switch format {
             case "json":
-                formatResultsJSON(results: results, query: query, enhancement: enhancement)
+                formatResultsJSON(
+                    results: results,
+                    query: query,
+                    enhancement: enhancement,
+                    staleness: staleness
+                )
             case "human":
-                formatResultsHuman(results: results, query: query, enhancement: enhancement)
+                formatResultsHuman(
+                    results: results,
+                    query: query,
+                    enhancement: enhancement,
+                    staleness: staleness
+                )
             default:
-                formatResultsTOON(results: results, query: query, enhancement: enhancement)
+                formatResultsTOON(
+                    results: results,
+                    query: query,
+                    enhancement: enhancement,
+                    staleness: staleness
+                )
             }
 
             return .text(output)
@@ -258,7 +267,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
     private func formatResultsTOON(
         results: [SearchResult],
         query: String,
-        enhancement: EnhancementInfo = .empty
+        enhancement: EnhancementInfo = .empty,
+        staleness: StalenessInfo = .clean
     ) -> String {
         var output = "search{q,n}:\n"
         output += "  \"\(escapeString(query))\",\(results.count)\n\n"
@@ -378,6 +388,10 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             }
         }
 
+        if let block = StalenessRenderer.toon(staleness, resultPaths: results.map(\.chunk.path)) {
+            output += "\n" + block + "\n"
+        }
+
         return output
     }
 
@@ -390,7 +404,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
     private func formatResultsHuman(
         results: [SearchResult],
         query: String,
-        enhancement: EnhancementInfo = .empty
+        enhancement: EnhancementInfo = .empty,
+        staleness: StalenessInfo = .clean
     ) -> String {
         var output = "Search: \"\(query)\"\n"
         output += "Found \(results.count) results\n"
@@ -419,6 +434,10 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
         // Add follow-up suggestions if available
         if let followUps = enhancement.followUps, !followUps.isEmpty {
             output += formatFollowUpsHuman(followUps)
+        }
+
+        if let footer = StalenessRenderer.human(staleness, resultPaths: results.map(\.chunk.path)) {
+            output += footer + "\n"
         }
 
         return output
@@ -517,7 +536,8 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
     private func formatResultsJSON(
         results: [SearchResult],
         query: String,
-        enhancement: EnhancementInfo = .empty
+        enhancement: EnhancementInfo = .empty,
+        staleness: StalenessInfo = .clean
     ) -> String {
         var jsonResults: [[String: Any]] = []
 
@@ -564,6 +584,19 @@ public struct SearchCodeTool: MCPToolHandler, Sendable {
             "result_count": results.count,
             "results": jsonResults,
         ]
+
+        // Staleness is omitted entirely when the index is fresh, so a clean search
+        // pays nothing for the feature.
+        if !staleness.isClean {
+            let staleRanks = results.enumerated()
+                .filter { staleness.dirtyPaths.contains($0.element.chunk.path) }
+                .map { $0.offset + 1 }
+            output["staleness"] = [
+                "dirty_files": staleness.dirtyPaths.count,
+                "stale_result_ranks": staleRanks,
+                "catch_up_deferred": staleness.deferredCatchUp,
+            ]
+        }
 
         // Add expanded query info if available
         if let expanded = enhancement.expandedQuery {

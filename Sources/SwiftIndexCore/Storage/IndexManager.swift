@@ -210,7 +210,18 @@ public actor IndexManager {
     ///   - hash: The file content hash.
     ///   - path: The file path.
     public func recordIndexed(fileHash hash: String, path: String) async throws {
-        try await chunkStore.setFileHash(hash, forPath: path)
+        // Capture size and mtime alongside the hash so working-tree reconciliation
+        // can skip unchanged files without reading them.
+        let attributes = try? FileManager.default.attributesOfItem(atPath: path)
+        let size = (attributes?[.size] as? NSNumber)?.int64Value
+        let modified = FileCollector.nanoseconds(from: attributes?[.modificationDate] as? Date)
+
+        try await chunkStore.setFileStat(
+            hash,
+            size: size,
+            modifiedNanoseconds: modified == 0 ? nil : modified,
+            forPath: path
+        )
     }
 
     /// Reindex a file with content-based change detection.

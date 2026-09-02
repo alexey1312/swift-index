@@ -141,6 +141,8 @@ private struct TOMLConfig: Codable {
     var embedding: EmbeddingSection?
     var search: SearchSection?
     var indexing: IndexingSection?
+    var auto_index: AutoIndexSection?
+    var graph: GraphSection?
     var storage: StorageSection?
     var watch: WatchSection?
     var logging: LoggingSection?
@@ -187,6 +189,57 @@ private struct TOMLConfig: Codable {
         var chunk_size: Int?
         var chunk_overlap: Int?
         var max_concurrent_tasks: Int?
+        var respect_gitignore: Bool?
+    }
+
+    struct AutoIndexSection: Codable {
+        var enabled: Bool?
+        var reconcile_on_connect: Bool?
+        var sync_threshold: Int?
+    }
+
+    /// Builds the auto-index settings from its TOML section.
+    static func makeAutoIndexConfig(_ section: AutoIndexSection) -> AutoIndexConfig {
+        var config = AutoIndexConfig()
+        if let enabled = section.enabled {
+            config.enabled = enabled
+        }
+        if let reconcile = section.reconcile_on_connect {
+            config.reconcileOnConnect = reconcile
+        }
+        if let threshold = section.sync_threshold {
+            config.syncThreshold = threshold
+        }
+        return config
+    }
+
+    /// Builds the graph settings from its TOML section.
+    static func makeGraphConfig(_ section: GraphSection) -> GraphConfig {
+        var config = GraphConfig()
+        if let enabled = section.enabled {
+            config.enabled = enabled
+        }
+        if let fanout = section.max_fanout {
+            config.maxFanout = fanout
+        }
+        if let witness = section.max_witness_fanout {
+            config.maxWitnessFanout = witness
+        }
+        if let enabled = section.witness_fanout_enabled {
+            config.witnessFanoutEnabled = enabled
+        }
+        if let confidence = section.min_confidence {
+            config.minConfidence = confidence
+        }
+        return config
+    }
+
+    struct GraphSection: Codable {
+        var enabled: Bool?
+        var max_fanout: Int?
+        var max_witness_fanout: Int?
+        var witness_fanout_enabled: Bool?
+        var min_confidence: Double?
     }
 
     struct StorageSection: Codable {
@@ -269,7 +322,11 @@ private struct TOMLConfig: Codable {
             config.chunkSize = indexing.chunk_size
             config.chunkOverlap = indexing.chunk_overlap
             config.maxConcurrentTasks = indexing.max_concurrent_tasks
+            config.respectGitignore = indexing.respect_gitignore
         }
+
+        config.autoIndex = auto_index.map(Self.makeAutoIndexConfig)
+        config.graph = graph.map(Self.makeGraphConfig)
 
         // Storage section
         if let storage {
@@ -308,7 +365,9 @@ public extension TOMLConfigLoader {
     ///   - envConfig: Configuration from environment variables.
     ///   - projectDirectory: Path to the project root directory.
     ///   - globalConfigDirectory: Optional global config directory path. If nil, uses `~/.config/swiftindex`.
-    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config files exist.
+    ///   - requireInitialization: If true, throws `ConfigError.notInitialized` when no config
+    ///     files exist. Defaults to false: the built-in defaults are a supported
+    ///     configuration, so commands run without any config file.
     /// - Returns: Complete merged configuration.
     /// - Throws: `ConfigError.notInitialized` if `requireInitialization` is true and no config files exist.
     static func loadLayered(
@@ -316,7 +375,7 @@ public extension TOMLConfigLoader {
         env envConfig: PartialConfig = .empty,
         projectDirectory: String,
         globalConfigDirectory: String? = nil,
-        requireInitialization: Bool = true
+        requireInitialization: Bool = false
     ) throws -> Config {
         var partials: [PartialConfig] = [cliConfig, envConfig]
         var hasConfigFile = false

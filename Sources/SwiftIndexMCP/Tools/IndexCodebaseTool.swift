@@ -170,7 +170,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
 
         let parser = HybridParser()
-        let files = (try? collectFiles(at: path, config: config, parser: parser)) ?? []
+        let files = (try? FileCollector.collectFiles(at: path, config: config, parser: parser)) ?? []
         return files.count
     }
 
@@ -252,7 +252,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         if let taskId {
             await taskManager.updateIndexingProgress(taskId, progress: IndexingProgress(phase: .collecting))
         }
-        let files = try collectFiles(at: path, config: config, parser: parser)
+        let files = try FileCollector.collectFiles(at: path, config: config, parser: parser)
 
         // Index files
         var stats = IndexingStats()
@@ -357,72 +357,6 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             path: path,
             forced: force
         )
-    }
-
-    private func collectFiles(
-        at path: String,
-        config: Config,
-        parser: HybridParser
-    ) throws -> [String] {
-        var files: [String] = []
-        let fileManager = FileManager.default
-
-        guard let enumerator = fileManager.enumerator(
-            at: URL(fileURLWithPath: path),
-            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            throw MCPError.executionFailed("Could not enumerate directory: \(path)")
-        }
-
-        for case let fileURL as URL in enumerator {
-            let filePath = fileURL.path
-
-            // Check exclusion patterns
-            var shouldExclude = false
-            for pattern in config.excludePatterns {
-                if filePath.contains(pattern) {
-                    shouldExclude = true
-                    break
-                }
-            }
-
-            if shouldExclude {
-                continue
-            }
-
-            // Check if regular file
-            guard let resourceValues = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
-                  let isRegularFile = resourceValues.isRegularFile,
-                  isRegularFile
-            else {
-                continue
-            }
-
-            // Check file size
-            if let fileSize = resourceValues.fileSize, fileSize > config.maxFileSize {
-                continue
-            }
-
-            // Check extension
-            let ext = fileURL.pathExtension.lowercased()
-
-            if !config.includeExtensions.isEmpty {
-                guard config.includeExtensions.contains(ext) ||
-                    config.includeExtensions.contains(".\(ext)")
-                else {
-                    continue
-                }
-            } else {
-                guard parser.supportedExtensions.contains(ext) else {
-                    continue
-                }
-            }
-
-            files.append(filePath)
-        }
-
-        return files.sorted()
     }
 
     private func indexFile(
