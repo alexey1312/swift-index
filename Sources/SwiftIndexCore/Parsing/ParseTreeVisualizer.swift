@@ -9,6 +9,8 @@ import SwiftSyntax
 /// Errors that can occur during parse tree operations.
 public enum ParseTreeError: Error, Sendable, Equatable, LocalizedError {
     case invalidGlobPattern(pattern: String, reason: String)
+    case directoryNotFound(path: String)
+    case notADirectory(path: String)
     case directoryEnumerationFailed(path: String)
     case jsonEncodingFailed
 
@@ -16,6 +18,10 @@ public enum ParseTreeError: Error, Sendable, Equatable, LocalizedError {
         switch self {
         case let .invalidGlobPattern(pattern, reason):
             "Invalid glob pattern '\(pattern)': \(reason)"
+        case let .directoryNotFound(path):
+            "Directory does not exist: \(path)"
+        case let .notADirectory(path):
+            "Not a directory: \(path)"
         case let .directoryEnumerationFailed(path):
             "Failed to enumerate directory: \(path)"
         case .jsonEncodingFailed:
@@ -381,6 +387,18 @@ public struct ParseTreeVisualizer: Sendable {
     private func findMatchingFiles(in directory: String, pattern: String) throws -> [String] {
         let fileManager = FileManager.default
         let directoryURL = URL(fileURLWithPath: directory)
+
+        // `enumerator(at:)` returns a *non-nil* enumerator for a path that does not
+        // exist, and for one that is a regular file — it simply yields nothing. So the
+        // nil check below cannot report either case, and a typo'd path would come back
+        // as "no files matched" rather than as an error. Check explicitly first.
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: directory, isDirectory: &isDirectory) else {
+            throw ParseTreeError.directoryNotFound(path: directory)
+        }
+        guard isDirectory.boolValue else {
+            throw ParseTreeError.notADirectory(path: directory)
+        }
 
         guard let enumerator = fileManager.enumerator(
             at: directoryURL,

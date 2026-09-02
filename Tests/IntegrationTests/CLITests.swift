@@ -422,45 +422,63 @@ struct CLITests {
         #expect(stdout.contains("Indexing:"), "Should show indexing message")
     }
 
-    @Test("index command fails if config missing from working directory")
-    func indexCommandFailsWithoutConfigInWorkingDirectory() throws {
-        // Create working directory without config
+    @Test("index command does not read config from the target directory")
+    func indexCommandIgnoresConfigInTargetDirectory() throws {
+        // Config is resolved from the working directory, never from the path being
+        // indexed. This used to be asserted by requiring the command to *fail*
+        // without a config, but built-in defaults are now a supported configuration,
+        // so absence of a config file is no longer an error. The surviving intent —
+        // that a config inside the target directory is not silently picked up — is
+        // what this checks.
         let workDir = tempDir
         try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
         defer { cleanupFixtures(workDir) }
 
-        // Create subdirectory with config (but we should NOT find it there)
         let subDir = workDir.appendingPathComponent("subproject")
         try FileManager.default.createDirectory(at: subDir, withIntermediateDirectories: true)
 
-        let subConfigFile = subDir.appendingPathComponent(".swiftindex.toml")
+        // A distinctive index path: if this config were read, the index would land in
+        // "subproject/.customindex" instead of the default ".swiftindex".
         try """
-        [embedding]
-        provider = "mock"
-        model = "all-MiniLM-L6-v2"
-        dimension = 384
-        """.write(to: subConfigFile, atomically: true, encoding: .utf8)
+        [storage]
+        index_path = ".customindex"
+        """.write(
+            to: subDir.appendingPathComponent(".swiftindex.toml"),
+            atomically: true,
+            encoding: .utf8
+        )
 
-        let swiftFile = subDir.appendingPathComponent("Code.swift")
         try """
         struct Code {
             let value: Int
         }
-        """.write(to: swiftFile, atomically: true, encoding: .utf8)
-
-        // Run index from working directory targeting subdirectory
-        // This should fail because config is in subproject, not working directory
-        let (_, stderr, exitCode) = try runCommand(
-            ["index", "subproject"],
-            workingDirectory: workDir.path,
-            environment: ["SWIFTINDEX_TTY_OVERRIDE": "noninteractive"]
+        """.write(
+            to: subDir.appendingPathComponent("Code.swift"),
+            atomically: true,
+            encoding: .utf8
         )
 
-        // Should fail because config is not in working directory
-        #expect(exitCode != 0, "Should fail without config in working directory")
+        let (_, _, exitCode) = try runCommand(
+            ["index", "subproject"],
+            workingDirectory: workDir.path,
+            environment: [
+                "SWIFTINDEX_TTY_OVERRIDE": "noninteractive",
+                // Keeps the run offline; env always outranks any config file.
+                "SWIFTINDEX_EMBEDDING_PROVIDER": "mock",
+            ]
+        )
+
+        #expect(exitCode == 0, "Indexing should succeed on built-in defaults")
+
+        let defaultIndex = subDir.appendingPathComponent(".swiftindex")
+        let configuredIndex = subDir.appendingPathComponent(".customindex")
         #expect(
-            stderr.contains("No configuration found") || stderr.contains("configuration file"),
-            "Should indicate missing config"
+            FileManager.default.fileExists(atPath: defaultIndex.path),
+            "Should use the default index path"
+        )
+        #expect(
+            !FileManager.default.fileExists(atPath: configuredIndex.path),
+            "Config inside the target directory must not be applied"
         )
     }
 
