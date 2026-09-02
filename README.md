@@ -954,7 +954,7 @@ SwiftIndex is designed specifically for Swift developers on macOS. Here's how it
 | Feature           | SwiftIndex            | [mgrep](https://github.com/mixedbread-ai/mgrep) | [ChunkHound](https://github.com/chunkhound/chunkhound) |
 | ----------------- | --------------------- | ----------------------------------------------- | ------------------------------------------------------ |
 | **Privacy**       | ✅ Local-first (MLX)  | ❌ Cloud-only                                   | ✅ Local-first                                         |
-| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                          |
+| **Swift Parsing** | ✅ SwiftSyntax (AST)  | ❌ Generic                                      | ⚠️ Tree-sitter                                         |
 | **Apple Silicon** | ✅ MLX optimized      | ❌                                              | ❌                                                     |
 | **Search Method** | BM25 + Semantic + RRF | Semantic + reranking                            | Multi-hop semantic                                     |
 | **MCP Server**    | ✅ Native             | ✅ Agent support                                | ❌                                                     |
