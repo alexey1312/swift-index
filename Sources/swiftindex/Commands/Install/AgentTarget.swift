@@ -64,8 +64,13 @@ struct AgentTarget: Sendable {
 
 /// Every agent SwiftIndex knows how to configure.
 enum AgentRegistry {
+    /// Agents whose configuration format is verified.
+    ///
+    /// VS Code is deliberately absent: its `mcp.json` uses a `servers` key rather
+    /// than `mcpServers`, so writing our format would report success while VS Code
+    /// silently ignored the server. Better to omit a target than to ship a broken one.
     static var all: [AgentTarget] {
-        [claudeCode, cursor, codex, gemini, claudeDesktop, vsCode, windsurf]
+        [claudeCode, cursor, codex, gemini, claudeDesktop, windsurf]
     }
 
     static func target(id: String) -> AgentTarget? {
@@ -130,17 +135,6 @@ enum AgentRegistry {
         },
         includesCwd: false,
         detectionPaths: { ["\(NSHomeDirectory())/Library/Application Support/Claude"] },
-        detectionExecutable: nil
-    )
-
-    static let vsCode = AgentTarget(
-        id: "vscode",
-        displayName: "VS Code",
-        format: .mcpServersJSON,
-        projectConfigPath: { "\($0)/.vscode/mcp.json" },
-        globalConfigPath: { "\(NSHomeDirectory())/.vscode/mcp.json" },
-        includesCwd: false,
-        detectionPaths: { ["\(NSHomeDirectory())/Library/Application Support/Code"] },
         detectionExecutable: nil
     )
 

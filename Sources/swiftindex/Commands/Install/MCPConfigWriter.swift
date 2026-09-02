@@ -110,7 +110,12 @@ enum MCPConfigWriter {
                let json = try? JSONCodec.deserialize(data) as? [String: Any]
             {
                 existing = json
-            } else if !force {
+            } else {
+                // Refuse even with --force. These files hold more than MCP entries —
+                // ~/.claude.json is Claude Code's own state — so replacing an
+                // unparseable one wholesale destroys unrelated user configuration.
+                // --force is for overwriting *our* entry, not for discarding a file
+                // we failed to understand.
                 return .skippedUnreadable
             }
         }
@@ -154,11 +159,9 @@ enum MCPConfigWriter {
 
         if exists {
             guard let existing = try? String(contentsOfFile: plan.configPath, encoding: .utf8) else {
-                if !force {
-                    return .skippedUnreadable
-                }
-                contents = ""
-                return try writeTOML(plan, contents: contents, exists: exists, alreadyPresent: false)
+                // Same reasoning as the JSON path: never discard a config we could
+                // not read, even with --force.
+                return .skippedUnreadable
             }
             contents = existing
         }

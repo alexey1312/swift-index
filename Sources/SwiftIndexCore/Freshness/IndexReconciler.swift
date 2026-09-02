@@ -165,11 +165,19 @@ public struct IndexReconciler: Sendable {
 
         if !report.touched.isEmpty {
             // Refresh stats so these files are not re-hashed on every future scan.
-            let stored = try await indexManager.chunkStore.allFileStats()
+            // Keys from the store are raw; entries are canonical. Looking up one with
+            // the other silently refreshed nothing, so legacy indexes re-read and
+            // re-hashed every touched file on every reconcile, forever.
+            let rawStored = try await indexManager.chunkStore.allFileStats()
+            var stored: [String: FileStatRecord] = [:]
+            for (path, record) in rawStored {
+                stored[FileCollector.canonicalPath(path)] = record
+            }
+
             let refreshed = report.touched.compactMap { entry -> FileStatRecord? in
                 guard let record = stored[entry.path] else { return nil }
                 return FileStatRecord(
-                    path: entry.path,
+                    path: record.path,
                     hash: record.hash,
                     size: entry.size,
                     modifiedNanoseconds: entry.modifiedNanoseconds

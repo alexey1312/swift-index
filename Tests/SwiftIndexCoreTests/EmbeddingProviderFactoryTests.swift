@@ -119,6 +119,24 @@ struct EmbeddingProviderFactoryTests {
 
     // MARK: - auto
 
+    @Test("A chain reports readiness without falling back to isAvailable")
+    func chainIsReadyDoesNotLoadModels() async {
+        // The protocol's default isReady() forwards to isAvailable(), which loads —
+        // and therefore downloads — a model. Every readiness check goes through a
+        // chain, so without an override on the chain itself the whole "never
+        // download to answer a question" guarantee silently evaporates.
+        let chain = EmbeddingProviderChain(
+            providers: [NeverReadyProvider()],
+            id: "test-chain",
+            name: "Test Chain"
+        )
+
+        let ready = await chain.isReady()
+        #expect(ready == false)
+        let probed = await NeverReadyProvider.availabilityProbes.wasProbed
+        #expect(probed == false, "isReady() must not fall through to isAvailable()")
+    }
+
     @Test("auto never resolves to a provider/dimension mismatch")
     func autoIsSelfConsistent() async throws {
         let resolved = try await EmbeddingProviderFactory.resolve(config: config(provider: "auto"))
@@ -128,5 +146,36 @@ struct EmbeddingProviderFactoryTests {
         // through a 384-dimensional fallback, failing on every vector insert.
         #expect(resolved.chain.dimension == resolved.dimension)
         #expect(["mlx", "swift-embeddings"].contains(resolved.providerID))
+    }
+}
+
+// MARK: - Test Doubles
+
+/// Records whether the expensive availability path was ever taken.
+private actor ProbeCounter {
+    private(set) var wasProbed = false
+    func markProbed() {
+        wasProbed = true
+    }
+}
+
+private struct NeverReadyProvider: EmbeddingProvider {
+    static let availabilityProbes = ProbeCounter()
+
+    let id = "never-ready"
+    let name = "Never Ready"
+    let dimension = 384
+
+    func isAvailable() async -> Bool {
+        await Self.availabilityProbes.markProbed()
+        return true
+    }
+
+    func isReady() async -> Bool {
+        false
+    }
+
+    func embed(_: String) async throws -> [Float] {
+        [Float](repeating: 0, count: dimension)
     }
 }

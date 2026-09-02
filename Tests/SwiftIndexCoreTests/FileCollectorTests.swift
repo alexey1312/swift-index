@@ -174,6 +174,46 @@ struct FileCollectorTests {
         #expect(entries[0].modifiedNanoseconds > 0)
     }
 
+    // MARK: - Watcher / collector agreement
+
+    @Test("The watcher and the indexer exclude the same files")
+    func watcherAgreesWithCollector() throws {
+        let project = try Project()
+        defer { project.cleanup() }
+
+        try project.write(".gitignore", "Generated/\n")
+        try project.write("Sources/Real.swift")
+        try project.write("Generated/Fake.swift")
+        try project.write(".build/Artifact.swift")
+        try project.write("App.xcodeproj/project.swift")
+
+        let config = Config()
+        let collected = try Set(collect(project))
+
+        // Any disagreement is worse than either rule alone: a file the watcher
+        // accepts but the collector skips gets indexed on save and then classified
+        // as deleted by the next reconciliation.
+        let rules = IgnoreRules(
+            patterns: config.excludePatterns,
+            rootPath: project.root.path,
+            respectGitignore: config.respectGitignore
+        )
+
+        for relative in [
+            "Sources/Real.swift",
+            "Generated/Fake.swift",
+            ".build/Artifact.swift",
+            "App.xcodeproj/project.swift",
+        ] {
+            let watcherAccepts = !rules.isIgnored(relativePath: relative, isDirectory: false)
+            let collectorAccepts = collected.contains(relative)
+            #expect(
+                watcherAccepts == collectorAccepts,
+                "watcher and collector disagree about \(relative)"
+            )
+        }
+    }
+
     // MARK: - Glob compilation
 
     @Test("Glob semantics: * does not cross separators, ** does")

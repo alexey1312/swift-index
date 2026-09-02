@@ -75,8 +75,13 @@ public struct IgnoreRules: Sendable {
             return true
         }
 
-        if let last = components.last {
-            for suffix in suffixes where last.hasSuffix(suffix) {
+        // Check every component, not just the last. A pattern like `*.xcodeproj`
+        // names a directory, and its contents must be excluded too. The collector
+        // gets this for free by pruning the directory, but the watcher only ever
+        // sees file paths — so a last-component-only test let every file inside a
+        // matched directory through, and the two disagreed about scope.
+        for component in components {
+            for suffix in suffixes where component.hasSuffix(suffix) {
                 return true
             }
         }
@@ -194,29 +199,36 @@ struct GitignoreRule: Sendable {
     }
 
     func matches(relativePath: String, isDirectory: Bool) -> Bool {
-        if directoryOnly, !isDirectory {
-            return false
-        }
+        let components = relativePath.split(separator: "/").map(String.init)
 
         if let bareName {
-            return relativePath.split(separator: "/").contains { $0 == bareName }
+            // A trailing-slash rule such as `Generated/` excludes the directory *and*
+            // everything beneath it, so when testing a file only ancestors count.
+            // Matching just the directory entry made the watcher accept files the
+            // collector had pruned, and reconciliation then treated them as deleted.
+            let candidates = (directoryOnly && !isDirectory) ? Array(components.dropLast()) : components
+            return candidates.contains(bareName)
         }
 
         guard let regex else { return false }
-        let range = NSRange(relativePath.startIndex ..< relativePath.endIndex, in: relativePath)
-        if regex.firstMatch(in: relativePath, range: range) != nil {
+
+        if !directoryOnly || isDirectory, matches(regex, relativePath) {
             return true
         }
 
-        // A rule matching a directory also excludes everything beneath it.
+        // Walk ancestor prefixes so a rule matching a directory covers its contents.
         var prefix = ""
-        for component in relativePath.split(separator: "/").dropLast() {
-            prefix += prefix.isEmpty ? String(component) : "/" + String(component)
-            let prefixRange = NSRange(prefix.startIndex ..< prefix.endIndex, in: prefix)
-            if regex.firstMatch(in: prefix, range: prefixRange) != nil {
+        for component in components.dropLast() {
+            prefix += prefix.isEmpty ? component : "/" + component
+            if matches(regex, prefix) {
                 return true
             }
         }
         return false
+    }
+
+    private func matches(_ regex: NSRegularExpression, _ path: String) -> Bool {
+        let range = NSRange(path.startIndex ..< path.endIndex, in: path)
+        return regex.firstMatch(in: path, range: range) != nil
     }
 }

@@ -21,8 +21,9 @@ public actor MCPContext {
     /// Cached resolution of the embedding provider, including its dimension.
     private var resolvedEmbedding: ResolvedEmbedding?
 
-    /// Paths already reconciled in this session, so the scan runs once per path.
-    private var reconciledPaths: Set<String> = []
+    /// Freshness already established for a path this session, so the scan runs once
+    /// per path but its verdict keeps being reported.
+    private var freshnessByPath: [String: StalenessInfo] = [:]
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
     private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
@@ -318,8 +319,14 @@ public actor MCPContext {
         }
 
         let resolvedPath = resolvePath(basePath)
-        guard !reconciledPaths.contains(resolvedPath) else { return .clean }
-        reconciledPaths.insert(resolvedPath)
+        // Return the cached verdict rather than `.clean`: a deferred branch-switch
+        // catch-up must keep being reported for the rest of the session, not warned
+        // about exactly once and then silently forgotten.
+        if let cached = freshnessByPath[resolvedPath] {
+            return cached
+        }
+        // Record before the work so a throw cannot cause an unbounded rescan loop.
+        freshnessByPath[resolvedPath] = .clean
 
         do {
             let indexManager = try await getIndexManager(for: resolvedPath, config: config)
@@ -347,6 +354,7 @@ public actor MCPContext {
                     "scanned": "\(report.scanned)",
                     "removedChunks": "\(removedChunks)",
                 ])
+                freshnessByPath[resolvedPath] = info
                 return info
             }
 
@@ -361,6 +369,7 @@ public actor MCPContext {
                     "path": "\(resolvedPath)",
                     "changed": "\(report.changed.count)",
                 ])
+                freshnessByPath[resolvedPath] = info
                 return info
             }
 
@@ -375,7 +384,24 @@ public actor MCPContext {
             for entry in report.changed {
                 do {
                     try await indexer.indexFile(at: entry.path)
-                    info.refreshedFiles += 1
+
+                    // indexFile returns without error when a file merely fails to
+                    // parse (a mid-edit syntax error), leaving the old chunks in
+                    // place. Confirm the file is genuinely current rather than
+                    // reporting a clean session while serving stale content.
+                    var stillStale = false
+                    if let contents = try? String(contentsOfFile: entry.path, encoding: .utf8) {
+                        stillStale = try await indexManager.needsIndexing(
+                            path: entry.path,
+                            fileHash: FileHasher.hash(contents)
+                        )
+                    }
+
+                    if stillStale {
+                        info.dirtyPaths.insert(entry.path)
+                    } else {
+                        info.refreshedFiles += 1
+                    }
                 } catch {
                     // Keep going: one unreadable file must not block the session.
                     info.dirtyPaths.insert(entry.path)
@@ -387,6 +413,7 @@ public actor MCPContext {
             }
             await indexer.flushPendingSave()
 
+            freshnessByPath[resolvedPath] = info
             return info
         } catch {
             logger.debug("Freshness check skipped", metadata: [
@@ -399,6 +426,6 @@ public actor MCPContext {
 
     /// Forgets reconciliation state, so the next tool call rescans.
     public func resetFreshness() {
-        reconciledPaths.removeAll()
+        freshnessByPath.removeAll()
     }
 }

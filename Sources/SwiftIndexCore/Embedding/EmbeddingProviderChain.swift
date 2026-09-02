@@ -101,6 +101,22 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
         return false
     }
 
+    /// Whether any provider in the chain is usable without network I/O.
+    ///
+    /// This override is load-bearing: without it the protocol's default
+    /// implementation would forward to `isAvailable()`, which loads (and therefore
+    /// downloads) a model. Every caller that asks "is this ready?" specifically to
+    /// avoid a download — provider auto-selection and `swiftindex status` — goes
+    /// through a chain, so the default would defeat the entire purpose.
+    public func isReady() async -> Bool {
+        for provider in providers {
+            if await provider.isReady() {
+                return true
+            }
+        }
+        return false
+    }
+
     public func embed(_ text: String) async throws -> [Float] {
         // Try cached active provider first
         if let active = await activeProviderManager.activeProvider {

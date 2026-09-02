@@ -130,6 +130,11 @@ public actor IncrementalIndexer {
     ///
     /// - Parameter path: The directory to watch.
     public func watchAndIndex(path: String) async throws {
+        // A previous stop() latched this to suppress re-arming while draining. Clear
+        // it here or a restarted watcher would never schedule a save again, and an
+        // unexpected kill would lose every vector written since the restart.
+        isShuttingDown = false
+
         let resolvedPath = (path as NSString).standardizingPath
 
         logger.info("Starting incremental indexing", metadata: [
@@ -142,6 +147,7 @@ public actor IncrementalIndexer {
             debounceMs: config.watchDebounceMs,
             extensions: FileCollector.indexableExtensions(config: config, parser: parser),
             excludePatterns: config.excludePatterns,
+            respectGitignore: config.respectGitignore,
             logger: logger
         )
 
