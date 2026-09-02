@@ -268,7 +268,7 @@ struct RRFFusionTests {
     }
 
     @Test("Fuse two ranked lists")
-    func fuseTwoLists() {
+    func fuseTwoLists() throws {
         let fusion = RRFFusion(k: 60)
 
         let list1: [(id: String, score: Float)] = [
@@ -299,11 +299,11 @@ struct RRFFusionTests {
         let indexA = fused.firstIndex { $0.id == "a" }
         let indexB = fused.firstIndex { $0.id == "b" }
         #expect(indexA != nil && indexB != nil)
-        #expect(indexB! < indexA!) // Lower index = higher rank
+        #expect(try #require(indexB) < indexA!) // Lower index = higher rank
     }
 
     @Test("Fuse with weights")
-    func fuseWithWeights() {
+    func fuseWithWeights() throws {
         let fusion = RRFFusion(k: 60)
 
         let list1: [(id: String, score: Float)] = [
@@ -321,7 +321,7 @@ struct RRFFusionTests {
         let itemB = fused.first { $0.id == "b" }
 
         #expect(itemA != nil && itemB != nil)
-        #expect(itemB!.score > itemA!.score) // "b" should have higher score
+        #expect(try #require(itemB?.score) > itemA!.score) // "b" should have higher score
     }
 
     @Test("Empty list handling")
@@ -733,7 +733,7 @@ struct HybridSearchTests {
 @Suite("GlobMatcher Tests")
 struct GlobMatcherTests {
     @Test("Basic glob pattern matching")
-    func basicPatternMatching() async throws {
+    func basicPatternMatching() async {
         let matcher = GlobMatcher()
 
         // Test simple wildcard
@@ -754,7 +754,7 @@ struct GlobMatcherTests {
     }
 
     @Test("LRU cache eviction")
-    func lruCacheEviction() async throws {
+    func lruCacheEviction() async {
         let matcher = GlobMatcher(maxSize: 3)
 
         // Fill cache with 3 patterns
@@ -777,7 +777,7 @@ struct GlobMatcherTests {
     }
 
     @Test("Cache reuses compiled regex")
-    func cacheReusesCompiledRegex() async throws {
+    func cacheReusesCompiledRegex() async {
         let matcher = GlobMatcher()
 
         // First call compiles the pattern
@@ -792,7 +792,7 @@ struct GlobMatcherTests {
     }
 
     @Test("Clear cache empties all entries")
-    func clearCacheEmptiesAll() async throws {
+    func clearCacheEmptiesAll() async {
         let matcher = GlobMatcher()
 
         _ = await matcher.matches("/path", pattern: "pattern1")
@@ -806,7 +806,7 @@ struct GlobMatcherTests {
     }
 
     @Test("Invalid regex pattern returns false")
-    func invalidPatternReturnsFalse() async throws {
+    func invalidPatternReturnsFalse() async {
         let matcher = GlobMatcher()
 
         // This pattern would create an invalid regex due to unbalanced brackets

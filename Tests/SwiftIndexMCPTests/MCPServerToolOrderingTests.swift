@@ -6,7 +6,7 @@ import Testing
 @Suite("MCP Server Tool Ordering")
 struct MCPServerToolOrderingTests {
     @Test("Tools list preserves registration order")
-    func toolsListPreservesRegistrationOrder() async throws {
+    func toolsListPreservesRegistrationOrder() async {
         let server = MCPServer()
 
         await server.registerTool(TestTool(name: "alpha"))
@@ -20,7 +20,7 @@ struct MCPServerToolOrderingTests {
     }
 
     @Test("Updating an existing tool keeps its position")
-    func updatingToolKeepsPosition() async throws {
+    func updatingToolKeepsPosition() async {
         let server = MCPServer()
 
         await server.registerTool(TestTool(name: "first"))

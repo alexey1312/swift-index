@@ -308,7 +308,7 @@ struct EmbeddingBatcherCrossFileTests {
 @Suite("EmbeddingBatcher Error Handling Tests")
 struct EmbeddingBatcherErrorTests {
     @Test("Error propagates to all requests in batch")
-    func errorPropagation() async throws {
+    func errorPropagation() async {
         let provider = BatchTrackingMockProvider()
         await provider.setShouldFail(true)
 

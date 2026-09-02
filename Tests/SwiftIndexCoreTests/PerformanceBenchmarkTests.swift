@@ -11,7 +11,7 @@ actor BenchmarkMockVectorStore: VectorStore {
     let dimension: Int
     private var vectors: [String: [Float]] = [:]
 
-    // Allow setting search results directly for benchmarking
+    /// Allow setting search results directly for benchmarking
     private var searchResultsOverride: [(id: String, similarity: Float)]?
 
     init(dimension: Int = 384) {
@@ -46,10 +46,22 @@ actor BenchmarkMockVectorStore: VectorStore {
     }
 
     func delete(id: String) async throws {}
-    func contains(id: String) async throws -> Bool { true }
-    func get(id: String) async throws -> [Float]? { vectors[id] }
-    func getBatch(ids: [String]) async throws -> [String: [Float]] { [:] }
-    func count() async throws -> Int { vectors.count }
+    func contains(id: String) async throws -> Bool {
+        true
+    }
+
+    func get(id: String) async throws -> [Float]? {
+        vectors[id]
+    }
+
+    func getBatch(ids: [String]) async throws -> [String: [Float]] {
+        [:]
+    }
+
+    func count() async throws -> Int {
+        vectors.count
+    }
+
     func save() async throws {}
     func load() async throws {}
     func clear() async throws {}
@@ -60,7 +72,10 @@ actor BenchmarkMockEmbeddingProvider: EmbeddingProvider {
     nonisolated let name = "Mock Provider"
     nonisolated let dimension = 384
 
-    func isAvailable() async -> Bool { true }
+    func isAvailable() async -> Bool {
+        true
+    }
+
     func embed(_ text: String) async throws -> [Float] {
         [Float](repeating: 0.1, count: dimension)
     }
@@ -119,7 +134,7 @@ struct PerformanceBenchmarkTests {
     }
 }
 
-// Helper to define benchmark tag
+/// Helper to define benchmark tag
 private extension Tag {
     @available(macOS 13.0, *)
     @Tag static var benchmark: Tag

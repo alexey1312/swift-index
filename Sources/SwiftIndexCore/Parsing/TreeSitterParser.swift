@@ -55,7 +55,7 @@ public struct TreeSitterParser: Parser, Sendable {
         static let cStructTypedef =
             try! NSRegularExpression(pattern: #"typedef\s+struct\s*\w*\s*\{[\s\S]*?\}\s*(\w+)\s*;"#)
 
-        // C
+        /// C
         static let cFunction = try! NSRegularExpression(
             pattern: #"^[\w\s\*]+\s+(\w+)\s*\([^)]*\)\s*\{[\s\S]*?^\}"#,
             options: .anchorsMatchLines
@@ -63,7 +63,7 @@ public struct TreeSitterParser: Parser, Sendable {
         static let cStruct = try! NSRegularExpression(pattern: #"struct\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
         static let cEnum = try! NSRegularExpression(pattern: #"enum\s+(\w+)\s*\{[\s\S]*?\}\s*;"#)
 
-        // C++
+        /// C++
         static let cppClass = try! NSRegularExpression(
             pattern: #"class\s+(\w+)[\s\S]*?\{[\s\S]*?^\};"#,
             options: .anchorsMatchLines

@@ -17,7 +17,9 @@ public struct InfoSnippetSearchResult: Sendable, Equatable, Identifiable {
 
     // MARK: - Identifiable
 
-    public var id: String { snippet.id }
+    public var id: String {
+        snippet.id
+    }
 
     // MARK: - Relevance Percentage
 

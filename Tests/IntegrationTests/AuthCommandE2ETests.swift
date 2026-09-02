@@ -1,9 +1,8 @@
 // MARK: - Auth Command E2E Tests
 
 import Foundation
-import Testing
-
 @testable import SwiftIndexCore
+import Testing
 
 /// End-to-end tests for `swiftindex auth` CLI commands.
 ///
@@ -23,7 +22,7 @@ struct AuthCommandE2ETests {
     // MARK: - Auth Status Tests
 
     @Test("auth status: No token found")
-    func authStatusNoToken() async throws {
+    func authStatusNoToken() throws {
         defer { cleanup() }
 
         // Given: No token in Keychain
@@ -33,7 +32,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth status: Valid token from Keychain")
-    func authStatusValidKeychainToken() async throws {
+    func authStatusValidKeychainToken() throws {
         defer { cleanup() }
 
         // Given: Valid token in Keychain
@@ -48,7 +47,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth status: Shows correct token preview")
-    func authStatusTokenPreview() async throws {
+    func authStatusTokenPreview() throws {
         defer { cleanup() }
 
         // Given: Token in Keychain
@@ -65,7 +64,7 @@ struct AuthCommandE2ETests {
     // MARK: - Auth Login Tests
 
     @Test("auth login: Manual mode with valid legacy token")
-    func authLoginManualModeLegacyToken() async throws {
+    func authLoginManualModeLegacyToken() throws {
         defer { cleanup() }
 
         // Given: Valid legacy format token
@@ -81,7 +80,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth login: Manual mode with new format token (oat01)")
-    func authLoginManualModeNewToken() async throws {
+    func authLoginManualModeNewToken() throws {
         defer { cleanup() }
 
         // Given: Valid new format token
@@ -97,7 +96,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth login: Manual mode with invalid token format")
-    func authLoginManualModeInvalid() async throws {
+    func authLoginManualModeInvalid() throws {
         // Given: Invalid token format
         let invalidToken = "invalid-token-format"
 
@@ -108,7 +107,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth login: Force flag overwrites existing token")
-    func authLoginForceOverwrite() async throws {
+    func authLoginForceOverwrite() throws {
         defer { cleanup() }
 
         // Given: Existing token
@@ -127,7 +126,7 @@ struct AuthCommandE2ETests {
     // MARK: - Auth Logout Tests
 
     @Test("auth logout: Removes token successfully")
-    func authLogoutRemovesToken() async throws {
+    func authLogoutRemovesToken() throws {
         defer { cleanup() }
 
         // Given: Token in Keychain
@@ -145,7 +144,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth logout: Handles no token gracefully")
-    func authLogoutNoToken() async throws {
+    func authLogoutNoToken() throws {
         defer { cleanup() }
 
         // Given: No token in Keychain
@@ -163,7 +162,7 @@ struct AuthCommandE2ETests {
     // MARK: - Integration Tests
 
     @Test("auth integration: Full login-status-logout cycle")
-    func authFullCycle() async throws {
+    func authFullCycle() throws {
         defer { cleanup() }
 
         // 1. Initial state: no token
@@ -192,7 +191,7 @@ struct AuthCommandE2ETests {
     // MARK: - Environment Variable Tests
 
     @Test("auth: Environment variable token priority")
-    func authEnvironmentTokenPriority() async throws {
+    func authEnvironmentTokenPriority() throws {
         defer {
             unsetenv("CLAUDE_CODE_OAUTH_TOKEN")
         }
@@ -211,7 +210,7 @@ struct AuthCommandE2ETests {
     }
 
     @Test("auth: SWIFTINDEX prefix has highest priority")
-    func authSwiftindexPrefixPriority() async throws {
+    func authSwiftindexPrefixPriority() throws {
         defer {
             unsetenv("SWIFTINDEX_ANTHROPIC_API_KEY")
             unsetenv("CLAUDE_CODE_OAUTH_TOKEN")

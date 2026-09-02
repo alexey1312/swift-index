@@ -64,7 +64,7 @@ struct LLMMessageTests {
 @Suite("LLMError")
 struct LLMErrorTests {
     @Test("Error descriptions")
-    func errorDescriptions() {
+    func errorDescriptions() throws {
         let errors: [LLMError] = [
             .notAvailable(reason: "test"),
             .cliNotFound(tool: "claude"),
@@ -77,7 +77,7 @@ struct LLMErrorTests {
         for error in errors {
             // All errors should have descriptions
             #expect(error.errorDescription != nil)
-            #expect(!error.errorDescription!.isEmpty)
+            #expect(try !(#require(error.errorDescription?.isEmpty)))
         }
     }
 
@@ -643,7 +643,7 @@ struct DescriptionGeneratorTests {
     }
 
     @Test("Generate batch descriptions")
-    func generateBatch() async throws {
+    func generateBatch() async {
         let provider = MockLLMProvider(response: "Test description.")
         let generator = DescriptionGenerator(provider: provider, batchSize: 2)
 
@@ -686,7 +686,7 @@ struct DescriptionGeneratorTests {
     }
 
     @Test("Batch generation handles failures gracefully")
-    func batchHandlesFailures() async throws {
+    func batchHandlesFailures() async {
         let failingProvider = FailingMockProvider(failOnNthCall: 2)
         let generator = DescriptionGenerator(provider: failingProvider, batchSize: 2)
 

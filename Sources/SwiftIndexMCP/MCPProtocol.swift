@@ -191,33 +191,47 @@ public enum JSONValue: Codable, Sendable, Equatable {
     // MARK: - Convenience Accessors
 
     public var stringValue: String? {
-        if case let .string(value) = self { return value }
+        if case let .string(value) = self {
+            return value
+        }
         return nil
     }
 
     public var intValue: Int? {
-        if case let .int(value) = self { return value }
+        if case let .int(value) = self {
+            return value
+        }
         return nil
     }
 
     public var doubleValue: Double? {
-        if case let .double(value) = self { return value }
-        if case let .int(value) = self { return Double(value) }
+        if case let .double(value) = self {
+            return value
+        }
+        if case let .int(value) = self {
+            return Double(value)
+        }
         return nil
     }
 
     public var boolValue: Bool? {
-        if case let .bool(value) = self { return value }
+        if case let .bool(value) = self {
+            return value
+        }
         return nil
     }
 
     public var arrayValue: [JSONValue]? {
-        if case let .array(value) = self { return value }
+        if case let .array(value) = self {
+            return value
+        }
         return nil
     }
 
     public var objectValue: [String: JSONValue]? {
-        if case let .object(value) = self { return value }
+        if case let .object(value) = self {
+            return value
+        }
         return nil
     }
 

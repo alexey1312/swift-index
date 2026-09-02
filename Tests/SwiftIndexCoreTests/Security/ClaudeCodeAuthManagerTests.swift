@@ -16,7 +16,7 @@ import XCTest
 final class ClaudeCodeAuthManagerTests: XCTestCase {
     // MARK: - CLI Availability Tests
 
-    func testIsCLIAvailable_WhenClaudeExists_ReturnsTrue() async throws {
+    func testIsCLIAvailable_WhenClaudeExists_ReturnsTrue() async {
         // Given: claude CLI exists in PATH
         // When: checking availability
         let available = await ClaudeCodeAuthManager.isCLIAvailable()

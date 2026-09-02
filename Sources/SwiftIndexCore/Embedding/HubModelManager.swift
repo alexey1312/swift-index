@@ -247,14 +247,12 @@ public actor HubModelManager {
         let repo = Hub.Repo(id: model.huggingFaceId)
 
         do {
-            let modelDir = try await hubApi.snapshot(
+            return try await hubApi.snapshot(
                 from: repo,
                 matching: model.requiredFiles
             ) { downloadProgress in
                 progress?(downloadProgress.fractionCompleted)
             }
-
-            return modelDir
         } catch {
             throw ProviderError.downloadFailed(
                 reason: "Failed to download model \(model.rawValue): \(error.localizedDescription)"

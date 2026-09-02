@@ -467,7 +467,7 @@ struct TreeSitterParserTests {
     }
 
     @Test("Calculate token count")
-    func calculateTokenCount() {
+    func calculateTokenCount() throws {
         let parser = TreeSitterParser()
         let content = """
         # Title
@@ -482,8 +482,8 @@ struct TreeSitterParserTests {
         #expect(chunk != nil)
         #expect(chunk?.tokenCount ?? 0 > 0)
         // Token count is approximately content.count / 4
-        let expectedApprox = chunk!.content.count / 4
-        #expect(abs(chunk!.tokenCount - expectedApprox) <= 1)
+        let expectedApprox = try #require(chunk?.content.count) / 4
+        #expect(try abs(#require(chunk?.tokenCount) - expectedApprox) <= 1)
     }
 
     @Test("Extract C function signature")

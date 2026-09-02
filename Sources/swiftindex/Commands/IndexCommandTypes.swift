@@ -117,7 +117,9 @@ actor DescriptionGenerationState {
         return true
     }
 
-    func isActive() -> Bool { isEnabled }
+    func isActive() -> Bool {
+        isEnabled
+    }
 }
 
 // MARK: - Indexing Statistics
