@@ -442,13 +442,19 @@ _General-Purpose:_
 - `mlx-community/Llama-3.2-1B-Instruct-4bit` — compact, good for simple tasks
 - `mlx-community/Llama-3.2-3B-Instruct-4bit` — larger, better quality
 
-First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~/.cache/huggingface/`.
+First run downloads the model from HuggingFace (~2-7GB). Models are cached in `~/.cache/huggingface/`
+(`$XDG_CACHE_HOME/huggingface` when set, or `SWIFTINDEX_MODEL_CACHE` to point anywhere else).
+swift-transformers' own default is `~/Documents/huggingface`, which iCloud Drive syncs when
+"Desktop & Documents Folders" is enabled; `ModelCacheLocation` overrides it for every provider and
+moves an existing `~/Documents/huggingface` into the cache directory once, so no model is
+re-downloaded.
 
 ### Environment Variables
 
 | Variable                        | Description                               |
 | ------------------------------- | ----------------------------------------- |
 | `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai               |
+| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory override            |
 | `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (highest priority)      |
 | `CLAUDE_CODE_OAUTH_TOKEN`       | OAuth token (auto-set by Claude Code CLI) |
 | `ANTHROPIC_API_KEY`             | Anthropic API key (fallback)              |

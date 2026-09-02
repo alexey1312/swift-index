@@ -9,13 +9,13 @@ import Tokenizers
 /// and `TokenizerLoader` protocols that mlx-swift-lm 3.x requires.
 ///
 /// mlx-swift-lm 3.x no longer bundles a Hugging Face integration; callers supply
-/// their own. Routing downloads through `HubApi` keeps MLX models in the same
-/// on-disk location as every other provider, so `HubModelManager.isRepoCached`
-/// keeps answering correctly for MLX model ids.
+/// their own. Routing downloads through `HubApi` with `ModelCacheLocation.base`
+/// keeps MLX models in the same on-disk location as every other provider, so
+/// `HubModelManager.isRepoCached` keeps answering correctly for MLX model ids.
 enum MLXModelLoading {
     /// Downloads model snapshots via swift-transformers' `HubApi`.
     static var downloader: any Downloader {
-        HubApiDownloader(hub: HubApi())
+        HubApiDownloader(hub: HubApi(downloadBase: ModelCacheLocation.base))
     }
 
     /// Loads tokenizers via swift-transformers' `AutoTokenizer`.

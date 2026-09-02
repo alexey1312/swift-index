@@ -171,7 +171,10 @@ private actor SwiftEmbeddingsModelManager {
 
         do {
             // Load BERT model bundle from HuggingFace using swift-embeddings
-            modelBundle = try await Bert.loadModelBundle(from: huggingFaceId)
+            modelBundle = try await Bert.loadModelBundle(
+                from: huggingFaceId,
+                downloadBase: ModelCacheLocation.base
+            )
             isLoaded = true
         } catch {
             throw ProviderError.modelNotFound(name: huggingFaceId)
