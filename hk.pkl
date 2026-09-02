@@ -22,8 +22,11 @@ local sourcekit_env = new Mapping<String, String> {
 local swift_linters = new Mapping<String, Step> {
     ["swiftformat"] {
         glob = List("*.swift")
-        check = "swiftformat --lint {{files}}"
-        fix = "swiftformat {{files}}"
+        // --cache ignore: SwiftFormat's cache key does not include its own
+        // version, so after a swiftformat upgrade it reports stale passes
+        // locally while CI, which has no cache, fails on the same commit.
+        check = "swiftformat --lint --cache ignore {{files}}"
+        fix = "swiftformat --cache ignore {{files}}"
         batch = true
         stage = List("*.swift")
         check_first = true

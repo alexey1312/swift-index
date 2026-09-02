@@ -77,7 +77,7 @@ struct LLMErrorTests {
         for error in errors {
             // All errors should have descriptions
             #expect(error.errorDescription != nil)
-            #expect(try !(#require(error.errorDescription?.isEmpty)))
+            #expect(try !#require(error.errorDescription?.isEmpty))
         }
     }
 
