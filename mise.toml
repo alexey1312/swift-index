@@ -109,9 +109,12 @@ run = "hk fix --all 2>&1 | grep -E '^(✔|✗|hk )' || true"
 
 [tasks.format-check]
 description = "Check all formatting (CI)"
+# No output filtering: when a check fails, the tool's diagnostics are the
+# whole point, and grepping them away leaves CI logs saying only that
+# something failed.
 run = """
 set -o pipefail
-hk check --all 2>&1 | grep -E '^(✔|✗|hk )'
+hk check --all
 """
 
 [tasks.setup]
