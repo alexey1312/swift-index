@@ -48,6 +48,7 @@ public struct PartialConfig: Sendable, Equatable {
     public var includeExtensions: [String]?
     public var maxFileSize: Int?
     public var respectGitignore: Bool?
+    public var autoIndex: AutoIndexConfig?
     public var chunkSize: Int?
     public var chunkOverlap: Int?
 
@@ -100,6 +101,7 @@ public struct PartialConfig: Sendable, Equatable {
         includeExtensions: [String]? = nil,
         maxFileSize: Int? = nil,
         respectGitignore: Bool? = nil,
+        autoIndex: AutoIndexConfig? = nil,
         chunkSize: Int? = nil,
         chunkOverlap: Int? = nil,
         indexPath: String? = nil,
@@ -133,6 +135,7 @@ public struct PartialConfig: Sendable, Equatable {
         self.includeExtensions = includeExtensions
         self.maxFileSize = maxFileSize
         self.respectGitignore = respectGitignore
+        self.autoIndex = autoIndex
         self.chunkSize = chunkSize
         self.chunkOverlap = chunkOverlap
         self.indexPath = indexPath

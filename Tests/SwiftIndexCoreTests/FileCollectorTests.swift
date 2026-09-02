@@ -11,6 +11,7 @@ struct FileCollectorTests {
 
         init() throws {
             root = URL(fileURLWithPath: NSTemporaryDirectory())
+                .resolvingSymlinksInPath()
                 .appendingPathComponent("swiftindex-collect-\(UUID().uuidString)")
             try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         }

@@ -35,6 +35,7 @@ public enum TOMLConfigValidator {
             "max_concurrent_tasks",
             "respect_gitignore",
         ],
+        "auto_index": ["enabled", "reconcile_on_connect", "sync_threshold"],
         "storage": ["index_path", "cache_path"],
         "watch": ["debounce_ms"],
         "logging": ["level"],

@@ -20,6 +20,9 @@ public actor MCPContext {
 
     /// Cached resolution of the embedding provider, including its dimension.
     private var resolvedEmbedding: ResolvedEmbedding?
+
+    /// Paths already reconciled in this session, so the scan runs once per path.
+    private var reconciledPaths: Set<String> = []
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
     private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
@@ -297,5 +300,105 @@ public actor MCPContext {
 
         return (FileManager.default.currentDirectoryPath as NSString)
             .appendingPathComponent(path)
+    }
+
+    // MARK: - Freshness
+
+    /// Brings the index for `basePath` in line with the working tree, once per session.
+    ///
+    /// stdio MCP servers are started and killed constantly, and nothing watches the
+    /// tree in between. Without this, edits made while no server was running stay
+    /// invisible until someone reindexes by hand. Running it lazily on the first tool
+    /// call that touches a path keeps the cost off startup.
+    ///
+    /// - Returns: What remains stale after the cheap work has been applied.
+    public func ensureFreshness(for basePath: String, config: Config) async -> StalenessInfo {
+        guard config.autoIndex.enabled, config.autoIndex.reconcileOnConnect else {
+            return .clean
+        }
+
+        let resolvedPath = resolvePath(basePath)
+        guard !reconciledPaths.contains(resolvedPath) else { return .clean }
+        reconciledPaths.insert(resolvedPath)
+
+        do {
+            let indexManager = try await getIndexManager(for: resolvedPath, config: config)
+            let reconciler = IndexReconciler(logger: logger)
+            let report = try await reconciler.reconcile(
+                path: resolvedPath,
+                config: config,
+                chunkStore: indexManager.chunkStore
+            )
+
+            var info = StalenessInfo()
+
+            // Deletions and stat refreshes are pure database work with no embedding
+            // cost, so they are always applied in full. Stale results pointing at
+            // files that no longer exist are the most misleading failure mode.
+            let removedChunks = try await reconciler.applyDeletionsAndTouches(
+                report,
+                indexManager: indexManager
+            )
+            info.removedFiles = report.deleted.count
+
+            if report.changed.isEmpty {
+                logger.debug("Index is up to date", metadata: [
+                    "path": "\(resolvedPath)",
+                    "scanned": "\(report.scanned)",
+                    "removedChunks": "\(removedChunks)",
+                ])
+                return info
+            }
+
+            // A large delta almost always means a branch switch. Re-embedding
+            // hundreds of files inside the first tool call would blow the client's
+            // timeout, so report staleness instead and let an explicit reindex catch
+            // up.
+            guard report.changed.count <= config.autoIndex.syncThreshold else {
+                info.dirtyPaths = Set(report.changed.map(\.path))
+                info.deferredCatchUp = true
+                logger.info("Deferring catch-up for large change set", metadata: [
+                    "path": "\(resolvedPath)",
+                    "changed": "\(report.changed.count)",
+                ])
+                return info
+            }
+
+            let resolved = try await getResolvedEmbedding(config: config)
+            let indexer = IncrementalIndexer(
+                indexManager: indexManager,
+                embeddingProvider: resolved.chain,
+                config: config,
+                logger: logger
+            )
+
+            for entry in report.changed {
+                do {
+                    try await indexer.indexFile(at: entry.path)
+                    info.refreshedFiles += 1
+                } catch {
+                    // Keep going: one unreadable file must not block the session.
+                    info.dirtyPaths.insert(entry.path)
+                    logger.warning("Catch-up failed for file", metadata: [
+                        "path": "\(entry.path)",
+                        "error": "\(error.localizedDescription)",
+                    ])
+                }
+            }
+            await indexer.flushPendingSave()
+
+            return info
+        } catch {
+            logger.debug("Freshness check skipped", metadata: [
+                "path": "\(resolvedPath)",
+                "error": "\(error.localizedDescription)",
+            ])
+            return .clean
+        }
+    }
+
+    /// Forgets reconciliation state, so the next tool call rescans.
+    public func resetFreshness() {
+        reconciledPaths.removeAll()
     }
 }

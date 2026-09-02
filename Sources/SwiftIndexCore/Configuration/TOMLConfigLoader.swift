@@ -141,6 +141,7 @@ private struct TOMLConfig: Codable {
     var embedding: EmbeddingSection?
     var search: SearchSection?
     var indexing: IndexingSection?
+    var auto_index: AutoIndexSection?
     var storage: StorageSection?
     var watch: WatchSection?
     var logging: LoggingSection?
@@ -188,6 +189,12 @@ private struct TOMLConfig: Codable {
         var chunk_overlap: Int?
         var max_concurrent_tasks: Int?
         var respect_gitignore: Bool?
+    }
+
+    struct AutoIndexSection: Codable {
+        var enabled: Bool?
+        var reconcile_on_connect: Bool?
+        var sync_threshold: Int?
     }
 
     struct StorageSection: Codable {
@@ -271,6 +278,21 @@ private struct TOMLConfig: Codable {
             config.chunkOverlap = indexing.chunk_overlap
             config.maxConcurrentTasks = indexing.max_concurrent_tasks
             config.respectGitignore = indexing.respect_gitignore
+        }
+
+        // Auto-index section
+        if let autoIndex = auto_index {
+            var section = AutoIndexConfig()
+            if let enabled = autoIndex.enabled {
+                section.enabled = enabled
+            }
+            if let reconcile = autoIndex.reconcile_on_connect {
+                section.reconcileOnConnect = reconcile
+            }
+            if let threshold = autoIndex.sync_threshold {
+                section.syncThreshold = threshold
+            }
+            config.autoIndex = section
         }
 
         // Storage section

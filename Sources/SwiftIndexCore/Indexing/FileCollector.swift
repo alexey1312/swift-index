@@ -40,8 +40,14 @@ public enum FileCollector {
         parser: HybridParser,
         logger: Logger = Logger(label: "FileCollector")
     ) throws -> [FileEntry] {
+        // Enumerate from the raw path but compare in canonical form. On macOS the
+        // same file has two spellings (/var/... and /private/var/...), and
+        // FileManager.enumerator does not necessarily return the one it was given.
+        // Mixing them makes the relative-path check fail, which would silently leave
+        // ignore rules matching against absolute paths — the exact bug IgnoreRules
+        // exists to prevent.
         let root = URL(fileURLWithPath: path).standardizedFileURL
-        let rootPath = root.path
+        let rootPath = canonicalPath(root.path)
         let rules = IgnoreRules(
             patterns: config.excludePatterns,
             rootPath: rootPath,
@@ -99,7 +105,7 @@ public enum FileCollector {
             }
 
             entries.append(FileEntry(
-                path: url.path,
+                path: canonicalPath(url.path),
                 size: size,
                 modifiedNanoseconds: Self.nanoseconds(from: values?.contentModificationDate)
             ))
@@ -133,11 +139,23 @@ public enum FileCollector {
 
     // MARK: - Helpers
 
+    /// A single canonical spelling for a filesystem path.
+    ///
+    /// `resolvingSymlinksInPath()` resolves symlinks but also strips a leading
+    /// `/private`, so it maps both `/var/folders/...` and `/private/var/folders/...`
+    /// onto the same string. Using it on every path — roots, collected entries and
+    /// stored records alike — is what keeps them comparable.
+    public static func canonicalPath(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+    }
+
     /// Path of `url` relative to the project root.
+    ///
+    /// `rootPath` is expected to already be canonical.
     static func relativePath(of url: URL, from rootPath: String) -> String {
-        let standardized = url.standardizedFileURL.path
-        guard standardized.hasPrefix(rootPath) else { return standardized }
-        let trimmed = standardized.dropFirst(rootPath.count)
+        let canonical = canonicalPath(url.path)
+        guard canonical.hasPrefix(rootPath) else { return canonical }
+        let trimmed = canonical.dropFirst(rootPath.count)
         return String(trimmed.drop(while: { $0 == "/" }))
     }
 
