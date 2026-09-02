@@ -456,10 +456,14 @@ Configuration is loaded from multiple sources with the following priority (highe
 | ------------------------------- | -------------------------------- |
 | `SWIFTINDEX_EMBEDDING_PROVIDER` | Embedding provider               |
 | `SWIFTINDEX_EMBEDDING_MODEL`    | Embedding model name             |
+| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory            |
 | `SWIFTINDEX_LIMIT`              | Default search limit             |
 | `OPENAI_API_KEY`                | API key for OpenAI embeddings    |
 | `GEMINI_API_KEY`                | API key for Gemini embeddings    |
 | `VOYAGE_API_KEY`                | API key for Voyage AI embeddings |
+
+Downloaded models are cached in `~/.cache/huggingface` (or `$XDG_CACHE_HOME/huggingface`).
+Set `SWIFTINDEX_MODEL_CACHE` to keep them elsewhere, for example on an external volume.
 
 ## Search Enhancement
 
