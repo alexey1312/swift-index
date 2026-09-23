@@ -198,67 +198,129 @@ enum FileIndexer {
             return (chunks, 0)
         }
 
-        // Compute relative path for progress display
-        let relativePath: String = if path.hasPrefix(context.projectPath) {
-            String(path.dropFirst(context.projectPath.count + 1))
-        } else {
-            (path as NSString).lastPathComponent
-        }
+        let reused = await reusableDescriptions(for: chunks, path: path, context: context)
+        let pending = chunks.filter { reused[$0.id] == nil && needsGeneratedDescription($0) }
 
-        let batchResult = await generator.generateBatch(
-            for: chunks,
-            file: relativePath,
-            onProgress: context.descriptionProgress
-        )
+        var generated: [String: String] = [:]
+        if !pending.isEmpty {
+            let batchResult = await generator.generateBatch(
+                for: pending,
+                file: relativePath(of: path, projectPath: context.projectPath),
+                onProgress: context.descriptionProgress
+            )
+            generated = batchResult.descriptions
 
-        if batchResult.failures > 0 {
-            let reason = batchResult.firstError ?? "Unknown error"
-            let didDisable = await context.descriptionState.disable(reason: reason)
-            if didDisable {
-                var metadata: Logger.Metadata = [
-                    "provider": "\(generator.providerName)",
-                    "error": "\(reason)",
-                ]
-                if let hint = descriptionFailureHint(for: reason) {
-                    metadata["hint"] = "\(hint)"
-                }
-                context.logger.warning("Description generation disabled after failure", metadata: metadata)
+            if batchResult.failures > 0 {
+                await disableDescriptions(
+                    reason: batchResult.firstError ?? "Unknown error",
+                    generator: generator,
+                    context: context
+                )
             }
         }
 
-        guard !batchResult.descriptions.isEmpty else {
+        let descriptions = reused.merging(generated) { _, new in new }
+        guard !descriptions.isEmpty else {
             return (chunks, 0)
         }
 
-        // Create new chunks with descriptions
         let updatedChunks = chunks.map { chunk in
-            if let description = batchResult.descriptions[chunk.id] {
-                return CodeChunk(
-                    id: chunk.id,
-                    path: chunk.path,
-                    content: chunk.content,
-                    startLine: chunk.startLine,
-                    endLine: chunk.endLine,
-                    kind: chunk.kind,
-                    symbols: chunk.symbols,
-                    references: chunk.references,
-                    fileHash: chunk.fileHash,
-                    createdAt: chunk.createdAt,
-                    docComment: chunk.docComment,
-                    signature: chunk.signature,
-                    breadcrumb: chunk.breadcrumb,
-                    tokenCount: chunk.tokenCount,
-                    language: chunk.language,
-                    contentHash: chunk.contentHash,
-                    generatedDescription: description,
-                    conformances: chunk.conformances,
-                    isTypeDeclaration: chunk.isTypeDeclaration
-                )
-            }
-            return chunk
+            guard let description = descriptions[chunk.id] else { return chunk }
+            return applying(description, to: chunk)
         }
 
-        return (updatedChunks, batchResult.descriptions.count)
+        return (updatedChunks, generated.count)
+    }
+
+    /// Whether a chunk earns an LLM call for its own description.
+    ///
+    /// A one-line constant is its own description, and the generated text repeats
+    /// what the reader already sees. Longer ones, such as a table of values, still
+    /// gain from a summary.
+    private static func needsGeneratedDescription(_ chunk: CodeChunk) -> Bool {
+        switch chunk.kind {
+        case .constant, .variable, .typealias:
+            chunk.content.count >= trivialChunkLength
+        default:
+            true
+        }
+    }
+
+    private static let trivialChunkLength = 300
+
+    /// Descriptions already stored for chunks whose content did not change.
+    ///
+    /// The stored chunks are still in place here, because the caller runs this
+    /// before `reindexWithChangeDetection` replaces them.
+    private static func reusableDescriptions(
+        for chunks: [CodeChunk],
+        path: String,
+        context: IndexingContext
+    ) async -> [String: String] {
+        let stored = await (try? context.indexManager.getChunks(path: path)) ?? []
+        guard !stored.isEmpty else { return [:] }
+
+        var byContentHash: [String: String] = [:]
+        for chunk in stored {
+            if let description = chunk.generatedDescription {
+                byContentHash[chunk.contentHash] = description
+            }
+        }
+
+        var result: [String: String] = [:]
+        for chunk in chunks where byContentHash[chunk.contentHash] != nil {
+            result[chunk.id] = byContentHash[chunk.contentHash]
+        }
+        return result
+    }
+
+    private static func relativePath(of path: String, projectPath: String) -> String {
+        if path.hasPrefix(projectPath) {
+            String(path.dropFirst(projectPath.count + 1))
+        } else {
+            (path as NSString).lastPathComponent
+        }
+    }
+
+    private static func disableDescriptions(
+        reason: String,
+        generator: DescriptionGenerator,
+        context: IndexingContext
+    ) async {
+        guard await context.descriptionState.disable(reason: reason) else { return }
+
+        var metadata: Logger.Metadata = [
+            "provider": "\(generator.providerName)",
+            "error": "\(reason)",
+        ]
+        if let hint = descriptionFailureHint(for: reason) {
+            metadata["hint"] = "\(hint)"
+        }
+        context.logger.warning("Description generation disabled after failure", metadata: metadata)
+    }
+
+    private static func applying(_ description: String, to chunk: CodeChunk) -> CodeChunk {
+        CodeChunk(
+            id: chunk.id,
+            path: chunk.path,
+            content: chunk.content,
+            startLine: chunk.startLine,
+            endLine: chunk.endLine,
+            kind: chunk.kind,
+            symbols: chunk.symbols,
+            references: chunk.references,
+            fileHash: chunk.fileHash,
+            createdAt: chunk.createdAt,
+            docComment: chunk.docComment,
+            signature: chunk.signature,
+            breadcrumb: chunk.breadcrumb,
+            tokenCount: chunk.tokenCount,
+            language: chunk.language,
+            contentHash: chunk.contentHash,
+            generatedDescription: description,
+            conformances: chunk.conformances,
+            isTypeDeclaration: chunk.isTypeDeclaration
+        )
     }
 
     private static func descriptionFailureHint(for reason: String) -> String? {
