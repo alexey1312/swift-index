@@ -248,11 +248,14 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         }
 
         let result: IndexingResult
+        await mcpContext.beginIndexing(for: path)
         do {
-            await mcpContext.beginIndexing(for: path)
-            defer { await mcpContext.endIndexing(for: path) }
             result = try await indexLocked(path: path, force: force, config: config, context: context, taskId: taskId)
+        } catch {
+            await mcpContext.endIndexing(for: path)
+            throw error
         }
+        await mcpContext.endIndexing(for: path)
         await mcpContext.startEmbeddingBackfillIfNeeded(for: path, config: config)
         return result
     }
