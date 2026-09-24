@@ -73,7 +73,7 @@ struct IndexCommand: AsyncParsableCommand {
         }
         let verboseFlag = verbose
         let quietFlag = quiet
-        let terminal = Terminal()
+        let terminal = Terminal(signalBehavior: .restoreOnly)
         let progressRenderer = StickyProgressRenderer(terminal: terminal)
         let descriptionState = DescriptionGenerationState()
         LoggingSystem.bootstrap { label in
@@ -181,7 +181,7 @@ struct IndexCommand: AsyncParsableCommand {
         // Use TaskGroup for parallel processing with bounded concurrency
         // Capture force as local constant to avoid capturing self
         let forceReindex = force
-        let ui = Noora()
+        let ui = Noora(terminal: terminal)
         var fatalError: Error?
 
         // Register shutdown handler to cancel indexing

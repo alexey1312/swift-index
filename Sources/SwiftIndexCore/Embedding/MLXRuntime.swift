@@ -4,7 +4,7 @@ import Foundation
 
 /// Reports whether MLX can actually run on this build.
 ///
-/// MLX needs a compiled Metal library (`default.metallib`). SwiftPM cannot build
+/// MLX needs a compiled Metal library (`mlx.metallib`). SwiftPM cannot build
 /// it, so `scripts/build-mlx-metallib` produces it and release artifacts ship it
 /// next to the binary. When it is missing, the first GPU call reaches MLX-C's
 /// default error handler, which prints `MLX error: Failed to load the default
@@ -30,17 +30,17 @@ enum MLXRuntime {
         var candidates: [URL] = []
 
         if let executableDirectory = executableURL?.resolvingSymlinksInPath().deletingLastPathComponent() {
-            candidates.append(contentsOf: metalLibraryNames.map { executableDirectory.appending(component: $0) })
+            candidates.append(contentsOf: colocatedLibraryPaths.map { executableDirectory.appending(path: $0) })
         }
 
         for bundleURL in bundleURLs {
             let resources = bundleURL.appending(component: swiftPMBundleName)
                 .appending(component: "Contents")
                 .appending(component: "Resources")
-            candidates.append(contentsOf: metalLibraryNames.map { resources.appending(component: $0) })
+            candidates.append(resources.appending(component: bundledLibraryName))
             // Non-macOS-style bundles keep resources at the top level.
             let flatResources = bundleURL.appending(component: swiftPMBundleName)
-            candidates.append(contentsOf: metalLibraryNames.map { flatResources.appending(component: $0) })
+            candidates.append(flatResources.appending(component: bundledLibraryName))
         }
 
         return candidates.first { fileManager.fileExists(atPath: $0.path) }
@@ -48,8 +48,11 @@ enum MLXRuntime {
 
     // MARK: - Private
 
-    /// Library names MLX looks for, in the order it tries them.
-    private static let metalLibraryNames = ["default.metallib", "mlx.metallib"]
+    /// Paths next to the binary that `load_default_library` tries. A bare `default.metallib` is not one.
+    private static let colocatedLibraryPaths = ["mlx.metallib", "Resources/mlx.metallib", "Resources/default.metallib"]
+
+    /// Library name MLX loads from the SwiftPM resource bundle.
+    private static let bundledLibraryName = "default.metallib"
 
     /// Resource bundle mlx-swift declares via `SWIFTPM_BUNDLE`.
     private static let swiftPMBundleName = "mlx-swift_Cmlx.bundle"

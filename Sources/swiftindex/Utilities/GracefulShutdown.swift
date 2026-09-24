@@ -26,9 +26,7 @@ public actor GracefulShutdownManager {
         Task { [weak self] in
             let signalStream = AsyncStream<Int32> { continuation in
                 let signalQueue = DispatchQueue(label: "com.swiftindex.signals")
-                let signals = [SIGINT, SIGTERM]
-
-                for sig in signals {
+                let sources = [SIGINT, SIGTERM].map { sig in
                     // Ignore the default signal behavior
                     signal(sig, SIG_IGN)
 
@@ -37,7 +35,10 @@ public actor GracefulShutdownManager {
                         continuation.yield(sig)
                     }
                     source.resume()
+                    return source
                 }
+                // A released source is cancelled, and SIG_IGN then drops the signal.
+                continuation.onTermination = { _ in sources.forEach { $0.cancel() } }
             }
 
             for await sig in signalStream {
@@ -72,9 +73,11 @@ public actor GracefulShutdownManager {
 
         // If we're still running after a grace period, force exit
         Task {
-            try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds
+            try? await Task.sleep(for: .seconds(15))
             logger.warning("Graceful shutdown timed out, forcing exit")
-            exit(128 + sig)
+            fflush(stdout)
+            // exit() runs C++ static destructors under a live MLX thread, and MLX then aborts.
+            _exit(128 + sig)
         }
     }
 }

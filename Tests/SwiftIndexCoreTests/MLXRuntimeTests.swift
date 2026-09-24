@@ -19,8 +19,8 @@ struct MLXRuntimeTests {
         #expect(found == nil)
     }
 
-    @Test("Finds a Metal library next to the binary")
-    func findsColocatedMetalLibrary() throws {
+    @Test("Ignores a bare default.metallib next to the binary, which MLX does not load")
+    func ignoresColocatedDefaultLibrary() throws {
         let root = try TemporaryDirectory()
         let executable = root.url.appending(component: "swiftindex")
         let library = root.url.appending(component: "default.metallib")
@@ -31,10 +31,10 @@ struct MLXRuntimeTests {
             bundleURLs: []
         )
 
-        #expect(found?.lastPathComponent == "default.metallib")
+        #expect(found == nil)
     }
 
-    @Test("Falls back to mlx.metallib")
+    @Test("Finds mlx.metallib next to the binary")
     func findsAlternateName() throws {
         let root = try TemporaryDirectory()
         let executable = root.url.appending(component: "swiftindex")
@@ -81,5 +81,22 @@ private struct TemporaryDirectory: ~Copyable {
 
     deinit {
         try? FileManager.default.removeItem(at: url)
+    }
+}
+
+@Suite("MLXEmbeddingProvider token limit")
+struct MLXTokenLimitTests {
+    @Test("A short input stays unchanged")
+    func shortInput() {
+        #expect(MLXEmbeddingProvider.truncated([1, 2, 3], to: 4) == [1, 2, 3])
+    }
+
+    @Test("A long input keeps the limit and its final token")
+    func longInput() {
+        let tokens = Array(0 ..< 10000)
+        let result = MLXEmbeddingProvider.truncated(tokens)
+        #expect(result.count == MLXEmbeddingProvider.maxTokens)
+        #expect(result.last == 9999)
+        #expect(Array(result.prefix(3)) == [0, 1, 2])
     }
 }

@@ -123,6 +123,9 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
             do {
                 return try await active.embed(text)
             } catch {
+                if error is CancellationError {
+                    throw error
+                }
                 // Active provider failed, clear cache and try others
                 await activeProviderManager.clearActiveProvider()
             }
@@ -145,6 +148,9 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
             } catch let error as ProviderError {
                 errors[provider.id] = error
             } catch {
+                if error is CancellationError {
+                    throw error
+                }
                 errors[provider.id] = .unknown(error.localizedDescription)
             }
         }
@@ -162,6 +168,9 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
             do {
                 return try await active.embed(texts)
             } catch {
+                if error is CancellationError {
+                    throw error
+                }
                 // Active provider failed, clear cache and try others
                 await activeProviderManager.clearActiveProvider()
             }
@@ -184,6 +193,9 @@ public final class EmbeddingProviderChain: EmbeddingProvider, @unchecked Sendabl
             } catch let error as ProviderError {
                 errors[provider.id] = error
             } catch {
+                if error is CancellationError {
+                    throw error
+                }
                 errors[provider.id] = .unknown(error.localizedDescription)
             }
         }

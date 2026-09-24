@@ -37,6 +37,15 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
     private let modelId: String
     private let maxBatchSize: Int
 
+    /// Attention cost grows with the square of the length, and a chunk can have 12K tokens.
+    static let maxTokens = 512
+
+    /// Keeps the first tokens and the final token, which last-token pooling reads.
+    static func truncated(_ tokens: [Int], to limit: Int = maxTokens) -> [Int] {
+        guard tokens.count > limit else { return tokens }
+        return Array(tokens.prefix(limit - 1)) + [tokens[tokens.count - 1]]
+    }
+
     #if canImport(MLX) && canImport(MLXEmbedders)
         /// Actor to manage thread-safe model loading and inference.
         private let modelManager: MLXModelManager
@@ -234,7 +243,9 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
 
             let embedding = try await container.perform { context -> [Float] in
                 // Tokenize input
-                let tokens = context.tokenizer.encode(text: text, addSpecialTokens: true)
+                let tokens = MLXEmbeddingProvider.truncated(
+                    context.tokenizer.encode(text: text, addSpecialTokens: true)
+                )
 
                 // Create input tensor
                 let inputArray = MLXArray(tokens)
@@ -275,11 +286,12 @@ public final class MLXEmbeddingProvider: EmbeddingProvider, @unchecked Sendable 
             for batchStart in stride(from: 0, to: texts.count, by: maxBatchSize) {
                 let batchEnd = min(batchStart + maxBatchSize, texts.count)
                 let batch = Array(texts[batchStart ..< batchEnd])
+                try Task.checkCancellation()
 
                 let batchEmbeddings = try await container.perform { context -> [[Float]] in
                     // Tokenize all inputs
                     let tokenizedInputs = batch.map {
-                        context.tokenizer.encode(text: $0, addSpecialTokens: true)
+                        MLXEmbeddingProvider.truncated(context.tokenizer.encode(text: $0, addSpecialTokens: true))
                     }
 
                     // Store original lengths for last-token pooling

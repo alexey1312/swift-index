@@ -787,3 +787,34 @@ struct EmbeddingProviderIntegrationTests {
         #expect(embedding.count == 384)
     }
 }
+
+@Suite("EmbeddingProviderChain cancellation")
+struct EmbeddingProviderChainCancellationTests {
+    private struct CancellingProvider: EmbeddingProvider {
+        let id = "cancelling"
+        let name = "Cancelling"
+        let dimension = 384
+        func isAvailable() async -> Bool {
+            true
+        }
+
+        func embed(_: String) async throws -> [Float] {
+            throw CancellationError()
+        }
+
+        func embed(_: [String]) async throws -> [[Float]] {
+            throw CancellationError()
+        }
+    }
+
+    @Test("Cancellation propagates and does not fall back to the next provider")
+    func cancellationPropagates() async {
+        let fallback = MockEmbeddingProvider(id: "fallback")
+        let chain = EmbeddingProviderChain(providers: [CancellingProvider(), fallback])
+
+        await #expect(throws: CancellationError.self) { try await chain.embed(["a"]) }
+        await #expect(throws: CancellationError.self) { try await chain.embed("a") }
+        #expect(fallback.embedBatchCallCount == 0)
+        #expect(fallback.embedCallCount == 0)
+    }
+}
