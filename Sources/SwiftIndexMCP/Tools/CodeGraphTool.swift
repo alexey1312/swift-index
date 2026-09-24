@@ -34,7 +34,9 @@ public struct CodeGraphTool: MCPToolHandler, Sendable {
                 "properties": .object([
                     "symbol": .object([
                         "type": "string",
-                        "description": "Symbol name or qualified name, e.g. 'IndexManager.save'",
+                        "description": """
+                        Symbol name or qualified name, e.g. 'IndexManager.save'. Not used by dead_code.
+                        """,
                     ]),
                     "relation": .object([
                         "type": "string",
@@ -43,10 +45,11 @@ public struct CodeGraphTool: MCPToolHandler, Sendable {
                         impact: everything that could break if it changes.
                         paths: how 'symbol' reaches 'target'.
                         neighborhood: both directions at once.
+                        dead_code: declarations nothing references ('symbol' not needed).
                         """,
                         "enum": .array([
                             .string("callers"), .string("callees"), .string("impact"),
-                            .string("paths"), .string("neighborhood"),
+                            .string("paths"), .string("neighborhood"), .string("dead_code"),
                         ]),
                         "default": "neighborhood",
                     ]),
@@ -79,7 +82,7 @@ public struct CodeGraphTool: MCPToolHandler, Sendable {
                         "enum": .array([.string("toon"), .string("human")]),
                     ]),
                 ]),
-                "required": .array([.string("symbol")]),
+                "required": .array([]),
             ]),
             annotations: ToolAnnotations(
                 readOnlyHint: true,
@@ -91,6 +94,13 @@ public struct CodeGraphTool: MCPToolHandler, Sendable {
     }
 
     public func execute(arguments: JSONValue) async throws -> ToolCallResult {
+        if arguments["relation"]?.stringValue == Self.deadCodeRelation {
+            return await deadCode(
+                path: arguments["path"]?.stringValue ?? ".",
+                limit: arguments["limit"]?.intValue ?? 100
+            )
+        }
+
         guard let symbolQuery = arguments["symbol"]?.stringValue,
               !symbolQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
@@ -169,6 +179,30 @@ public struct CodeGraphTool: MCPToolHandler, Sendable {
             return ToolCallResult(content: [.text(TextContent(text: text))])
         } catch {
             return .error("Graph query failed: \(error.localizedDescription)")
+        }
+    }
+
+    static let deadCodeRelation = "dead_code"
+
+    private func deadCode(path: String, limit: Int) async -> ToolCallResult {
+        do {
+            let context = MCPContext.shared
+            let config = try await context.getConfig(for: path)
+            guard config.graph.enabled else {
+                return .error("The symbol graph is disabled ([graph] enabled = false).")
+            }
+            guard await context.indexExists(for: path, config: config) else {
+                return .error("No index found for path: \(path). Run 'index_codebase' first.")
+            }
+            let indexManager = try await context.getIndexManager(for: path, config: config)
+            let symbols = try await DeadCodeFinder.find(in: indexManager.chunkStore, limit: limit)
+            let text = await DeadCodeFinder.format(
+                symbols,
+                projectRoot: FileCollector.canonicalPath(context.resolvePath(path))
+            )
+            return ToolCallResult(content: [.text(TextContent(text: text))])
+        } catch {
+            return .error("Dead code query failed: \(error.localizedDescription)")
         }
     }
 }

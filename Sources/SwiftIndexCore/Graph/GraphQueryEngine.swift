@@ -119,7 +119,7 @@ public actor GraphQueryEngine {
                 root: symbol,
                 relation: relation,
                 incoming: true,
-                kinds: [.calls, .initializes, .overrides, .conforms, .references],
+                kinds: [.calls, .initializes, .overrides, .conforms, .inherits, .references],
                 depth: depth,
                 minConfidence: threshold,
                 limit: limit

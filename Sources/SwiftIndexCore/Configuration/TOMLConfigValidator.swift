@@ -20,7 +20,9 @@ public struct TOMLConfigDiagnostic: Sendable, Equatable {
 
 public enum TOMLConfigValidator {
     private static let allowedSections: [String: Set<String>] = [
-        "embedding": ["provider", "model", "dimension", "batch_size", "batch_timeout_ms", "batch_memory_limit_mb"],
+        "embedding": [
+            "provider", "model", "dimension", "batch_size", "batch_timeout_ms", "batch_memory_limit_mb", "enabled",
+        ],
         "search": [
             "semantic_weight", "rrf_k", "multi_hop_enabled", "multi_hop_depth", "output_format",
             "limit", "expand_query_by_default", "synthesize_by_default",
@@ -35,7 +37,7 @@ public enum TOMLConfigValidator {
             "max_concurrent_tasks",
             "respect_gitignore",
         ],
-        "auto_index": ["enabled", "reconcile_on_connect", "sync_threshold"],
+        "auto_index": ["enabled", "reconcile_on_connect", "sync_threshold", "watch"],
         "graph": [
             "enabled",
             "max_fanout",

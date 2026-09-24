@@ -51,6 +51,16 @@ public actor IncrementalIndexer {
     /// Currently active file watcher.
     private var watcher: FileWatcher?
 
+    /// Graph maintenance, active after `enableGraph(projectRoot:)`.
+    private var graphBuilder: GraphBuilder?
+    private var projectRoot = ""
+    private var graphNeedsResolve = false
+
+    /// Stores changed chunks for text search only and leaves vectors to a
+    /// background pass, so a save never waits for an embedding model.
+    private var defersEmbedding = false
+    private var changeHandler: (@Sendable () async -> Void)?
+
     /// Statistics tracking.
     private var stats: IndexingStats
 
@@ -136,6 +146,7 @@ public actor IncrementalIndexer {
         isShuttingDown = false
 
         let resolvedPath = (path as NSString).standardizingPath
+        await enableGraph(projectRoot: resolvedPath)
 
         logger.info("Starting incremental indexing", metadata: [
             "path": "\(resolvedPath)",
@@ -175,6 +186,43 @@ public actor IncrementalIndexer {
     /// Stops the incremental indexer.
     ///
     /// Persists any unsaved vector index changes before returning.
+    /// Keeps the symbol graph current with every indexed or removed file.
+    ///
+    /// Does nothing when the graph is disabled in config.
+    public func enableGraph(projectRoot: String) async {
+        guard config.graph.enabled, graphBuilder == nil else { return }
+        self.projectRoot = projectRoot
+        graphBuilder = GraphBuilder(
+            chunkStore: indexManager.chunkStore,
+            config: config.graph,
+            logger: logger
+        )
+    }
+
+    /// Leaves vectors for changed chunks to `IndexManager.embedMissingVectors`.
+    public func deferEmbedding() {
+        defersEmbedding = true
+    }
+
+    /// Runs after each handled file event, e.g. to start a background embedding pass.
+    public func onChange(_ handler: @escaping @Sendable () async -> Void) {
+        changeHandler = handler
+    }
+
+    /// Resolves edges recorded since the last pass.
+    ///
+    /// Batch callers index many files, then call this once: resolution looks at the
+    /// whole symbol table, so one pass per file would repeat that work.
+    public func resolveGraphIfNeeded() async {
+        guard graphNeedsResolve, let graphBuilder else { return }
+        graphNeedsResolve = false
+        do {
+            try await graphBuilder.resolve()
+        } catch {
+            logger.warning("Graph resolution failed", metadata: ["error": "\(error.localizedDescription)"])
+        }
+    }
+
     public func stop() async {
         // Set before draining so a failed save cannot re-arm a timer that would
         // outlive the indexer and fire after shutdown.
@@ -226,6 +274,9 @@ public actor IncrementalIndexer {
             stats.filesDeleted += 1
         }
 
+        await resolveGraphIfNeeded()
+        await changeHandler?()
+
         stats.lastUpdateTime = Date()
     }
 
@@ -268,6 +319,7 @@ public actor IncrementalIndexer {
             let removed = try await clearChunks(for: path)
             try await indexManager.chunkStore.deleteSnippetsByPath(path)
             try await indexManager.recordIndexed(fileHash: fileHash, path: path)
+            try await removeGraphFacts(for: path)
             stats.chunksRemoved += removed
             scheduleSave()
 
@@ -289,17 +341,36 @@ public actor IncrementalIndexer {
             try await indexManager.chunkStore.deleteSnippetsByPath(path)
         }
 
-        let result = try await indexManager.indexFile(
-            path: path,
-            fileHash: fileHash,
-            parseResult: parseResult,
-            embedder: { [embeddingProvider] chunks in
-                try await embeddingProvider.embed(chunks.map(\.content))
-            }
-        )
+        let result: FileIndexResult = if config.embeddingEnabled, !defersEmbedding {
+            try await indexManager.indexFile(
+                path: path,
+                fileHash: fileHash,
+                parseResult: parseResult,
+                embedder: { [embeddingProvider] chunks in
+                    try await embeddingProvider.embed(chunks.map(\.content))
+                }
+            )
+        } else {
+            try await indexManager.indexFileDeferringEmbedding(
+                path: path,
+                fileHash: fileHash,
+                parseResult: parseResult
+            )
+        }
 
         // Count only chunks that were actually (re-)embedded; `chunksReused` tracks
         // the rest, so the two counters partition `result.chunksIndexed`.
+        if let graphBuilder {
+            try await graphBuilder.recordFile(
+                path: path,
+                content: content,
+                fileHash: fileHash,
+                chunks: parseResult.chunks,
+                projectRoot: projectRoot
+            )
+            graphNeedsResolve = true
+        }
+
         stats.chunksAdded += result.chunksIndexed - result.chunksReused
         stats.chunksReused += result.chunksReused
         scheduleSave()
@@ -321,6 +392,7 @@ public actor IncrementalIndexer {
         let removed = try await clearChunks(for: path)
         try await indexManager.chunkStore.deleteSnippetsByPath(path)
         try await indexManager.chunkStore.deleteFileHash(path: path)
+        try await removeGraphFacts(for: path)
 
         stats.chunksRemoved += removed
         scheduleSave()
@@ -337,6 +409,12 @@ public actor IncrementalIndexer {
     /// at rows that no longer exist.
     ///
     /// - Returns: The number of chunks removed.
+    private func removeGraphFacts(for path: String) async throws {
+        guard let graphBuilder else { return }
+        try await graphBuilder.removeFile(path: path)
+        graphNeedsResolve = true
+    }
+
     @discardableResult
     private func clearChunks(for path: String) async throws -> Int {
         let existing = try await indexManager.chunkStore.getByPath(path)

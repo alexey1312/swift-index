@@ -336,6 +336,29 @@ struct IncrementalIndexerTests {
         #expect(stats.errors == 0)
     }
 
+    @Test("Incremental indexing keeps the symbol graph current")
+    func incrementalIndexingMaintainsGraph() async throws {
+        let harness = try await Harness(dimension: dimension)
+        defer { harness.cleanup() }
+        await harness.indexer.enableGraph(projectRoot: harness.directory.path)
+
+        let callee = try harness.writeFile(name: "Callee.swift", content: "func target() -> Int { 1 }")
+        let caller = try harness.writeFile(name: "Caller.swift", content: "func source() -> Int { target() }")
+        try await harness.indexer.indexFile(at: callee, isNew: true)
+        try await harness.indexer.indexFile(at: caller, isNew: true)
+        await harness.indexer.resolveGraphIfNeeded()
+
+        let store = await harness.indexManager.chunkStore
+        #expect(try await !store.symbolIDs(forPath: callee).isEmpty)
+        #expect(try await store.graphStatistics().resolved == 1)
+
+        try await harness.indexer.removeFile(at: callee)
+        await harness.indexer.resolveGraphIfNeeded()
+
+        #expect(try await store.symbolIDs(forPath: callee).isEmpty)
+        #expect(try await store.graphStatistics().resolved == 0)
+    }
+
     @Test("Indexing failures propagate to the caller")
     func indexingFailurePropagates() async throws {
         let harness = try await Harness(dimension: dimension, failEmbeddings: true)

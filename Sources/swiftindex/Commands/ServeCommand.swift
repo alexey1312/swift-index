@@ -86,6 +86,7 @@ struct ServeCommand: AsyncParsableCommand {
 
         // Run the server (blocks until stdin closes or error)
         await server.run()
+        await MCPContext.shared.stopAllWatchers()
 
         logger.info("MCP server stopped")
     }

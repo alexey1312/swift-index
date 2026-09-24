@@ -221,6 +221,43 @@ enum MCPConfigWriter {
         return result.joined(separator: "\n")
     }
 
+    // MARK: - Removal
+
+    /// Removes the SwiftIndex entry from one config file.
+    ///
+    /// - Returns: Whether the file changed. An unreadable file is left alone.
+    static func remove(configPath: String, format: MCPConfigFormat) throws -> Bool {
+        let fileManager = FileManager.default
+        guard fileManager.fileExists(atPath: configPath),
+              let data = fileManager.contents(atPath: configPath)
+        else {
+            return false
+        }
+
+        switch format {
+        case .mcpServersJSON:
+            guard var json = try? JSONCodec.deserialize(data) as? [String: Any],
+                  var servers = json["mcpServers"] as? [String: Any],
+                  servers.removeValue(forKey: serverName) != nil
+            else {
+                return false
+            }
+            json["mcpServers"] = servers
+            try backUpIfNeeded(path: configPath, exists: true)
+            let updated = try JSONCodec.serialize(json, options: [.prettyPrinted, .sortedKeys])
+            try updated.write(to: URL(fileURLWithPath: configPath), options: .atomic)
+            return true
+
+        case .codexTOML:
+            guard let content = String(bytes: data, encoding: .utf8) else { return false }
+            let updated = removeSection(from: content)
+            guard updated != content.trimmingCharacters(in: .newlines) else { return false }
+            try backUpIfNeeded(path: configPath, exists: true)
+            try (updated + "\n").write(toFile: configPath, atomically: true, encoding: .utf8)
+            return true
+        }
+    }
+
     // MARK: - Safety
 
     /// Copies an existing config aside before modifying it.

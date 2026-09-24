@@ -23,6 +23,8 @@ struct InstallCommand: AsyncParsableCommand {
           swiftindex install --all                 Configure every known agent
           swiftindex install --list                Show detection results only
           swiftindex install --dry-run             Show what would change
+          swiftindex install --hook                Also add the Claude Code prompt hook
+          swiftindex install --remove              Remove everything install added
         """
     )
 
@@ -47,6 +49,18 @@ struct InstallCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Path to the swiftindex binary.")
     var binaryPath: String?
 
+    @Flag(
+        inversion: .prefixedNo,
+        help: "Write usage rules into CLAUDE.md, AGENTS.md or GEMINI.md (project scope only)."
+    )
+    var instructions = true
+
+    @Flag(name: .long, help: "Add a Claude Code prompt hook that injects matching code for named symbols.")
+    var hook = false
+
+    @Flag(name: .long, help: "Remove the MCP entries, instruction blocks, permissions and hook.")
+    var remove = false
+
     @Flag(name: .long, help: "Enable verbose logging.")
     var verbose = false
 
@@ -68,6 +82,11 @@ struct InstallCommand: AsyncParsableCommand {
 
         let workingDirectory = FileManager.default.currentDirectoryPath
         let scope: InstallScope = global ? .global : .project
+
+        if remove {
+            try removeInstallation(targets: targets, scope: scope, workingDirectory: workingDirectory)
+            return
+        }
 
         var rows: [(name: String, path: String, outcome: InstallOutcome)] = []
         var restartNames: [String] = []
@@ -101,6 +120,14 @@ struct InstallCommand: AsyncParsableCommand {
         }
 
         printResults(rows, dryRun: dryRun)
+        if !dryRun {
+            try installAgentGuidance(
+                targets: targets,
+                scope: scope,
+                executablePath: pathResult.path,
+                workingDirectory: workingDirectory
+            )
+        }
 
         if !restartNames.isEmpty {
             print("")
@@ -111,6 +138,69 @@ struct InstallCommand: AsyncParsableCommand {
             print("")
             print("Some configs could not be read. Re-run with --force to overwrite them.")
             throw ExitCode.failure
+        }
+    }
+
+    // MARK: - Agent Guidance
+
+    /// Writes instruction blocks and Claude Code settings for project installs.
+    private func installAgentGuidance(
+        targets: [AgentTarget],
+        scope: InstallScope,
+        executablePath: String,
+        workingDirectory: String
+    ) throws {
+        guard scope == .project else { return }
+
+        var changed: [String] = []
+        if instructions {
+            let files = targets.compactMap { AgentInstructionsWriter.fileName(forAgent: $0.id) }
+                .map { (workingDirectory as NSString).appendingPathComponent($0) }
+            changed += try AgentInstructionsWriter.apply(paths: files, removing: false)
+        }
+        if targets.contains(where: { $0.id == "claude-code" }) {
+            let path = ClaudeSettingsWriter.settingsPath(workingDirectory: workingDirectory)
+            let command = hook ? "\(executablePath) \(ClaudeSettingsWriter.hookSubcommand)" : nil
+            if try ClaudeSettingsWriter.apply(path: path, hookCommand: command, removing: false) {
+                changed.append(path)
+            }
+        }
+        printChanged(changed, verb: "Updated")
+    }
+
+    private func removeInstallation(targets: [AgentTarget], scope: InstallScope, workingDirectory: String) throws {
+        var changed: [String] = []
+        for target in targets {
+            guard let path = target.configPath(scope: scope, workingDirectory: workingDirectory)
+                ?? target.configPath(scope: .global, workingDirectory: workingDirectory)
+            else {
+                continue
+            }
+            if try MCPConfigWriter.remove(configPath: path, format: target.format) {
+                changed.append(path)
+            }
+        }
+        if scope == .project {
+            let files = targets.compactMap { AgentInstructionsWriter.fileName(forAgent: $0.id) }
+                .map { (workingDirectory as NSString).appendingPathComponent($0) }
+            changed += try AgentInstructionsWriter.apply(paths: files, removing: true)
+            let settings = ClaudeSettingsWriter.settingsPath(workingDirectory: workingDirectory)
+            if try ClaudeSettingsWriter.apply(path: settings, hookCommand: nil, removing: true) {
+                changed.append(settings)
+            }
+        }
+        printChanged(changed, verb: "Removed SwiftIndex from")
+        if changed.isEmpty {
+            print("Nothing to remove.")
+        }
+    }
+
+    private func printChanged(_ paths: [String], verb: String) {
+        guard !paths.isEmpty else { return }
+        print("")
+        print("\(verb):")
+        for path in paths {
+            print("  \(path)")
         }
     }
 

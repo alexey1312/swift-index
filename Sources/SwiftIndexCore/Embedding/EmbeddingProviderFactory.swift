@@ -40,21 +40,23 @@ public struct ResolvedEmbedding: Sendable {
 /// with one copy and searching with another could therefore embed into two different
 /// vector spaces.
 public enum EmbeddingProviderFactory {
-    /// Providers `auto` will consider, in preference order.
-    ///
-    /// MLX first for quality, but only when it is *ready* — see `resolve(config:logger:)`.
-    private static let autoPreference = ["mlx", "swift-embeddings"]
-
     /// Resolves the configured provider, probing availability where the choice is
     /// automatic.
     ///
+    /// Under `auto` an existing index decides first: its `meta.json` records the
+    /// provider and model that built it, and a different choice would embed queries
+    /// into another vector space. A new index uses the first cloud provider with an
+    /// API key, then MLX when this binary can run it, else swift-embeddings.
+    ///
     /// - Parameters:
     ///   - config: Effective configuration.
+    ///   - indexDirectory: Index directory whose metadata pins `auto`, if known.
     ///   - logger: Logger for selection diagnostics.
     /// - Returns: The selected provider plus its identity and dimension.
     /// - Throws: `ProviderError` if an explicitly requested provider cannot be used.
     public static func resolve(
         config: Config,
+        indexDirectory: String? = nil,
         logger: Logger = Logger(label: "EmbeddingProviderFactory")
     ) async throws -> ResolvedEmbedding {
         let requested = config.embeddingProvider.lowercased()
@@ -63,26 +65,66 @@ public enum EmbeddingProviderFactory {
             return try make(provider: requested, config: config, logger: logger)
         }
 
-        // "Smart auto": prefer MLX, but only if it can run *now* — metallibs present,
-        // Apple Silicon, and the model already downloaded. Probing with `isAvailable()`
-        // here would download ~0.4 GB just to answer the question, turning the very
-        // first `swiftindex index` into a long silent stall.
-        for candidate in autoPreference {
-            guard let resolved = try? make(provider: candidate, config: config, logger: logger) else {
-                continue
-            }
-            if await resolved.chain.isReady() {
-                logger.debug("auto selected ready provider: \(resolved.providerID)")
+        if let indexDirectory,
+           let metadata = IndexMetadata.load(fromIndexDirectory: indexDirectory),
+           let pinned = try? make(provider: metadata.providerID, config: config.pinned(to: metadata), logger: logger)
+        {
+            logger.debug("auto pinned to index provider: \(pinned.providerID)")
+            return pinned
+        }
+
+        if let cloud = firstCloudProvider(config: config, logger: logger) {
+            logger.debug("auto selected cloud provider: \(cloud.providerID)")
+            return cloud
+        }
+
+        // The Metal library ships only with release artifacts, so its presence marks an
+        // install that can run MLX. The model downloads on first use.
+        if MLXSupport.isRuntimeAvailable, let mlx = try? make(provider: "mlx", config: config, logger: logger) {
+            logger.debug("auto selected mlx: Metal library present")
+            return mlx
+        }
+
+        logger.debug("auto selected swift-embeddings: no Metal library beside the binary")
+        return try make(provider: "swift-embeddings", config: config, logger: logger)
+    }
+
+    /// Whether `auto` has no cloud key and so embeds with a local model.
+    public static func autoUsesLocalModel(config: Config) -> Bool {
+        config.embeddingProvider.lowercased() == "auto" && !hasCloudKey(config: config)
+    }
+
+    private static func hasCloudKey(config: Config) -> Bool {
+        EmbeddingModelDefaults.cloudPreference.contains { apiKey(for: $0.provider, config: config) != nil }
+    }
+
+    private static func apiKey(for provider: String, config: Config) -> String? {
+        let key = switch provider {
+        case "openai": config.openAIAPIKey
+        case "voyage": config.voyageAPIKey
+        case "gemini": config.geminiAPIKey
+        default: String?.none
+        }
+        guard let key, !key.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+        return key
+    }
+
+    /// The first cloud provider with a key, built with its own default model.
+    ///
+    /// The shared `embeddingModel` default names a local model, so it cannot be
+    /// passed to a cloud API.
+    private static func firstCloudProvider(config: Config, logger: Logger) -> ResolvedEmbedding? {
+        for candidate in EmbeddingModelDefaults.cloudPreference
+            where apiKey(for: candidate.provider, config: config) != nil
+        {
+            var cloudConfig = config
+            cloudConfig.embeddingModel = candidate.model
+            cloudConfig.embeddingDimension = candidate.dimension
+            if let resolved = try? make(provider: candidate.provider, config: cloudConfig, logger: logger) {
                 return resolved
             }
         }
-
-        // Nothing is cached yet. Fall back to the provider with the cheapest first run
-        // rather than the best quality: swift-embeddings is ~87 MB with no Metal
-        // toolchain requirement, where MLX is ~0.4 GB and needs metallibs beside the
-        // binary. Users who want MLX can ask for it explicitly.
-        logger.debug("auto found no ready provider; defaulting to swift-embeddings")
-        return try make(provider: "swift-embeddings", config: config, logger: logger)
+        return nil
     }
 
     /// Builds a specific provider without any availability probing.
@@ -107,17 +149,22 @@ public enum EmbeddingProviderFactory {
 
         case "mlx":
             logger.debug("Using MLX embedding provider")
-            let mlx = MLXEmbeddingProvider(
-                huggingFaceId: config.embeddingModel,
-                dimension: config.embeddingDimension
+            let selection = EmbeddingModelDefaults.mlxSelection(
+                configuredModel: config.embeddingModel,
+                configuredDimension: config.embeddingDimension
             )
-            return pin(mlx, id: "mlx", model: config.embeddingModel)
+            let mlx = MLXEmbeddingProvider(huggingFaceId: selection.model, dimension: selection.dimension)
+            return pin(mlx, id: "mlx", model: selection.model)
 
         case "swift-embeddings", "swift", "swiftembeddings":
             logger.debug("Using Swift Embeddings provider")
             // Dimension is derived from the model rather than config: the provider
             // auto-detects it, and an explicit mismatched value corrupts the index.
-            let swift = SwiftEmbeddingsProvider()
+            let model = EmbeddingModelDefaults.swiftEmbeddingsModel(for: config.embeddingModel)
+            if model == nil {
+                logger.debug("Unknown swift-embeddings model '\(config.embeddingModel)'; using the default")
+            }
+            let swift = SwiftEmbeddingsProvider(model: model ?? .miniLM)
             return pin(swift, id: "swift-embeddings", model: swift.modelName)
 
         case "ollama":
@@ -192,5 +239,15 @@ public enum EmbeddingProviderFactory {
             modelID: model,
             dimension: provider.dimension
         )
+    }
+}
+
+private extension Config {
+    /// This config with the model and dimension an existing index was built with.
+    func pinned(to metadata: IndexMetadata) -> Config {
+        var copy = self
+        copy.embeddingModel = metadata.modelID
+        copy.embeddingDimension = metadata.dimension
+        return copy
     }
 }

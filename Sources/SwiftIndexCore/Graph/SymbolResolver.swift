@@ -75,13 +75,14 @@ public actor SymbolResolver {
             let batch = try await chunkStore.unattemptedEdges(limit: 5000)
             guard !batch.isEmpty else { break }
 
+            var updates: [EdgeResolution] = []
             for edge in batch {
                 let outcome = resolve(
                     edge: edge,
                     localTypes: visibleTypes(for: edge.sourceID, in: localTypesBySymbol)
                 )
 
-                try await chunkStore.updateEdgeResolution(EdgeResolution(
+                updates.append(EdgeResolution(
                     sourceID: edge.sourceID,
                     targetName: edge.targetName,
                     kind: edge.kind,
@@ -89,7 +90,8 @@ public actor SymbolResolver {
                     provenance: outcome.provenance,
                     confidence: outcome.confidence,
                     ambiguity: outcome.ambiguity,
-                    synthesizedBy: outcome.rule.rawValue
+                    synthesizedBy: outcome.rule.rawValue,
+                    resolvedKind: resolvedKind(for: edge, targetID: outcome.targetID)
                 ))
 
                 if outcome.targetID != nil {
@@ -97,11 +99,13 @@ public actor SymbolResolver {
                 }
                 witnessEdges.append(contentsOf: witnessFanout(for: edge, outcome: outcome))
             }
+            try await chunkStore.updateEdgeResolutions(updates)
         }
 
         if !witnessEdges.isEmpty {
             try await chunkStore.insertEdges(witnessEdges)
         }
+        try await rebuildOverrideEdges(chunkStore: chunkStore)
         try await chunkStore.recomputeInDegrees()
 
         return resolvedCount
@@ -245,6 +249,82 @@ public actor SymbolResolver {
             }
         }
         return types
+    }
+
+    /// Kind of an inheritance-clause edge once its target is known.
+    ///
+    /// Only a class can be inherited from, and every class is a `.type` symbol. So a
+    /// `.type` target means `inherits`, and a protocol target means `conforms`.
+    func resolvedKind(for edge: GraphEdge, targetID: String?) -> EdgeKind? {
+        guard edge.kind == .conforms || edge.kind == .inherits,
+              let targetID,
+              let target = byID[targetID]
+        else {
+            return nil
+        }
+        switch target.kind {
+        case .type: return .inherits
+        case .protocolDecl: return .conforms
+        default: return nil
+        }
+    }
+
+    // MARK: - Overrides
+
+    static let overrideRule = "override-chain"
+    private static let maxSuperclassDepth = 8
+
+    /// Links each `override` member to the member it overrides in a superclass.
+    ///
+    /// Rebuilt from scratch on every pass because it depends on `inherits` edges
+    /// anywhere in the project.
+    private func rebuildOverrideEdges(chunkStore: GRDBChunkStore) async throws {
+        try await chunkStore.deleteEdges(synthesizedBy: Self.overrideRule)
+
+        var superclassOf: [String: String] = [:]
+        for pair in try await chunkStore.resolvedEdgePairs(kind: .inherits) {
+            superclassOf[pair.source] = pair.target
+        }
+        guard !superclassOf.isEmpty else { return }
+
+        let edges = byID.values
+            .filter(\.isOverride)
+            .compactMap { member in overrideEdge(for: member, superclassOf: superclassOf) }
+        try await chunkStore.insertEdges(edges)
+    }
+
+    private func overrideEdge(for member: SymbolNode, superclassOf: [String: String]) -> GraphEdge? {
+        guard let container = member.container else { return nil }
+        let owners = (byName[container] ?? []).filter { $0.kind == .type }
+
+        for owner in owners {
+            var current = superclassOf[owner.id]
+            var depth = 0
+            while let classID = current, depth < Self.maxSuperclassDepth, let superclass = byID[classID] {
+                let base = (byContainer[superclass.name] ?? []).first {
+                    $0.name == member.name && $0.kind == member.kind && $0.argumentLabels == member.argumentLabels
+                }
+                if let base {
+                    return GraphEdge(
+                        sourceID: member.id,
+                        targetID: base.id,
+                        targetName: base.name,
+                        kind: .overrides,
+                        provenance: .heuristic,
+                        confidence: 0.9,
+                        ambiguity: 1,
+                        synthesizedBy: Self.overrideRule,
+                        occurrences: 1,
+                        firstLine: member.startLine,
+                        receiver: nil,
+                        sourcePath: member.path
+                    )
+                }
+                current = superclassOf[classID]
+                depth += 1
+            }
+        }
+        return nil
     }
 
     // MARK: - Protocol witnesses

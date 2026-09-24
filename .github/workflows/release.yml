@@ -36,6 +36,9 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.3.app/Contents/Developer
 
+      - name: Ensure Metal toolchain
+        run: xcrun -sdk macosx metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
+
       - name: Replace version placeholder
         run: |
           VERSION="${{ github.ref_name }}"

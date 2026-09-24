@@ -19,6 +19,7 @@ struct GraphCommand: AsyncParsableCommand {
           swiftindex graph SearchEngine.run --callees --depth 3
           swiftindex graph ChunkStore.search --impact
           swiftindex graph SearchEngine.run --to ChunkStore.search
+          swiftindex graph --dead
           swiftindex graph --status
         """
     )
@@ -53,6 +54,9 @@ struct GraphCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Show graph statistics instead of running a query.")
     var status = false
 
+    @Flag(name: .long, help: "List declarations that nothing in the project references.")
+    var dead = false
+
     @Option(name: .long, help: "Project path.")
     var path = "."
 
@@ -84,8 +88,14 @@ struct GraphCommand: AsyncParsableCommand {
             return
         }
 
+        if dead {
+            let symbols = try await DeadCodeFinder.find(in: store, limit: limit)
+            print(DeadCodeFinder.format(symbols, projectRoot: resolvedPath))
+            return
+        }
+
         guard let symbolQuery = symbol else {
-            throw ValidationError("Provide a symbol, or use --status.")
+            throw ValidationError("Provide a symbol, or use --dead or --status.")
         }
 
         let engine = GraphQueryEngine(

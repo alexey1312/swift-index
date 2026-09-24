@@ -71,6 +71,8 @@ public actor SemanticSearch: SearchEngine {
     ///   - options: Search configuration options.
     /// - Returns: Array of search results with semantic scores.
     public func search(query: String, options: SearchOptions) async throws -> [SearchResult] {
+        guard try await vectorStore.count() > 0 else { return [] }
+
         // Generate query embedding
         let queryVector = try await embeddingProvider.embed(query)
 
@@ -142,6 +144,9 @@ public actor SemanticSearch: SearchEngine {
         query: String,
         limit: Int
     ) async throws -> [(id: String, score: Float)] {
+        // An index without vectors (embedding off, or still in progress) cannot match
+        // anything, so do not load a model to embed the query.
+        guard try await vectorStore.count() > 0 else { return [] }
         let queryVector = try await embeddingProvider.embed(query)
         // Fetch extra results for re-ranking
         let fetchLimit = limit * 2

@@ -18,6 +18,13 @@ public extension GRDBChunkStore {
         try await dbWriter.write { db in
             try db.execute(sql: "DELETE FROM edges WHERE src_path = ?", arguments: [facts.path])
             try db.execute(sql: "DELETE FROM symbols WHERE path = ?", arguments: [facts.path])
+            try db.execute(sql: "DELETE FROM file_imports WHERE path = ?", arguments: [facts.path])
+            for module in Set(facts.imports) {
+                try db.execute(
+                    sql: "INSERT OR IGNORE INTO file_imports (path, module) VALUES (?, ?)",
+                    arguments: [facts.path, module]
+                )
+            }
 
             for symbol in facts.symbols {
                 try db.execute(
@@ -25,8 +32,8 @@ public extension GRDBChunkStore {
                     INSERT OR REPLACE INTO symbols
                     (id, name, qualified_name, container, module, kind, arg_labels, arity,
                      is_static, is_requirement, is_override, access, path, start_line,
-                     end_line, chunk_id, in_degree, file_hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     end_line, chunk_id, in_degree, file_hash, attributes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     arguments: [
                         symbol.id, symbol.name, symbol.qualifiedName, symbol.container,
@@ -34,6 +41,7 @@ public extension GRDBChunkStore {
                         symbol.isStatic, symbol.isRequirement, symbol.isOverride, symbol.access,
                         symbol.path, symbol.startLine, symbol.endLine,
                         chunkIDsByLine[symbol.startLine], symbol.inDegree, symbol.fileHash,
+                        symbol.attributes.isEmpty ? nil : symbol.attributes.joined(separator: ","),
                     ]
                 )
             }
@@ -98,6 +106,42 @@ public extension GRDBChunkStore {
                 """,
                 arguments: [trimmed, trimmed, "%.\(trimmed)", trimmed, limit]
             ).compactMap(Self.symbol(from:))
+        }
+    }
+
+    /// Every symbol declared in a file, in line order.
+    func symbols(inPath path: String) async throws -> [SymbolNode] {
+        try await dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT * FROM symbols WHERE path = ? ORDER BY start_line",
+                arguments: [path]
+            ).compactMap(Self.symbol(from:))
+        }
+    }
+
+    /// Symbols by id. Unknown ids are skipped.
+    func symbols(ids: [String]) async throws -> [SymbolNode] {
+        guard !ids.isEmpty else { return [] }
+        return try await dbWriter.read { db in
+            var found: [SymbolNode] = []
+            for start in stride(from: 0, to: ids.count, by: 500) {
+                let slice = Array(ids[start ..< min(start + 500, ids.count)])
+                let placeholders = slice.map { _ in "?" }.joined(separator: ", ")
+                try found += Row.fetchAll(
+                    db,
+                    sql: "SELECT * FROM symbols WHERE id IN (\(placeholders))",
+                    arguments: StatementArguments(slice)
+                ).compactMap(Self.symbol(from:))
+            }
+            return found
+        }
+    }
+
+    /// Number of files the index has recorded.
+    func indexedFileCount() async throws -> Int {
+        try await dbWriter.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM file_hashes") ?? 0
         }
     }
 
@@ -227,27 +271,135 @@ public extension GRDBChunkStore {
     /// `OR IGNORE` so that if two edges would collapse onto the same target the
     /// duplicate is left unresolved rather than aborting the entire resolution pass.
     func updateEdgeResolution(_ update: EdgeResolution) async throws {
-        let sourceID = update.sourceID
-        let targetName = update.targetName
-        let kind = update.kind
-        let targetID = update.targetID
-        let provenance = update.provenance
-        let confidence = update.confidence
-        let ambiguity = update.ambiguity
-        let synthesizedBy = update.synthesizedBy
+        try await updateEdgeResolutions([update])
+    }
 
+    /// Writes many resolutions in one transaction.
+    ///
+    /// One transaction per edge made resolution I/O-bound: each commit waits for the
+    /// disk, and a mid-size project has tens of thousands of edges.
+    func updateEdgeResolutions(_ updates: [EdgeResolution]) async throws {
+        guard !updates.isEmpty else { return }
+        try await dbWriter.write { db in
+            for update in updates {
+                try Self.apply(update, in: db)
+            }
+        }
+    }
+
+    private static func apply(_ update: EdgeResolution, in db: Database) throws {
+        let kind = update.kind.rawValue
+        let newKind = (update.resolvedKind ?? update.kind).rawValue
+        try db.execute(
+            sql: """
+            UPDATE OR IGNORE edges
+            SET dst_symbol_id = ?, provenance = ?, confidence = ?,
+                ambiguity = ?, synthesized_by = ?, kind = ?
+            WHERE src_symbol_id = ? AND dst_name = ? AND kind = ? AND dst_symbol_id IS NULL
+            """,
+            arguments: [
+                update.targetID, update.provenance.rawValue, update.confidence, update.ambiguity,
+                update.synthesizedBy, newKind, update.sourceID, update.targetName, kind,
+            ]
+        )
+        // An ignored update means an identical resolved edge already exists. The
+        // row would stay unattempted and the resolver would fetch it forever.
+        if db.changesCount == 0 {
+            try db.execute(
+                sql: """
+                DELETE FROM edges
+                WHERE src_symbol_id = ? AND dst_name = ? AND kind = ?
+                  AND dst_symbol_id IS NULL AND synthesized_by IS NULL
+                """,
+                arguments: [update.sourceID, update.targetName, kind]
+            )
+        }
+    }
+
+    /// Symbols that no edge reaches, filtered by the exemptions of `DeadCodeFinder`.
+    ///
+    /// A type counts as referenced when any edge names it: extensions record their
+    /// own type symbol, and an edge resolves to only one of them.
+    func unreferencedSymbols(exemptNames: Set<String>, limit: Int) async throws -> [SymbolNode] {
+        let names = Array(exemptNames)
+        let placeholders = names.map { _ in "?" }.joined(separator: ", ")
+        return try await dbWriter.read { db in
+            var arguments: [any DatabaseValueConvertible] = names
+            arguments.append(limit)
+            return try Row.fetchAll(
+                db,
+                sql: """
+                SELECT s.* FROM symbols s
+                WHERE (s.access IS NULL OR s.access NOT IN ('public', 'open'))
+                  AND s.is_override = 0
+                  AND s.is_requirement = 0
+                  AND s.attributes IS NULL
+                  AND s.kind NOT IN ('enumCase', 'operator')
+                  AND s.path NOT LIKE '%/Tests/%'
+                  AND s.name NOT IN (\(placeholders))
+                  AND NOT EXISTS (SELECT 1 FROM edges e WHERE e.dst_symbol_id = s.id)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM edges e
+                      WHERE e.dst_name = s.name AND (e.dst_symbol_id IS NULL OR s.kind = 'type')
+                  )
+                  AND NOT EXISTS (
+                      SELECT 1 FROM symbols owner
+                      JOIN edges c ON c.src_symbol_id = owner.id AND c.kind = 'conforms'
+                      JOIN symbols req ON req.container = c.dst_name AND req.is_requirement = 1
+                      WHERE owner.name = s.container AND owner.kind = 'type' AND req.name = s.name
+                  )
+                ORDER BY s.path, s.start_line
+                LIMIT ?
+                """,
+                arguments: StatementArguments(arguments)
+            ).compactMap(Self.symbol(from:))
+        }
+    }
+
+    /// Files that import at least one of `modules`.
+    func paths(importingAnyOf modules: [String]) async throws -> [String] {
+        guard !modules.isEmpty else { return [] }
+        let placeholders = modules.map { _ in "?" }.joined(separator: ", ")
+        return try await dbWriter.read { db in
+            try String.fetchAll(
+                db,
+                sql: "SELECT DISTINCT path FROM file_imports WHERE module IN (\(placeholders))",
+                arguments: StatementArguments(modules)
+            )
+        }
+    }
+
+    /// Resolved edges of one kind, as source and target ids.
+    func resolvedEdgePairs(kind: EdgeKind) async throws -> [(source: String, target: String)] {
+        try await dbWriter.read { db in
+            try Row.fetchAll(
+                db,
+                sql: "SELECT src_symbol_id, dst_symbol_id FROM edges WHERE kind = ? AND dst_symbol_id IS NOT NULL",
+                arguments: [kind.rawValue]
+            ).map { (source: $0["src_symbol_id"], target: $0["dst_symbol_id"]) }
+        }
+    }
+
+    /// Deletes every edge one synthesis rule produced, so the rule can rebuild them.
+    ///
+    /// Re-inserting instead would add to `occurrences` on each pass.
+    func deleteEdges(synthesizedBy rule: String) async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM edges WHERE synthesized_by = ?", arguments: [rule])
+        }
+    }
+
+    /// Queues inheritance-clause edges for another resolver pass.
+    ///
+    /// Used after a resolver change that assigns their kinds differently.
+    func resetInheritanceEdges() async throws {
         try await dbWriter.write { db in
             try db.execute(
                 sql: """
                 UPDATE OR IGNORE edges
-                SET dst_symbol_id = ?, provenance = ?, confidence = ?,
-                    ambiguity = ?, synthesized_by = ?
-                WHERE src_symbol_id = ? AND dst_name = ? AND kind = ? AND dst_symbol_id IS NULL
-                """,
-                arguments: [
-                    targetID, provenance.rawValue, confidence, ambiguity, synthesizedBy,
-                    sourceID, targetName, kind.rawValue,
-                ]
+                SET dst_symbol_id = NULL, confidence = 0, synthesized_by = NULL
+                WHERE kind IN ('conforms', 'inherits')
+                """
             )
         }
     }
@@ -372,7 +524,8 @@ public extension GRDBChunkStore {
             endLine: row["end_line"],
             chunkID: row["chunk_id"],
             inDegree: row["in_degree"] ?? 0,
-            fileHash: row["file_hash"]
+            fileHash: row["file_hash"],
+            attributes: (row["attributes"] as String?)?.split(separator: ",").map(String.init) ?? []
         )
     }
 

@@ -37,6 +37,17 @@ public actor MCPServer {
         version: "VERSION_PLACEHOLDER"
     )
 
+    /// Guidance sent in the `initialize` response.
+    public static let instructions = """
+    SwiftIndex has a pre-built index of this codebase: hybrid text and semantic search \
+    plus a symbol graph of calls, conformances and overrides.
+    - To understand code, call `explore` first. It returns ranked, line-numbered source \
+    in Read format, so you can edit from it without a new Read.
+    - Use `code_graph` for callers, callees, impact and dead code.
+    - Use `search_code` for a plain ranked list of matching chunks.
+    - Use Grep only for exact text that the index cannot answer.
+    """
+
     /// Supported protocol versions (newest first).
     /// We support both 2025-11-25 (latest) and 2024-11-05 (Claude Code).
     public static let supportedProtocolVersions = ["2025-11-25", "2024-11-05"]
@@ -76,6 +87,7 @@ public actor MCPServer {
     }
 
     private func registerDefaultTools() {
+        tools["explore"] = ExploreTool()
         tools["index_codebase"] = IndexCodebaseTool()
         tools["check_indexing_status"] = CheckIndexingStatusTool()
         tools["search_code"] = SearchCodeTool()
@@ -233,7 +245,8 @@ public actor MCPServer {
                 tools: .init(listChanged: false),
                 tasks: tasksCapability
             ),
-            serverInfo: Self.serverInfo
+            serverInfo: Self.serverInfo,
+            instructions: Self.instructions
         )
 
         let resultData = try encoder.encode(result)

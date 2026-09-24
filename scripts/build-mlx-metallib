@@ -13,13 +13,9 @@ if [ ! -d "$CHECKOUT" ]; then
   exit 1
 fi
 
-if ! /usr/bin/xcrun --find metal >/dev/null 2>&1; then
-  echo "MetalToolchain not found (xcrun metal)" >&2
-  exit 1
-fi
-
-if ! /usr/bin/xcrun --find metallib >/dev/null 2>&1; then
-  echo "MetalToolchain not found (xcrun metallib)" >&2
+# Xcode 26+ ships a `metal` stub that `xcrun --find` resolves without the component.
+if ! /usr/bin/xcrun -sdk macosx metal --version >/dev/null 2>&1; then
+  echo "MetalToolchain not installed. Run: xcodebuild -downloadComponent MetalToolchain" >&2
   exit 1
 fi
 

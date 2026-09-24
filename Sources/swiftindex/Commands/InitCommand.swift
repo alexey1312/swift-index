@@ -179,10 +179,14 @@ struct InitCommand: AsyncParsableCommand {
 
         // Embedding section
         lines.append("[embedding]")
-        lines.append("# Provider options: mlx, swift, ollama, voyage, openai")
+        lines.append("# Provider options: auto, mlx, swift, ollama, voyage, openai, gemini")
         lines.append("provider = \"\(provider)\"")
         if let model {
             lines.append("model = \"\(model)\"")
+        } else if provider == "auto" {
+            let mlxModel = suggestedModel(for: "mlx")
+            let swiftModel = suggestedModel(for: "swift")
+            lines.append("# model is chosen per provider: MLX \(mlxModel), Swift \(swiftModel)")
         } else {
             lines.append("# model = \"\(suggestedModel(for: provider))\"")
         }
@@ -197,7 +201,7 @@ struct InitCommand: AsyncParsableCommand {
         }
         lines.append("")
         lines.append("# Provider examples and defaults:")
-        lines.append("# MLX (Apple Silicon + Metal toolchain)")
+        lines.append("# MLX (Apple Silicon; needs default.metallib beside the binary)")
         lines.append("# provider = \"mlx\"")
         lines.append("# model = \"\(suggestedModel(for: "mlx"))\"")
         lines.append("# Swift Embeddings (CPU)")
@@ -413,7 +417,7 @@ private struct InitWizard {
     }
 
     private func resolveDefaults() -> InitSelections {
-        let resolvedProvider = EmbeddingProviderOption.fromFlag(providerFlag) ?? .mlx
+        let resolvedProvider = EmbeddingProviderOption.fromFlag(providerFlag) ?? .auto
         let resolvedModel = modelFlag ?? defaultModel(for: resolvedProvider.configValue)
         let validatedProvider = validateEmbeddingProvider(resolvedProvider, allowPrompts: false)
         let finalModel = resolvedProvider == validatedProvider
@@ -433,17 +437,19 @@ private struct InitWizard {
     }
 
     private func selectEmbeddingProvider() -> EmbeddingProviderOption {
-        let preselected = EmbeddingProviderOption.fromFlag(providerFlag)
+        let preselected = EmbeddingProviderOption.fromFlag(providerFlag) ?? .auto
         return ui.singleChoicePrompt(
             title: "Embeddings",
             question: "Select an embedding provider:",
             options: orderedOptions(EmbeddingProviderOption.allCases, preselected: preselected),
-            description: "MLX is fastest on Apple Silicon. Cloud providers require API keys."
+            description: "Auto picks MLX when this build ships its Metal library. Cloud providers require API keys."
         )
     }
 
     private func selectEmbeddingModel(for provider: EmbeddingProviderOption) -> String? {
         switch provider {
+        case .auto:
+            modelFlag
         case .mlx:
             selectModel(
                 title: "Embeddings",
@@ -586,11 +592,14 @@ private struct InitWizard {
         _ provider: EmbeddingProviderOption,
         allowPrompts: Bool = true
     ) -> EmbeddingProviderOption {
-        guard provider == .mlx, !isMetalToolchainAvailable() else {
+        guard provider == .mlx, !isMLXRuntimeAvailable() else {
             return provider
         }
 
-        print("MetalToolchain not found. MLX requires Metal shader tools.")
+        print("""
+        MLX needs default.metallib beside the swiftindex binary. Release and Homebrew \
+        builds include it; source builds create it with `./bin/mise run build:release`.
+        """)
 
         if !allowPrompts {
             print("Falling back to Swift Embeddings defaults.")
@@ -598,9 +607,9 @@ private struct InitWizard {
         }
 
         let wantsFallback = ui.yesOrNoChoicePrompt(
-            question: "Switch to Swift Embeddings (CPU) defaults instead?",
+            question: "Switch to Swift Embeddings defaults instead?",
             defaultAnswer: true,
-            description: "Requires no Metal toolchain."
+            description: "Requires no Metal library."
         )
         if wantsFallback {
             return .swift
@@ -615,15 +624,14 @@ private struct InitWizard {
             return validateEmbeddingProvider(newProvider, allowPrompts: allowPrompts)
         }
 
-        print("Cannot continue without MetalToolchain for MLX.")
+        print("Cannot continue: MLX has no Metal library beside the binary.")
         exit(ExitCode.failure.rawValue)
     }
 
     private func isLLMProviderAvailable(_ provider: LLMProviderOption) -> Bool {
         switch provider {
         case .mlx:
-            // MLX is always available on Apple Silicon (this product is arm64-only)
-            true
+            isMLXRuntimeAvailable()
         case .claudeCodeOAuth:
             // OAuth is always available on Apple platforms
             true

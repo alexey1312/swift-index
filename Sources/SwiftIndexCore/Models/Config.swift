@@ -27,6 +27,12 @@ public struct Config: Sendable, Equatable {
     /// Memory limit for pending embedding chunks (megabytes).
     public var embeddingBatchMemoryLimitMB: Int
 
+    /// Whether chunks get embedding vectors for semantic search.
+    ///
+    /// When false, the index has only FTS5 text search and the symbol graph. It is
+    /// built in seconds and never loads an embedding model.
+    public var embeddingEnabled: Bool
+
     // MARK: - Search Configuration
 
     /// Weight for semantic search (0.0 to 1.0).
@@ -136,6 +142,7 @@ public struct Config: Sendable, Equatable {
         embeddingBatchSize: Int = 32,
         embeddingBatchTimeoutMs: Int = 150,
         embeddingBatchMemoryLimitMB: Int = 10,
+        embeddingEnabled: Bool = true,
         semanticWeight: Float = 0.7,
         rrfK: Int = 60,
         multiHopEnabled: Bool = true,
@@ -171,6 +178,7 @@ public struct Config: Sendable, Equatable {
         self.embeddingBatchSize = embeddingBatchSize
         self.embeddingBatchTimeoutMs = embeddingBatchTimeoutMs
         self.embeddingBatchMemoryLimitMB = embeddingBatchMemoryLimitMB
+        self.embeddingEnabled = embeddingEnabled
         self.semanticWeight = semanticWeight
         self.rrfK = rrfK
         self.multiHopEnabled = multiHopEnabled
@@ -328,6 +336,7 @@ public extension Config {
         applyIfPresent(partial.embeddingBatchSize, to: \.embeddingBatchSize)
         applyIfPresent(partial.embeddingBatchTimeoutMs, to: \.embeddingBatchTimeoutMs)
         applyIfPresent(partial.embeddingBatchMemoryLimitMB, to: \.embeddingBatchMemoryLimitMB)
+        applyIfPresent(partial.embeddingEnabled, to: \.embeddingEnabled)
         applyIfPresent(partial.semanticWeight, to: \.semanticWeight)
         applyIfPresent(partial.rrfK, to: \.rrfK)
         applyIfPresent(partial.multiHopEnabled, to: \.multiHopEnabled)
@@ -406,13 +415,19 @@ public struct AutoIndexConfig: Sendable, Equatable, Codable {
     /// of date.
     public var syncThreshold: Int
 
+    /// Watch the working tree while the MCP server runs, so edits are indexed as
+    /// they happen instead of at the next session.
+    public var watch: Bool
+
     public init(
         enabled: Bool = true,
         reconcileOnConnect: Bool = true,
-        syncThreshold: Int = 25
+        syncThreshold: Int = 25,
+        watch: Bool = true
     ) {
         self.enabled = enabled
         self.reconcileOnConnect = reconcileOnConnect
         self.syncThreshold = syncThreshold
+        self.watch = watch
     }
 }

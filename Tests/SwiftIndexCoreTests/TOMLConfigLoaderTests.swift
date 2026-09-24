@@ -53,6 +53,17 @@ struct TOMLConfigLoaderTests {
 
     // MARK: - Empty File Tests
 
+    @Test("Parses auto_index.watch")
+    func autoIndexWatch() throws {
+        let filePath = try createTempTOMLFile(contents: "[auto_index]\nwatch = false\n")
+        defer { removeTempFile(at: filePath) }
+
+        let config = try TOMLConfigLoader(filePath: filePath).load()
+
+        #expect(config.autoIndex?.watch == false)
+        #expect(AutoIndexConfig().watch == true)
+    }
+
     @Test("Returns empty config for empty file")
     func emptyFile() throws {
         let filePath = try createTempTOMLFile(contents: "")

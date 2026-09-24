@@ -1,6 +1,7 @@
 // MARK: - Init Command Types
 
 import Foundation
+import SwiftIndexCore
 
 // MARK: - Supporting Types
 
@@ -35,6 +36,7 @@ enum InitMode: CaseIterable, CustomStringConvertible {
 }
 
 enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
+    case auto
     case mlx
     case swift
     case ollama
@@ -44,6 +46,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
 
     var description: String {
         switch self {
+        case .auto:
+            "Auto (cloud when an API key is set, else local MLX or Swift Embeddings)"
         case .mlx:
             "MLX (Apple Silicon, fastest)"
         case .swift:
@@ -61,6 +65,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
 
     var configValue: String {
         switch self {
+        case .auto:
+            "auto"
         case .mlx:
             "mlx"
         case .swift:
@@ -81,6 +87,8 @@ enum EmbeddingProviderOption: CaseIterable, CustomStringConvertible, Equatable {
             return nil
         }
         switch value {
+        case "auto":
+            return .auto
         case "mlx":
             return .mlx
         case "swift", "swift-embeddings", "swiftembeddings":
@@ -332,40 +340,19 @@ func orderedOptions<T: Equatable>(_ options: [T], preselected: T?) -> [T] {
 }
 
 func defaultModel(for provider: String) -> String? {
-    switch provider.lowercased() {
-    case "mlx":
-        "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
-    case "swift", "swift-embeddings", "swiftembeddings":
-        "all-MiniLM-L6-v2"
-    default:
-        nil
-    }
+    EmbeddingModelDefaults.model(for: provider)
 }
 
-func isMetalToolchainAvailable() -> Bool {
-    if let override = ProcessInfo.processInfo.environment["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE"]?.lowercased() {
-        switch override {
-        case "present":
-            return true
-        case "missing":
-            return false
-        default:
-            break
-        }
-    }
-
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/xcrun")
-    process.arguments = ["--find", "metal"]
-    process.standardOutput = Pipe()
-    process.standardError = Pipe()
-
-    do {
-        try process.run()
-        process.waitUntilExit()
-        return process.terminationStatus == 0
-    } catch {
-        return false
+/// Whether this binary can run MLX. Tests force the answer with
+/// `SWIFTINDEX_MLX_RUNTIME_OVERRIDE=present|missing`.
+func isMLXRuntimeAvailable() -> Bool {
+    switch ProcessInfo.processInfo.environment["SWIFTINDEX_MLX_RUNTIME_OVERRIDE"]?.lowercased() {
+    case "present":
+        true
+    case "missing":
+        false
+    default:
+        MLXSupport.isRuntimeAvailable
     }
 }
 

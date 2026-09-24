@@ -155,15 +155,41 @@ public actor IndexManager {
         parseResult: ParseResult,
         embedder: ([CodeChunk]) async throws -> [[Float]]
     ) async throws -> FileIndexResult {
+        try await indexFile(
+            path: path,
+            fileHash: fileHash,
+            parseResult: parseResult,
+            deferEmbedding: false,
+            embedder: embedder
+        )
+    }
+
+    /// Indexes a file for text search now; `embedMissingVectors` adds its vectors later.
+    public func indexFileDeferringEmbedding(
+        path: String,
+        fileHash: String,
+        parseResult: ParseResult
+    ) async throws -> FileIndexResult {
+        try await indexFile(path: path, fileHash: fileHash, parseResult: parseResult, deferEmbedding: true) { _ in [] }
+    }
+
+    private func indexFile(
+        path: String,
+        fileHash: String,
+        parseResult: ParseResult,
+        deferEmbedding: Bool,
+        embedder: ([CodeChunk]) async throws -> [[Float]]
+    ) async throws -> FileIndexResult {
         let chunks = parseResult.chunks
         let snippets = parseResult.snippets
 
         // 1. Index chunks with change detection
         var chunksResult = ReindexResult(totalChunks: 0, reusedChunks: 0, embeddedChunks: 0)
         if !chunks.isEmpty {
-            chunksResult = try await reindexWithChangeDetection(
+            chunksResult = try await reindex(
                 path: path,
                 newChunks: chunks,
+                deferEmbedding: deferEmbedding,
                 embedder: embedder
             )
         } else {
@@ -242,6 +268,21 @@ public actor IndexManager {
         newChunks: [CodeChunk],
         embedder: ([CodeChunk]) async throws -> [[Float]]
     ) async throws -> ReindexResult {
+        try await reindex(path: path, newChunks: newChunks, deferEmbedding: false, embedder: embedder)
+    }
+
+    /// Reindexes a file for text search now; `embedMissingVectors` adds vectors later.
+    @discardableResult
+    public func reindexDeferringEmbedding(path: String, newChunks: [CodeChunk]) async throws -> ReindexResult {
+        try await reindex(path: path, newChunks: newChunks, deferEmbedding: true) { _ in [] }
+    }
+
+    private func reindex(
+        path: String,
+        newChunks: [CodeChunk],
+        deferEmbedding: Bool,
+        embedder: ([CodeChunk]) async throws -> [[Float]]
+    ) async throws -> ReindexResult {
         // Get existing chunks and their vectors for this file
         let oldChunks = try await chunkStore.getByPath(path)
 
@@ -273,8 +314,13 @@ public actor IndexManager {
         }
 
         // Generate embeddings only for changed chunks
+        // Without an embedder the changed chunks are stored for text search only, and
+        // `embedMissingVectors` adds their vectors later.
         var newlyEmbedded: [(chunk: CodeChunk, vector: [Float])] = []
-        if !chunksToEmbed.isEmpty {
+        var deferred: [CodeChunk] = []
+        if !chunksToEmbed.isEmpty, deferEmbedding {
+            deferred = chunksToEmbed
+        } else if !chunksToEmbed.isEmpty {
             let embeddings = try await embedder(chunksToEmbed)
             for (chunk, embedding) in zip(chunksToEmbed, embeddings) {
                 newlyEmbedded.append((chunk: chunk, vector: embedding))
@@ -293,6 +339,9 @@ public actor IndexManager {
 
         // Index all chunks (reused + newly embedded)
         try await indexBatch(allChunks)
+        if !deferred.isEmpty {
+            try await chunkStore.insertBatch(deferred)
+        }
 
         // Record file hash
         if let firstChunk = newChunks.first {
@@ -583,6 +632,60 @@ public actor IndexManager {
             orphanedVectors: Array(orphanedVectors),
             isConsistent: missingVectors.isEmpty && orphanedVectors.isEmpty
         )
+    }
+
+    /// Number of chunks that have no embedding vector yet.
+    public func missingVectorCount() async throws -> Int {
+        try await verifyConsistency().missingVectors.count
+    }
+
+    /// Embeds every chunk that has no vector yet.
+    ///
+    /// Indexing can store chunks for text search first and embed them here later,
+    /// so search is ready before the slow part starts. The work is saved in steps:
+    /// a cancelled run keeps its vectors, and the next run embeds only the rest.
+    ///
+    /// - Parameters:
+    ///   - batchSize: Chunks per embedding call.
+    ///   - embedder: Produces one vector per chunk, in order.
+    ///   - progress: Called with the number of embedded chunks and the total.
+    /// - Returns: Number of chunks embedded.
+    @discardableResult
+    public func embedMissingVectors(
+        batchSize: Int = 64,
+        embedder: ([CodeChunk]) async throws -> [[Float]],
+        progress: ((Int, Int) -> Void)? = nil
+    ) async throws -> Int {
+        let missing = try await verifyConsistency().missingVectors.sorted()
+        guard !missing.isEmpty else { return 0 }
+
+        var embedded = 0
+        let saveInterval = batchSize * 16
+        for start in stride(from: 0, to: missing.count, by: batchSize) {
+            try Task.checkCancellation()
+            let ids = Array(missing[start ..< min(start + batchSize, missing.count)])
+            let chunks = try await chunkStore.getByIDs(ids)
+            guard !chunks.isEmpty else { continue }
+
+            let vectors = try await embedder(chunks)
+            try await vectorStore.addBatch(zip(chunks, vectors).map { (id: $0.id, vector: $1) })
+            embedded += chunks.count
+            progress?(start + ids.count, missing.count)
+            if embedded % saveInterval < chunks.count {
+                try await saveIfPersistent()
+            }
+        }
+        try await saveIfPersistent()
+        return embedded
+    }
+
+    /// Saves unless the vector store lives only in memory.
+    private func saveIfPersistent() async throws {
+        do {
+            try await save()
+        } catch VectorStoreError.noPersistencePath {
+            return
+        }
     }
 
     /// Repair index by removing orphaned entries.

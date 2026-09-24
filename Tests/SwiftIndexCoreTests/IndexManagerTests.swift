@@ -508,6 +508,55 @@ struct IndexManagerTests {
 
     // MARK: - Helpers
 
+    // MARK: - Deferred Embedding
+
+    private func deferredChunks(count: Int) -> [CodeChunk] {
+        (1 ... count).map { index in
+            CodeChunk(
+                path: "/p/Deferred.swift",
+                content: "func item\(index)() {}",
+                startLine: index,
+                endLine: index,
+                kind: .function,
+                fileHash: "deferred"
+            )
+        }
+    }
+
+    @Test("Chunks indexed without an embedder are searchable and embedded later")
+    func deferredEmbedding() async throws {
+        let manager = try await makeIndexManager()
+        let chunks = deferredChunks(count: 5)
+
+        try await manager.reindexDeferringEmbedding(path: "/p/Deferred.swift", newChunks: chunks)
+
+        #expect(try await manager.chunkCount() == 5)
+        #expect(try await manager.vectorCount() == 0)
+        #expect(try await manager.missingVectorCount() == 5)
+
+        let dimension = dimension
+        let embedded = try await manager.embedMissingVectors(batchSize: 2) { batch in
+            batch.map { _ in [Float](repeating: 0.5, count: dimension) }
+        }
+
+        #expect(embedded == 5)
+        #expect(try await manager.vectorCount() == 5)
+        #expect(try await manager.missingVectorCount() == 0)
+    }
+
+    @Test("Semantic search does not embed the query when the index has no vectors")
+    func semanticSearchSkipsEmptyIndex() async throws {
+        let chunkStore = try GRDBChunkStore()
+        let vectorStore = try USearchVectorStore(dimension: dimension)
+        let provider = MockEmbeddingProvider(dimension: dimension)
+        let search = SemanticSearch(vectorStore: vectorStore, chunkStore: chunkStore, embeddingProvider: provider)
+
+        let results = try await search.searchRaw(query: "anything", limit: 5)
+
+        #expect(results.isEmpty)
+        #expect(provider.embedCallCount == 0)
+    }
+
     private func makeIndexManager() async throws -> IndexManager {
         let chunkStore = try GRDBChunkStore()
         let vectorStore = try USearchVectorStore(dimension: dimension)

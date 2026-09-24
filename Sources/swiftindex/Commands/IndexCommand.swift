@@ -59,6 +59,12 @@ struct IndexCommand: AsyncParsableCommand {
     )
     var quiet: Bool = false
 
+    @Flag(
+        name: .long,
+        help: "Build only text search and the symbol graph; skip embedding vectors"
+    )
+    var noEmbed: Bool = false
+
     // MARK: - Execution
 
     mutating func run() async throws {
@@ -98,6 +104,8 @@ struct IndexCommand: AsyncParsableCommand {
             projectPath: resolvedPath,
             configuration: configuration
         )
+        let writerLock = try CLIUtils.acquireWriterLock(indexPath: indexPath)
+        defer { writerLock.release() }
 
         printStartupInfo(
             resolvedPath: resolvedPath,
@@ -107,12 +115,14 @@ struct IndexCommand: AsyncParsableCommand {
             logger: logger
         )
 
-        // Create embedding provider chain
-        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+        // --force rebuilds the index, so the provider that built it no longer binds.
+        let resolved = try await EmbeddingProviderFactory.resolve(
+            config: configuration,
+            indexDirectory: force ? nil : indexPath,
+            logger: logger
+        )
+        printCloudKeyHintIfNeeded(configuration: configuration, indexPath: indexPath)
         let embeddingProvider = resolved.chain
-
-        // Check provider availability
-        try await ensureEmbeddingProviderAvailable(embeddingProvider, quiet: quietFlag)
 
         // Create index manager
         let indexManager = try await createIndexManager(
@@ -143,7 +153,6 @@ struct IndexCommand: AsyncParsableCommand {
         let descriptionGenerator = DescriptionGeneratorFactory.create(config: configuration, logger: logger)
         await DescriptionGeneratorFactory.checkAvailability(descriptionGenerator, logger: logger)
 
-        let embeddingBatcher = createEmbeddingBatcher(config: configuration, provider: embeddingProvider)
         let graphBuilder = await makeGraphBuilder(
             configuration: configuration,
             indexManager: indexManager,
@@ -153,7 +162,6 @@ struct IndexCommand: AsyncParsableCommand {
         let indexingContext = createIndexingContext(from: IndexingContextParams(
             indexManager: indexManager,
             parser: parser,
-            embeddingBatcher: embeddingBatcher,
             descriptionGenerator: descriptionGenerator,
             descriptionState: descriptionState,
             progressRenderer: progressRenderer,
@@ -201,9 +209,6 @@ struct IndexCommand: AsyncParsableCommand {
             throw ExitCode.failure
         }
 
-        // Flush any remaining embedding requests
-        try await embeddingBatcher.flush()
-
         try await resolveGraph(graphBuilder, quiet: quietFlag)
 
         // Record how this index was built so a later provider change produces an
@@ -221,6 +226,77 @@ struct IndexCommand: AsyncParsableCommand {
             quiet: quietFlag,
             logger: logger
         )
+
+        try await embedMissingVectors(
+            indexManager: indexManager,
+            provider: embeddingProvider,
+            configuration: configuration,
+            shutdownManager: shutdownManager
+        )
+    }
+
+    /// Suggests a cloud key before a new index embeds with a slow local model.
+    private func printCloudKeyHintIfNeeded(configuration: Config, indexPath: String) {
+        guard !quiet, !noEmbed, configuration.embeddingEnabled,
+              EmbeddingProviderFactory.autoUsesLocalModel(config: configuration),
+              IndexMetadata.load(fromIndexDirectory: indexPath) == nil
+        else {
+            return
+        }
+        print(EmbeddingModelDefaults.cloudKeyHint)
+    }
+
+    /// Adds vectors to chunks the first pass stored for text search only.
+    ///
+    /// Search and the graph already work at this point, so the slow part cannot
+    /// block them. Ctrl-C keeps every saved vector, and the next run resumes.
+    private func embedMissingVectors(
+        indexManager: IndexManager,
+        provider: EmbeddingProviderChain,
+        configuration: Config,
+        shutdownManager: GracefulShutdownManager
+    ) async throws {
+        guard configuration.embeddingEnabled, !noEmbed else { return }
+        let missing = try await indexManager.missingVectorCount()
+        guard missing > 0 else { return }
+
+        if !quiet {
+            print("""
+
+            Text search and the symbol graph are ready.
+            Embedding \(missing) chunks for semantic search. Ctrl-C stops; the next run resumes.
+            """)
+        }
+        try await ensureEmbeddingProviderAvailable(provider, quiet: quiet)
+
+        let quietFlag = quiet
+        let batchSize = max(configuration.embeddingBatchSize, 64)
+        let task = Task {
+            var lastDecile = -1
+            return try await indexManager.embedMissingVectors(
+                batchSize: batchSize,
+                embedder: { chunks in try await provider.embed(chunks.map(\.content)) },
+                progress: { done, total in
+                    let decile = done * 10 / max(total, 1)
+                    if !quietFlag, decile != lastDecile {
+                        lastDecile = decile
+                        print("  Embedded \(done)/\(total)")
+                    }
+                }
+            )
+        }
+        await shutdownManager.onShutdown { task.cancel() }
+
+        do {
+            let embedded = try await task.value
+            if !quiet {
+                print("Semantic search ready: \(embedded) chunks embedded.")
+            }
+        } catch is CancellationError {
+            try await indexManager.save()
+            let remaining = try await indexManager.missingVectorCount()
+            print("Embedding stopped. \(remaining) chunks still have no vectors; run 'swiftindex index' to resume.")
+        }
     }
 
     private func printFinalStatistics(
@@ -271,15 +347,6 @@ struct IndexCommand: AsyncParsableCommand {
     }
 
     // MARK: - Private Helpers
-
-    private func createEmbeddingBatcher(config: Config, provider: EmbeddingProviderChain) -> EmbeddingBatcher {
-        let batcherConfig = EmbeddingBatcher.Configuration(
-            batchSize: config.embeddingBatchSize,
-            timeoutMs: config.embeddingBatchTimeoutMs,
-            memoryLimitMB: config.embeddingBatchMemoryLimitMB
-        )
-        return EmbeddingBatcher(provider: provider, configuration: batcherConfig)
-    }
 
     private func resolvePath(logger: Logger) throws -> String {
         let resolvedPath = CLIUtils.resolvePath(path)
@@ -347,7 +414,6 @@ struct IndexCommand: AsyncParsableCommand {
     private struct IndexingContextParams {
         let indexManager: IndexManager
         let parser: HybridParser
-        let embeddingBatcher: EmbeddingBatcher
         let descriptionGenerator: DescriptionGenerator?
         let descriptionState: DescriptionGenerationState
         let progressRenderer: StickyProgressRenderer
@@ -377,7 +443,6 @@ struct IndexCommand: AsyncParsableCommand {
         return IndexingContext(
             indexManager: params.indexManager,
             parser: params.parser,
-            embeddingBatcher: params.embeddingBatcher,
             descriptionGenerator: params.descriptionGenerator,
             descriptionState: params.descriptionState,
             descriptionProgress: descriptionProgress,

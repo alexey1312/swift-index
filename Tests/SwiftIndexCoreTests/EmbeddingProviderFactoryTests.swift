@@ -147,6 +147,86 @@ struct EmbeddingProviderFactoryTests {
         #expect(resolved.chain.dimension == resolved.dimension)
         #expect(["mlx", "swift-embeddings"].contains(resolved.providerID))
     }
+
+    @Test("auto keeps the provider an existing index was built with")
+    func autoPinsToIndexMetadata() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("factory-pin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let metadata = IndexMetadata(
+            providerID: "swift-embeddings",
+            modelID: SwiftEmbeddingsProvider.Model.bgeBase.huggingFaceId,
+            dimension: 768,
+            swiftindexVersion: "test"
+        )
+        try metadata.save(toIndexDirectory: directory.path)
+
+        let resolved = try await EmbeddingProviderFactory.resolve(
+            config: config(provider: "auto"),
+            indexDirectory: directory.path
+        )
+
+        #expect(resolved.providerID == "swift-embeddings")
+        #expect(resolved.dimension == 768)
+    }
+
+    @Test("auto prefers a cloud provider with a key and uses its own default model")
+    func autoPrefersCloudWithKey() async throws {
+        let openAI = try await EmbeddingProviderFactory.resolve(config: config(provider: "auto", openAIKey: "k"))
+        #expect(openAI.providerID == "openai")
+        #expect(openAI.dimension == 1536)
+
+        let voyage = try await EmbeddingProviderFactory.resolve(config: config(provider: "auto", voyageKey: "k"))
+        #expect(voyage.providerID == "voyage")
+        #expect(voyage.modelID == "voyage-code-2")
+
+        #expect(!EmbeddingProviderFactory.autoUsesLocalModel(config: config(provider: "auto", geminiKey: "k")))
+        #expect(EmbeddingProviderFactory.autoUsesLocalModel(config: config(provider: "auto")))
+    }
+
+    @Test("An existing local index keeps its provider when a cloud key appears")
+    func pinnedIndexBeatsCloudKey() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("factory-cloud-pin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try IndexMetadata(
+            providerID: "swift-embeddings",
+            modelID: SwiftEmbeddingsProvider.Model.miniLM.huggingFaceId,
+            dimension: 384,
+            swiftindexVersion: "test"
+        ).save(toIndexDirectory: directory.path)
+
+        let resolved = try await EmbeddingProviderFactory.resolve(
+            config: config(provider: "auto", openAIKey: "k"),
+            indexDirectory: directory.path
+        )
+
+        #expect(resolved.providerID == "swift-embeddings")
+    }
+
+    // MARK: - Model mapping
+
+    @Test("MLX replaces a short model name with its own default")
+    func mlxIgnoresForeignShortModelName() throws {
+        let resolved = try EmbeddingProviderFactory.make(provider: "mlx", config: config(provider: "mlx"))
+
+        #expect(resolved.modelID == EmbeddingModelDefaults.mlxModel)
+        #expect(resolved.dimension == EmbeddingModelDefaults.mlxDimension)
+    }
+
+    @Test("swift-embeddings honors the configured model")
+    func swiftEmbeddingsHonorsConfiguredModel() throws {
+        let resolved = try EmbeddingProviderFactory.make(
+            provider: "swift",
+            config: config(provider: "swift", model: "bge-base-en-v1.5")
+        )
+
+        #expect(resolved.dimension == 768)
+        #expect(resolved.modelID == SwiftEmbeddingsProvider.Model.bgeBase.huggingFaceId)
+    }
 }
 
 // MARK: - Test Doubles

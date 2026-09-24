@@ -154,6 +154,7 @@ private struct TOMLConfig: Codable {
         var batch_size: Int?
         var batch_timeout_ms: Int?
         var batch_memory_limit_mb: Int?
+        var enabled: Bool?
     }
 
     struct SearchSection: Codable {
@@ -196,6 +197,7 @@ private struct TOMLConfig: Codable {
         var enabled: Bool?
         var reconcile_on_connect: Bool?
         var sync_threshold: Int?
+        var watch: Bool?
     }
 
     /// Builds the auto-index settings from its TOML section.
@@ -209,6 +211,9 @@ private struct TOMLConfig: Codable {
         }
         if let threshold = section.sync_threshold {
             config.syncThreshold = threshold
+        }
+        if let watch = section.watch {
+            config.watch = watch
         }
         return config
     }
@@ -267,6 +272,7 @@ private struct TOMLConfig: Codable {
             config.embeddingBatchSize = embedding.batch_size
             config.embeddingBatchTimeoutMs = embedding.batch_timeout_ms
             config.embeddingBatchMemoryLimitMB = embedding.batch_memory_limit_mb
+            config.embeddingEnabled = embedding.enabled
         }
 
         // Search section

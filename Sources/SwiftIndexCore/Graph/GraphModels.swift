@@ -72,6 +72,8 @@ public struct SymbolNode: Sendable, Equatable, Codable {
     /// Confidence-weighted incoming call count, filled in by the resolver.
     public var inDegree: Int
     public let fileHash: String
+    /// Attributes that make a symbol reachable from outside Swift code, e.g. `objc`.
+    public let attributes: [String]
 
     public init(
         id: String,
@@ -91,7 +93,8 @@ public struct SymbolNode: Sendable, Equatable, Codable {
         endLine: Int,
         chunkID: String?,
         inDegree: Int = 0,
-        fileHash: String
+        fileHash: String,
+        attributes: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -111,6 +114,7 @@ public struct SymbolNode: Sendable, Equatable, Codable {
         self.chunkID = chunkID
         self.inDegree = inDegree
         self.fileHash = fileHash
+        self.attributes = attributes
     }
 
     /// Builds a position-independent identity.
@@ -222,6 +226,8 @@ public struct EdgeResolution: Sendable {
     public let confidence: Double
     public let ambiguity: Int
     public let synthesizedBy: String?
+    /// Kind the edge takes once its target is known, e.g. `conforms` to `inherits`.
+    public let resolvedKind: EdgeKind?
 
     public init(
         sourceID: String,
@@ -231,7 +237,8 @@ public struct EdgeResolution: Sendable {
         provenance: EdgeProvenance,
         confidence: Double,
         ambiguity: Int,
-        synthesizedBy: String?
+        synthesizedBy: String?,
+        resolvedKind: EdgeKind? = nil
     ) {
         self.sourceID = sourceID
         self.targetName = targetName
@@ -241,6 +248,7 @@ public struct EdgeResolution: Sendable {
         self.confidence = confidence
         self.ambiguity = ambiguity
         self.synthesizedBy = synthesizedBy
+        self.resolvedKind = resolvedKind
     }
 }
 

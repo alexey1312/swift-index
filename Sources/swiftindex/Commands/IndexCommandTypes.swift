@@ -10,7 +10,6 @@ import SwiftIndexCore
 struct IndexingContext: Sendable {
     let indexManager: IndexManager
     let parser: HybridParser
-    let embeddingBatcher: EmbeddingBatcher
     let descriptionGenerator: DescriptionGenerator?
     let descriptionState: DescriptionGenerationState
     let descriptionProgress: DescriptionProgressCallback?

@@ -144,11 +144,16 @@ public struct IndexReconciler: Sendable {
     /// failure mode. Re-indexing changed files is left to the caller, which decides
     /// whether to block or catch up in the background.
     ///
+    /// - Parameters:
+    ///   - report: Result of `reconcile`.
+    ///   - indexManager: Index to update.
+    ///   - graphBuilder: Graph to remove deleted files from, when the graph is enabled.
     /// - Returns: Number of chunks removed for deleted files.
     @discardableResult
     public func applyDeletionsAndTouches(
         _ report: ReconcileReport,
-        indexManager: IndexManager
+        indexManager: IndexManager,
+        graphBuilder: GraphBuilder? = nil
     ) async throws -> Int {
         var removedChunks = 0
 
@@ -160,6 +165,7 @@ public struct IndexReconciler: Sendable {
             try await indexManager.chunkStore.deleteByPath(path)
             try await indexManager.chunkStore.deleteSnippetsByPath(path)
             try await indexManager.chunkStore.deleteFileHash(path: path)
+            try await graphBuilder?.removeFile(path: path)
             removedChunks += chunks.count
         }
 

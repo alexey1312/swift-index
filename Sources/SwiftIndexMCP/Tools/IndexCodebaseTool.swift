@@ -205,6 +205,28 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
     // MARK: - Private
 
+    /// A blocking call returns a complete index. An async task returns once text
+    /// search and the graph are ready, and the server embeds in the background.
+    private func finishEmbedding(
+        indexManager: IndexManager,
+        path: String,
+        config: Config,
+        blocking: Bool
+    ) async throws {
+        let mcpContext = MCPContext.shared
+        guard blocking, config.embeddingEnabled else {
+            await mcpContext.startEmbeddingBackfillIfNeeded(for: path, config: config)
+            return
+        }
+        let provider = try await mcpContext.getEmbeddingProvider(config: config)
+        guard await provider.isAvailable() else {
+            throw MCPError.executionFailed("No embedding provider available")
+        }
+        try await indexManager.embedMissingVectors(batchSize: max(config.embeddingBatchSize, 64)) { chunks in
+            try await provider.embed(chunks.map(\.content))
+        }
+    }
+
     private func performIndexing(
         path: String,
         force: Bool,
@@ -227,15 +249,15 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         // Report initial status
         await context?.reportStatus("Initializing...")
 
-        // Create embedding provider
-        let embeddingProvider = try await mcpContext.getEmbeddingProvider(config: config)
-
-        // Check provider availability
-        guard await embeddingProvider.isAvailable() else {
-            throw MCPError.executionFailed("No embedding provider available")
+        guard await mcpContext.acquireWriterRole(for: path, config: config) else {
+            throw await MCPError.executionFailed(mcpContext.writerConflictMessage(for: path, config: config))
         }
 
-        // Get or create index manager
+        // The watcher and the embedding pass would write to the index concurrently.
+        // The next tool call restarts them.
+        await mcpContext.stopBackgroundWork(for: path)
+
+        // The index manager resolves the provider first, so an existing index pins `auto`.
         let indexManager = try await mcpContext.getIndexManager(for: path, config: config)
 
         // Handle force re-indexing
@@ -246,6 +268,19 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // Create parser
         let parser = HybridParser()
+        var graphBuilder: GraphBuilder?
+        if config.graph.enabled {
+            graphBuilder = await GraphBuilder(
+                chunkStore: indexManager.chunkStore,
+                config: config.graph
+            )
+        }
+        let indexingContext = MCPIndexingContext(
+            indexManager: indexManager,
+            parser: parser,
+            graphBuilder: graphBuilder,
+            projectRoot: path
+        )
 
         // Collect files to index
         await context?.reportStatus("Collecting files...")
@@ -289,13 +324,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
             // Index file first, then update progress with accurate stats
             do {
-                let result = try await indexFile(
-                    at: filePath,
-                    indexManager: indexManager,
-                    parser: parser,
-                    embeddingProvider: embeddingProvider,
-                    force: force
-                )
+                let result = try await indexFile(at: filePath, context: indexingContext, force: force)
 
                 stats.filesProcessed += 1
                 stats.chunksIndexed += result.chunksIndexed
@@ -328,6 +357,9 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             }
         }
 
+        await context?.reportStatus("Resolving symbol graph...")
+        try await graphBuilder?.resolve()
+
         // Save index
         await context?.reportStatus("Saving index...")
         if let taskId {
@@ -341,6 +373,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             ))
         }
         try await indexManager.save()
+        try await finishEmbedding(indexManager: indexManager, path: path, config: config, blocking: taskId == nil)
 
         // Get final statistics
         let finalStats = try await indexManager.statistics()
@@ -361,11 +394,10 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
     private func indexFile(
         at path: String,
-        indexManager: IndexManager,
-        parser: HybridParser,
-        embeddingProvider: EmbeddingProviderChain,
+        context: MCPIndexingContext,
         force: Bool
     ) async throws -> MCPFileIndexResult {
+        let indexManager = context.indexManager
         // Read file content
         let content = try String(contentsOfFile: path, encoding: .utf8)
 
@@ -376,12 +408,21 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         if !force {
             let needsIndexing = try await indexManager.needsIndexing(path: path, fileHash: fileHash)
             if !needsIndexing {
+                if let graphBuilder = context.graphBuilder, await graphBuilder.needsBackfill(path: path) {
+                    try await graphBuilder.recordFile(
+                        path: path,
+                        content: content,
+                        fileHash: fileHash,
+                        chunks: [],
+                        projectRoot: context.projectRoot
+                    )
+                }
                 return MCPFileIndexResult(chunksIndexed: 0, snippetsIndexed: 0, skipped: true)
             }
         }
 
         // Parse file
-        let parseResult = parser.parse(content: content, path: path, fileHash: fileHash)
+        let parseResult = context.parser.parse(content: content, path: path, fileHash: fileHash)
 
         if case .failure = parseResult {
             return MCPFileIndexResult(chunksIndexed: 0, snippetsIndexed: 0, skipped: false)
@@ -389,14 +430,19 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
         // Use unified indexFile method from IndexManager
         // This handles both chunks (with change detection) and snippets
-        let result = try await indexManager.indexFile(
+        let result = try await indexManager.indexFileDeferringEmbedding(
             path: path,
             fileHash: fileHash,
             parseResult: parseResult
-        ) { chunksToEmbed in
-            // Generate embeddings for chunks that need them
-            try await embeddingProvider.embed(chunksToEmbed.map(\.content))
-        }
+        )
+
+        try await context.graphBuilder?.recordFile(
+            path: path,
+            content: content,
+            fileHash: fileHash,
+            chunks: parseResult.chunks,
+            projectRoot: context.projectRoot
+        )
 
         return MCPFileIndexResult(
             chunksIndexed: result.chunksIndexed,
@@ -455,4 +501,12 @@ private struct IndexingResult {
     let errors: Int
     let path: String
     let forced: Bool
+}
+
+/// Shared inputs for indexing one file from the MCP tool.
+private struct MCPIndexingContext {
+    let indexManager: IndexManager
+    let parser: HybridParser
+    let graphBuilder: GraphBuilder?
+    let projectRoot: String
 }

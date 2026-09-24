@@ -102,9 +102,15 @@ struct WatchCommand: AsyncParsableCommand {
                 """
             )
         }
+        let writerLock = try CLIUtils.acquireWriterLock(indexPath: indexPath)
+        defer { writerLock.release() }
 
         // Create embedding provider chain
-        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+        let resolved = try await EmbeddingProviderFactory.resolve(
+            config: configuration,
+            indexDirectory: indexPath,
+            logger: logger
+        )
         let embeddingProvider = resolved.chain
 
         // Check provider availability

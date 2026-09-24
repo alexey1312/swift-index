@@ -84,8 +84,13 @@ public enum DiagnosticsCollector {
         var providerID = config.embeddingProvider
         var modelID = config.embeddingModel
         var dimension = config.embeddingDimension
+        let indexPath = (projectPath as NSString).appendingPathComponent(config.indexPath)
         do {
-            let resolved = try await EmbeddingProviderFactory.resolve(config: config, logger: logger)
+            let resolved = try await EmbeddingProviderFactory.resolve(
+                config: config,
+                indexDirectory: indexPath,
+                logger: logger
+            )
             providerID = resolved.providerID
             modelID = resolved.modelID
             dimension = resolved.dimension
@@ -106,7 +111,6 @@ public enum DiagnosticsCollector {
             )
         }
 
-        let indexPath = (projectPath as NSString).appendingPathComponent(config.indexPath)
         let indexStatus = await inspectIndex(at: indexPath, dimension: dimension)
 
         if let metadata = indexStatus.metadata,

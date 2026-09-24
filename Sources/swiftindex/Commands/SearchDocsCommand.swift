@@ -108,7 +108,11 @@ struct SearchDocsCommand: AsyncParsableCommand {
 
         // Create embedding provider chain (needed for IndexManager, though not used for doc search which uses BM25/FTS)
         // We reuse the logic from SearchCommand to ensure correct initialization
-        let resolved = try await EmbeddingProviderFactory.resolve(config: configuration, logger: logger)
+        let resolved = try await EmbeddingProviderFactory.resolve(
+            config: configuration,
+            indexDirectory: indexPath,
+            logger: logger
+        )
 
         // Explain a provider change in terms of providers rather than letting the
         // vector store fail with a bare dimension mismatch.

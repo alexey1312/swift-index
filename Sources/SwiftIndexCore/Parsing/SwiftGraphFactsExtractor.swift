@@ -452,8 +452,32 @@ final class GraphVisitor: SyntaxVisitor {
             startLine: start,
             endLine: end,
             chunkID: nil,
-            fileHash: fileHash
+            fileHash: fileHash,
+            attributes: Self.entryPointAttributes(of: node)
         )
+    }
+
+    /// Attributes that expose a declaration to callers the graph cannot see.
+    static let trackedAttributes: Set<String> = [
+        "objc", "objcMembers", "main", "IBAction", "IBOutlet", "IBInspectable",
+        "IBSegueAction", "NSManaged", "UIApplicationMain", "NSApplicationMain", "Test", "_cdecl",
+    ]
+
+    /// Tracked attributes on a declaration. A property's attributes sit on the
+    /// enclosing `VariableDeclSyntax`, a few levels above its pattern binding.
+    private static func entryPointAttributes(of node: some SyntaxProtocol) -> [String] {
+        var current: Syntax? = Syntax(node)
+        for _ in 0 ..< 3 {
+            guard let syntax = current else { break }
+            if let decl = syntax.asProtocol(WithAttributesSyntax.self) {
+                return decl.attributes.compactMap { element in
+                    element.as(AttributeSyntax.self)?.attributeName.trimmedDescription
+                }
+                .filter { trackedAttributes.contains($0) }
+            }
+            current = syntax.parent
+        }
+        return []
     }
 
     private struct ReferenceSpec {
@@ -498,9 +522,8 @@ final class GraphVisitor: SyntaxVisitor {
         for inherited in clause.inheritedTypes {
             let name = inherited.type.trimmedDescription
             guard !name.isEmpty else { continue }
-            // Swift syntax alone cannot tell a superclass from a protocol, so both are
-            // recorded as `conforms`; the resolver upgrades to `inherits` once it knows
-            // the target is a class.
+            // Syntax cannot tell a superclass from a protocol, so both are recorded as
+            // `conforms`. The resolver changes the kind to `inherits` for a type target.
             references.append(RawReference(
                 name: name,
                 kind: .conforms,

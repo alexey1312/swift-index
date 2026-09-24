@@ -441,15 +441,19 @@ public struct InitializeResult: Codable, Sendable {
     public let protocolVersion: String
     public let capabilities: MCPServerCapabilities
     public let serverInfo: MCPServerInfo
+    /// Usage guidance the client may add to the model's context.
+    public let instructions: String?
 
     public init(
         protocolVersion: String,
         capabilities: MCPServerCapabilities,
-        serverInfo: MCPServerInfo
+        serverInfo: MCPServerInfo,
+        instructions: String? = nil
     ) {
         self.protocolVersion = protocolVersion
         self.capabilities = capabilities
         self.serverInfo = serverInfo
+        self.instructions = instructions
     }
 }
 

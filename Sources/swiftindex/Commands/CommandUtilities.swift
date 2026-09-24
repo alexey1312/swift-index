@@ -1,5 +1,6 @@
 // MARK: - Command Utilities
 
+import ArgumentParser
 import Foundation
 import Logging
 import SwiftIndexCore
@@ -8,6 +9,22 @@ import SwiftIndexCore
 
 /// Namespace for CLI utility functions.
 enum CLIUtils {
+    /// Takes the index writer lock, or fails with the reason when another process has it.
+    ///
+    /// An agent's MCP server keeps the lock while it runs, and its watcher keeps the
+    /// index current. A second writer would overwrite the vectors it keeps in memory.
+    static func acquireWriterLock(indexPath: String) throws -> IndexWriterLock {
+        if let lock = IndexWriterLock.acquire(indexDirectory: indexPath) {
+            return lock
+        }
+        let holder = IndexWriterLock.recordedHolder(indexDirectory: indexPath).map { " (pid \($0))" } ?? ""
+        throw ValidationError("""
+        Another SwiftIndex process\(holder) writes this index, usually an agent's MCP server. \
+        Its watcher keeps the index current. To rebuild, call the index_codebase MCP tool, \
+        or stop that session first.
+        """)
+    }
+
     // MARK: - Logger Factory
 
     /// Creates a logger with appropriate log level based on verbose flag.

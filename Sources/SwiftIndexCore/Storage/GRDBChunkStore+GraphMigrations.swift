@@ -77,5 +77,19 @@ extension GRDBChunkStore {
                 table.column("v", .text).notNull()
             }
         }
+
+        // Module imports are not symbols: as pseudo-symbols they would match name
+        // searches and distort in-degree.
+        migrator.registerMigration("v12_graph_imports") { db in
+            try db.create(table: "file_imports") { table in
+                table.column("path", .text).notNull()
+                table.column("module", .text).notNull()
+                table.primaryKey(["path", "module"])
+            }
+            try db.create(index: "idx_file_imports_module", on: "file_imports", columns: ["module"])
+            try db.alter(table: "symbols") { table in
+                table.add(column: "attributes", .text)
+            }
+        }
     }
 }

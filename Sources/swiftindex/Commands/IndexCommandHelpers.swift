@@ -58,15 +58,13 @@ extension FileIndexer {
         chunks: [CodeChunk],
         context: IndexingContext
     ) async throws {
-        guard let graphBuilder = context.graphBuilder, path.hasSuffix(".swift") else { return }
-
-        let facts = SwiftGraphFactsExtractor.extract(
-            content: content,
+        try await context.graphBuilder?.recordFile(
             path: path,
+            content: content,
             fileHash: fileHash,
-            module: GraphBuilder.inferModule(path: path, projectRoot: context.projectPath)
+            chunks: chunks,
+            projectRoot: context.projectPath
         )
-        try await graphBuilder.record(facts: facts, chunks: chunks)
     }
 
     /// Records graph facts for a file whose chunks are already current.
@@ -143,14 +141,12 @@ enum FileIndexer {
         )
         chunks = updatedChunks
 
-        // Re-index the file with content-hash-based change detection
-        let reindexResult = try await context.indexManager.reindexWithChangeDetection(
+        // Changed chunks are stored for text search now and embedded in a later
+        // pass, so a slow model never delays search or the graph.
+        let reindexResult = try await context.indexManager.reindexDeferringEmbedding(
             path: path,
             newChunks: chunks
-        ) { chunksToEmbed in
-            let contents = chunksToEmbed.map(\.content)
-            return try await context.embeddingBatcher.embed(contents)
-        }
+        )
 
         // Record graph facts in the same pass that produced the chunks. Edges are
         // written unresolved; names are resolved once the whole symbol table exists.

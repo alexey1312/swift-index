@@ -197,9 +197,9 @@ struct CLITests {
         defer { cleanupFixtures(fixtureDir) }
 
         let (_, _, exitCode) = try runCommand(
-            ["init"],
+            ["init", "--provider", "mlx"],
             workingDirectory: fixtureDir.path,
-            environment: ["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "present"]
+            environment: ["SWIFTINDEX_MLX_RUNTIME_OVERRIDE": "present"]
         )
 
         #expect(exitCode == 0, "Init should succeed")
@@ -212,15 +212,15 @@ struct CLITests {
         #expect(contents.contains("# provider = \"openai\""))
     }
 
-    @Test("init command falls back to Swift Embeddings when MetalToolchain missing")
+    @Test("init command falls back to Swift Embeddings when the MLX runtime is missing")
     func initCommandFallsBackToSwiftEmbeddings() throws {
         let fixtureDir = try createTestFixtures(includeConfig: false)
         defer { cleanupFixtures(fixtureDir) }
 
         let (_, _, exitCode) = try runCommand(
-            ["init"],
+            ["init", "--provider", "mlx"],
             workingDirectory: fixtureDir.path,
-            environment: ["SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "missing"],
+            environment: ["SWIFTINDEX_MLX_RUNTIME_OVERRIDE": "missing"],
             stdin: "n\ny\n"
         )
 
@@ -242,7 +242,7 @@ struct CLITests {
             workingDirectory: fixtureDir.path,
             environment: [
                 "SWIFTINDEX_TTY_OVERRIDE": "noninteractive",
-                "SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "present",
+                "SWIFTINDEX_MLX_RUNTIME_OVERRIDE": "present",
             ]
         )
 
@@ -251,7 +251,7 @@ struct CLITests {
 
         let configPath = fixtureDir.appendingPathComponent(".swiftindex.toml")
         let contents = try String(contentsOf: configPath, encoding: .utf8)
-        #expect(contents.contains("provider = \"mlx\""), "Should use MLX defaults")
+        #expect(contents.contains("provider = \"auto\""), "Should use auto provider selection")
         #expect(contents.contains("enabled = false"), "LLM enhancement should be disabled by default")
     }
 
@@ -293,7 +293,7 @@ struct CLITests {
         #expect(contents.contains("model = \"nomic-embed-text\""), "Should use specified model")
     }
 
-    @Test("init command MLX falls back to Swift in non-TTY when MetalToolchain missing")
+    @Test("init command MLX falls back to Swift in non-TTY when the MLX runtime is missing")
     func initCommandMLXFallbackNonTTY() throws {
         let fixtureDir = try createTestFixtures(includeConfig: false)
         defer { cleanupFixtures(fixtureDir) }
@@ -303,7 +303,7 @@ struct CLITests {
             workingDirectory: fixtureDir.path,
             environment: [
                 "SWIFTINDEX_TTY_OVERRIDE": "noninteractive",
-                "SWIFTINDEX_METALTOOLCHAIN_OVERRIDE": "missing",
+                "SWIFTINDEX_MLX_RUNTIME_OVERRIDE": "missing",
             ]
         )
 
@@ -636,5 +636,101 @@ struct CLITests {
             stderr.contains("unknown") || stderr.contains("Unknown") || stderr.contains("Error"),
             "Should indicate unknown command"
         )
+    }
+
+    // MARK: - Agent Guidance and Graph Commands
+
+    @Test("install writes agent guidance once through a symlink and --remove undoes it")
+    func installWritesAndRemovesGuidance() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let agents = fixtureDir.appendingPathComponent("AGENTS.md")
+        try "# Project\n".write(to: agents, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(
+            at: fixtureDir.appendingPathComponent("CLAUDE.md"),
+            withDestinationURL: agents
+        )
+
+        let install = ["install", "--agent", "claude-code", "--agent", "codex", "--hook"]
+        let (_, _, exitCode) = try runCommand(install, workingDirectory: fixtureDir.path)
+        #expect(exitCode == 0)
+
+        let content = try String(contentsOf: agents, encoding: .utf8)
+        #expect(content.hasPrefix("# Project"))
+        #expect(content.components(separatedBy: "<!-- SWIFTINDEX_START -->").count == 2)
+        let settings = try String(
+            contentsOf: fixtureDir.appendingPathComponent(".claude/settings.json"),
+            encoding: .utf8
+        )
+        #expect(settings.contains("mcp__swiftindex__*"))
+        #expect(settings.contains("prompt-hook"))
+
+        let (_, _, removeCode) = try runCommand(
+            ["install", "--agent", "claude-code", "--agent", "codex", "--remove"],
+            workingDirectory: fixtureDir.path
+        )
+        #expect(removeCode == 0)
+        #expect(try String(contentsOf: agents, encoding: .utf8) == "# Project\n")
+        let cleaned = try String(
+            contentsOf: fixtureDir.appendingPathComponent(".claude/settings.json"),
+            encoding: .utf8
+        )
+        #expect(!cleaned.contains("swiftindex"))
+    }
+
+    @Test("prompt-hook ignores input it cannot use and exits 0")
+    func promptHookIgnoresGarbage() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+
+        let (stdout, _, exitCode) = try runCommand(
+            ["prompt-hook"],
+            workingDirectory: fixtureDir.path,
+            stdin: "not json"
+        )
+
+        #expect(exitCode == 0)
+        #expect(stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    @Test("index --no-embed supports explore, affected and dead-code queries")
+    func textOnlyIndexSupportsGraphCommands() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let testsDir = fixtureDir.appendingPathComponent("Tests/AppTests")
+        try FileManager.default.createDirectory(at: testsDir, withIntermediateDirectories: true)
+        try "func testGreet() { _ = Sample(name: \"a\").greet() }".write(
+            to: testsDir.appendingPathComponent("SampleTests.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try "struct Unused {\n    func neverCalled() {}\n}".write(
+            to: fixtureDir.appendingPathComponent("Unused.swift"),
+            atomically: true,
+            encoding: .utf8
+        )
+
+        let (_, _, indexCode) = try runCommand(["index", "--no-embed", "."], workingDirectory: fixtureDir.path)
+        #expect(indexCode == 0)
+
+        let (explore, _, exploreCode) = try runCommand(
+            ["explore", "Sample greet", "--bm25"],
+            workingDirectory: fixtureDir.path
+        )
+        #expect(exploreCode == 0)
+        #expect(explore.contains("## Sample.swift"))
+
+        let (affected, _, affectedCode) = try runCommand(
+            ["affected", "--stdin"],
+            workingDirectory: fixtureDir.path,
+            stdin: "Sample.swift\n"
+        )
+        #expect(affectedCode == 0)
+        #expect(affected.contains("Tests/AppTests/SampleTests.swift"))
+
+        let (dead, _, deadCode) = try runCommand(["graph", "--dead"], workingDirectory: fixtureDir.path)
+        #expect(deadCode == 0)
+        #expect(dead.contains("Unused.neverCalled"))
+        #expect(!dead.contains("Sample.greet"))
     }
 }

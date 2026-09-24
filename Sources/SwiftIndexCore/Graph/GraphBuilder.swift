@@ -10,6 +10,10 @@ import Logging
 /// the same pass that produces chunks, and phase B resolves names once, when the whole
 /// symbol table is known.
 public actor GraphBuilder {
+    /// Version of the resolution rules. An index resolved by an older version
+    /// re-resolves the edges whose rules changed.
+    static let resolverVersion = 2
+
     private let chunkStore: GRDBChunkStore
     private let config: GraphConfig
     private let logger: Logger
@@ -74,6 +78,38 @@ public actor GraphBuilder {
         }
     }
 
+    /// Parses one file and records its graph facts. Only Swift files feed the graph.
+    ///
+    /// - Parameters:
+    ///   - path: Absolute file path.
+    ///   - content: File content.
+    ///   - fileHash: Hash of `content`.
+    ///   - chunks: Chunks produced for the file, used to link symbols to chunks.
+    ///   - projectRoot: Project root, used to infer the module name.
+    public func recordFile(
+        path: String,
+        content: String,
+        fileHash: String,
+        chunks: [CodeChunk],
+        projectRoot: String
+    ) async throws {
+        guard config.enabled, path.hasSuffix(".swift") else { return }
+        let facts = SwiftGraphFactsExtractor.extract(
+            content: content,
+            path: path,
+            fileHash: fileHash,
+            module: Self.inferModule(path: path, projectRoot: projectRoot)
+        )
+        try await record(facts: facts, chunks: chunks)
+    }
+
+    /// Removes a deleted or emptied file from the graph and unresolves edges into it.
+    public func removeFile(path: String) async throws {
+        guard config.enabled, path.hasSuffix(".swift") else { return }
+        let empty = FileGraphFacts(path: path, fileHash: "", symbols: [], references: [], imports: [])
+        try await record(facts: empty, chunks: [])
+    }
+
     /// Whether a file has no symbols recorded yet.
     ///
     /// Used to backfill the graph for files whose chunks are already up to date, so
@@ -94,6 +130,11 @@ public actor GraphBuilder {
         // Marked dirty first so an interrupted pass is detectable and can be redone.
         try await chunkStore.setGraphMetaValue("dirty", "1")
 
+        let storedVersion = try await Int(chunkStore.graphMetaValue("resolver_version") ?? "") ?? 1
+        if storedVersion < Self.resolverVersion {
+            try await chunkStore.resetInheritanceEdges()
+        }
+
         let resolver = SymbolResolver(config: config, logger: logger)
         let resolved = try await resolver.resolveAll(
             chunkStore: chunkStore,
@@ -104,6 +145,7 @@ public actor GraphBuilder {
         try await chunkStore.setGraphMetaValue("symbol_count", String(stats.symbols))
         try await chunkStore.setGraphMetaValue("edge_count", String(stats.edges))
         try await chunkStore.setGraphMetaValue("resolved_count", String(stats.resolved))
+        try await chunkStore.setGraphMetaValue("resolver_version", String(Self.resolverVersion))
         try await chunkStore.setGraphMetaValue("dirty", "0")
 
         logger.info("Symbol graph resolved", metadata: [

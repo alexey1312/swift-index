@@ -28,6 +28,7 @@ public struct PartialConfig: Sendable, Equatable {
     public var embeddingBatchSize: Int?
     public var embeddingBatchTimeoutMs: Int?
     public var embeddingBatchMemoryLimitMB: Int?
+    public var embeddingEnabled: Bool?
 
     // MARK: - Search
 

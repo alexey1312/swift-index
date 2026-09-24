@@ -26,22 +26,31 @@
 
 ### CLI Commands
 
-| Command                          | Description                             |
-| -------------------------------- | --------------------------------------- |
-| `swiftindex init`                | Initialize config (required first step) |
-| `swiftindex index [PATH]`        | Index a codebase                        |
-| `swiftindex search <QUERY>`      | Search indexed code                     |
-| `swiftindex search-docs <QUERY>` | Search documentation snippets           |
-| `swiftindex parse-tree [PATH]`   | Visualize Swift AST structure           |
-| `swiftindex watch [PATH]`        | Watch mode (incremental)                |
-| `swiftindex serve`               | Start MCP server                        |
-| `swiftindex providers`           | List embedding providers                |
-| `swiftindex auth status`         | Check OAuth token status                |
-| `swiftindex auth login`          | Set up Claude Code OAuth token          |
-| `swiftindex auth logout`         | Remove OAuth token from Keychain        |
-| `swiftindex status`              | Show config, index and freshness status |
-| `swiftindex install`             | Configure all detected AI agents        |
-| `swiftindex parse-tree <PATH>`   | Visualize Swift AST structure           |
+| Command                          | Description                               |
+| -------------------------------- | ----------------------------------------- |
+| `swiftindex init`                | Initialize config (required first step)   |
+| `swiftindex index [PATH]`        | Index a codebase                          |
+| `swiftindex search <QUERY>`      | Search indexed code                       |
+| `swiftindex search-docs <QUERY>` | Search documentation snippets             |
+| `swiftindex parse-tree [PATH]`   | Visualize Swift AST structure             |
+| `swiftindex watch [PATH]`        | Watch mode (incremental)                  |
+| `swiftindex serve`               | Start MCP server                          |
+| `swiftindex providers`           | List embedding providers                  |
+| `swiftindex auth status`         | Check OAuth token status                  |
+| `swiftindex auth login`          | Set up Claude Code OAuth token            |
+| `swiftindex auth logout`         | Remove OAuth token from Keychain          |
+| `swiftindex status`              | Show config, index and freshness status   |
+| `swiftindex install`             | Configure all detected AI agents          |
+| `swiftindex parse-tree <PATH>`   | Visualize Swift AST structure             |
+| `swiftindex explore <QUERY>`     | Ranked, line-numbered code for a question |
+| `swiftindex graph <SYMBOL>`      | Callers, callees, impact, paths           |
+| `swiftindex graph --dead`        | List unreferenced declarations            |
+| `swiftindex affected [FILES]`    | Test files a change can break (`--stdin`) |
+
+`swiftindex install` also writes a marked block into CLAUDE.md, AGENTS.md or GEMINI.md
+and adds the `mcp__swiftindex__*` permission to `.claude/settings.json` (project scope).
+`--hook` adds a `UserPromptSubmit` hook (hidden command `swiftindex prompt-hook`), and
+`--remove` removes all of it.
 
 **Getting Started**: No configuration is required — `swiftindex index` runs on
 built-in defaults. `swiftindex init` is optional and only writes a `.swiftindex.toml`
@@ -97,10 +106,22 @@ See `docs/search-enhancement.md`.
 
 ### Indexing Flags
 
-| Flag      | Description                                         |
-| --------- | --------------------------------------------------- |
-| `--force` | Re-index all files, ignoring change detection       |
-| `--quiet` | Suppress all output except progress bar and summary |
+| Flag         | Description                                         |
+| ------------ | --------------------------------------------------- |
+| `--force`    | Re-index all files, ignoring change detection       |
+| `--quiet`    | Suppress all output except progress bar and summary |
+| `--no-embed` | Build only FTS5 text search and the symbol graph    |
+
+**Indexing phases**: Indexing first stores chunks for FTS5 text search and builds the
+symbol graph. No embedding model loads in this phase, so search, `explore` and
+`code_graph` work after seconds. The second phase embeds the chunks that have no vector.
+Ctrl-C keeps the saved vectors, and the next run resumes. The MCP server embeds missing
+vectors in the background. `[embedding] enabled = false` turns vectors off.
+
+**Provider selection (`auto`)**: An existing index keeps the provider in its `meta.json`.
+A new index uses the first cloud provider with a key (OpenAI, then Voyage, then Gemini),
+then MLX when `default.metallib` is beside the binary, else Swift Embeddings.
+`index --force` selects the provider again.
 
 **LLM Descriptions**: Automatically generated when an LLM provider is available.
 No flag needed - descriptions are created during indexing if `[search.enhancement]`
@@ -134,7 +155,9 @@ TOON is the default format for both CLI and MCP server.
 - `MCPTasks` — Tasks API for async long-running operations
 - `CancellationToken` — Cooperative cancellation for tool execution
 - Protocol version: `2025-11-25`
-- 6 tools: `index_codebase`, `check_indexing_status`, `search_code`, `search_docs`, `code_research`, `parse_tree`
+- 8 tools: `explore`, `index_codebase`, `check_indexing_status`, `search_code`, `search_docs`,
+  `code_graph`, `code_research`, `parse_tree`
+- The `initialize` response sends `instructions` that tell agents to call `explore` first
 
 #### MCP 2025-11-25 Features
 
@@ -157,6 +180,8 @@ TOON is the default format for both CLI and MCP server.
 | `search_docs`           | Documentation Search  | true     | true       |
 | `code_research`         | Code Research         | true     | true       |
 | `parse_tree`            | Parse Tree Visualizer | true     | true       |
+| `explore`               | Code Explorer         | true     | true       |
+| `code_graph`            | Code Graph            | true     | true       |
 
 #### Async Indexing (Two-Tool Callback Pattern)
 
@@ -339,18 +364,23 @@ let object = try JSONCodec.deserialize(data)
   `default.metallib` and `mlx.metallib` next to the release binary.
 - Release builds disable Whole-Module Optimization to avoid swift-frontend
   crashes in `swift-transformers` (Tokenizers).
-- Requires MetalToolchain (`xcrun --find metal` and `xcrun --find metallib`).
+- Requires MetalToolchain. Xcode 26+ has a `metal` stub, so `xcrun --find metal` is not
+  a valid check; run `xcrun metal --version`. Install it with
+  `xcodebuild -downloadComponent MetalToolchain`.
+- End users do not need MetalToolchain: release artifacts ship the metallib.
+- Swift 6.4 SwiftPM compiles `.metal` sources and fails without MetalToolchain. Install
+  it, or use `swift build --build-system native`.
 
 ### Init Behavior Notes
 
 - **Config required**: Most commands require a config file. Running `swiftindex index`
   without config will prompt to run init interactively (or show an error in
   non-interactive mode).
-- `swiftindex init` writes MLX defaults by default and includes commented examples.
-- If MetalToolchain is missing and MLX is selected, it prompts to install and can
-  fall back to Swift Embeddings defaults.
-- Tests can override MetalToolchain detection with
-  `SWIFTINDEX_METALTOOLCHAIN_OVERRIDE=present|missing`.
+- `swiftindex init` writes `provider = "auto"` by default and includes commented examples.
+- If MLX is selected and no metallib is beside the binary, it can fall back to Swift
+  Embeddings defaults.
+- Tests can override MLX runtime detection with
+  `SWIFTINDEX_MLX_RUNTIME_OVERRIDE=present|missing`.
 - **Dimension auto-detection**: Swift Embeddings provider auto-detects dimension from
   the model. Only MLX, Voyage, and OpenAI require explicit `dimension` in config.
   Don't specify dimension for `swift` provider — it will cause index corruption.
@@ -413,6 +443,24 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 | synthesize_by_default   | bool     | false   | Enable LLM result synthesis by default    |
 | default_extensions      | [string] | []      | Default extension filter (empty = all)    |
 | default_path_filter     | string   | ""      | Default path filter pattern (glob syntax) |
+
+### Auto Index and Embedding Options
+
+| Option                            | Type | Default | Description                                       |
+| --------------------------------- | ---- | ------- | ------------------------------------------------- |
+| `embedding.enabled`               | bool | true    | Compute vectors; false keeps FTS5 and graph only  |
+| `auto_index.reconcile_on_connect` | bool | true    | Catch up on edits when an MCP session starts      |
+| `auto_index.sync_threshold`       | int  | 25      | Changed files re-indexed before a catch-up defers |
+| `auto_index.watch`                | bool | true    | Watch the tree while `swiftindex serve` runs      |
+
+**One writer per index**: Each agent starts its own `swiftindex serve`, so one index can
+have several servers. The process that holds `flock` on `.swiftindex/writer.lock` is the
+writer: it reconciles, watches and embeds. The other servers only read, and they reload
+vectors when the writer saves them. A reader becomes the writer when the lock is free.
+The kernel releases the lock when its process exits. `swiftindex index` and
+`swiftindex watch` also take the lock, and they stop with a message when a server holds it.
+The watcher stores changed chunks for text search and the graph at once; a background
+pass adds their vectors.
 
 ### Search Enhancement Config
 

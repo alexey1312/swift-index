@@ -49,10 +49,7 @@ public actor BM25Search: SearchEngine {
     /// - Returns: Array of search results with BM25 scores.
     public func search(query: String, options: SearchOptions) async throws -> [SearchResult] {
         // Perform FTS5 search
-        let ftsResults = try await chunkStore.searchFTS(
-            query: prepareQuery(query),
-            limit: options.limit * 2 // Fetch extra for filtering
-        )
+        let ftsResults = try await searchFTS(query, limit: options.limit * 2)
 
         // Filter and transform results
         var results: [SearchResult] = []
@@ -105,10 +102,7 @@ public actor BM25Search: SearchEngine {
         query: String,
         limit: Int
     ) async throws -> [(id: String, score: Float)] {
-        let ftsResults = try await chunkStore.searchFTS(
-            query: prepareQuery(query),
-            limit: limit
-        )
+        let ftsResults = try await searchFTS(query, limit: limit)
 
         return ftsResults.map { (id: $0.chunk.id, score: Float($0.score)) }
     }
@@ -119,11 +113,40 @@ public actor BM25Search: SearchEngine {
     ///
     /// - Parameter query: The raw query string.
     /// - Returns: FTS5-compatible query string.
-    private func prepareQuery(_ query: String) -> String {
+    /// Words that carry no meaning in a question, dropped from the any-term query.
+    static let stopWords: Set<String> = [
+        "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does", "for", "from",
+        "how", "in", "is", "it", "of", "on", "or", "the", "this", "that", "to", "what",
+        "when", "where", "which", "who", "why", "with",
+    ]
+
+    /// Runs the all-terms query, then fills the rest with an any-term query.
+    ///
+    /// FTS5 joins bare terms with AND, so a question in natural language rarely
+    /// has one chunk that holds every word. Semantic search used to hide that. For
+    /// a text-only index the any-term query is what finds anything, and BM25 still
+    /// ranks chunks that match more terms higher.
+    private func searchFTS(_ query: String, limit: Int) async throws -> [(chunk: CodeChunk, score: Double)] {
+        var results = try await chunkStore.searchFTS(query: prepareQuery(query), limit: limit)
+        guard results.count < limit else { return results }
+
+        let anyTerm = prepareQuery(query, joiner: " OR ", dropStopWords: true)
+        guard !anyTerm.isEmpty else { return results }
+        var seen = Set(results.map(\.chunk.id))
+        for result in try await chunkStore.searchFTS(query: anyTerm, limit: limit) where results.count < limit {
+            if seen.insert(result.chunk.id).inserted {
+                results.append(result)
+            }
+        }
+        return results
+    }
+
+    private func prepareQuery(_ query: String, joiner: String = " ", dropStopWords: Bool = false) -> String {
         // Split into terms and join with AND for FTS5
         let terms = query
             .components(separatedBy: .whitespaces)
             .filter { !$0.isEmpty }
+            .filter { !dropStopWords || !Self.stopWords.contains($0.lowercased()) }
             .compactMap { term -> String? in
                 // Remove FTS5 special characters that cause syntax errors
                 // These include: ? * + - ^ ( ) { } [ ] | \ : ~
@@ -150,7 +173,7 @@ public actor BM25Search: SearchEngine {
                 return "\"\(escaped)\""
             }
 
-        return terms.joined(separator: " ")
+        return terms.joined(separator: joiner)
     }
 
     /// Detects if a term is a CamelCase identifier (e.g., USearchError, CodeChunk).
