@@ -109,11 +109,7 @@ public actor BM25Search: SearchEngine {
 
     // MARK: - Private Helpers
 
-    /// Prepares a query for FTS5 search.
-    ///
-    /// - Parameter query: The raw query string.
-    /// - Returns: FTS5-compatible query string.
-    /// Words that carry no meaning in a question, dropped from the any-term query.
+    /// Words that carry no meaning in a question. The any-term query drops them.
     static let stopWords: Set<String> = [
         "a", "an", "and", "are", "as", "at", "be", "by", "can", "do", "does", "for", "from",
         "how", "in", "is", "it", "of", "on", "or", "the", "this", "that", "to", "what",
@@ -141,6 +137,7 @@ public actor BM25Search: SearchEngine {
         return results
     }
 
+    /// Makes an FTS5 query from the raw query string.
     private func prepareQuery(_ query: String, joiner: String = " ", dropStopWords: Bool = false) -> String {
         // Split into terms and join with AND for FTS5
         let terms = query

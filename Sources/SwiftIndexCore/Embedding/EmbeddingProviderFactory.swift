@@ -53,7 +53,8 @@ public enum EmbeddingProviderFactory {
     ///   - indexDirectory: Index directory whose metadata pins `auto`, if known.
     ///   - logger: Logger for selection diagnostics.
     /// - Returns: The selected provider plus its identity and dimension.
-    /// - Throws: `ProviderError` if an explicitly requested provider cannot be used.
+    /// - Throws: `ProviderError` if an explicitly requested provider or the provider
+    ///   that built the index cannot be used.
     public static func resolve(
         config: Config,
         indexDirectory: String? = nil,
@@ -65,12 +66,8 @@ public enum EmbeddingProviderFactory {
             return try make(provider: requested, config: config, logger: logger)
         }
 
-        if let indexDirectory,
-           let metadata = IndexMetadata.load(fromIndexDirectory: indexDirectory),
-           let pinned = try? make(provider: metadata.providerID, config: config.pinned(to: metadata), logger: logger)
-        {
-            logger.debug("auto pinned to index provider: \(pinned.providerID)")
-            return pinned
+        if let indexDirectory, let metadata = IndexMetadata.load(fromIndexDirectory: indexDirectory) {
+            return try pinnedProvider(metadata: metadata, config: config, logger: logger)
         }
 
         if let cloud = firstCloudProvider(config: config, logger: logger) {
@@ -89,6 +86,29 @@ public enum EmbeddingProviderFactory {
         return try make(provider: "swift-embeddings", config: config, logger: logger)
     }
 
+    /// The provider that built an existing index.
+    ///
+    /// A different provider embeds into another vector space, so a failure throws.
+    /// `index --force` passes no index directory and so selects a provider again.
+    private static func pinnedProvider(
+        metadata: IndexMetadata,
+        config: Config,
+        logger: Logger
+    ) throws -> ResolvedEmbedding {
+        do {
+            let pinned = try make(provider: metadata.providerID, config: config.pinned(to: metadata), logger: logger)
+            logger.debug("auto pinned to index provider: \(pinned.providerID)")
+            return pinned
+        } catch {
+            let keyHint = CloudEmbeddingProvider(rawValue: metadata.providerID.lowercased())
+                .map { "set \($0.keyVariable) or " } ?? ""
+            throw ProviderError.notAvailable(reason: """
+            Index was built with \(metadata.providerID) (\(error.localizedDescription)); \
+            \(keyHint)run `swiftindex index --force` to rebuild it with another provider.
+            """)
+        }
+    }
+
     /// Whether `auto` has no cloud key and so embeds with a local model.
     public static func autoUsesLocalModel(config: Config) -> Bool {
         config.embeddingProvider.lowercased() == "auto" && !hasCloudKey(config: config)
@@ -98,12 +118,11 @@ public enum EmbeddingProviderFactory {
         EmbeddingModelDefaults.cloudPreference.contains { apiKey(for: $0.provider, config: config) != nil }
     }
 
-    private static func apiKey(for provider: String, config: Config) -> String? {
+    private static func apiKey(for provider: CloudEmbeddingProvider, config: Config) -> String? {
         let key = switch provider {
-        case "openai": config.openAIAPIKey
-        case "voyage": config.voyageAPIKey
-        case "gemini": config.geminiAPIKey
-        default: String?.none
+        case .openai: config.openAIAPIKey
+        case .voyage: config.voyageAPIKey
+        case .gemini: config.geminiAPIKey
         }
         guard let key, !key.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
         return key
@@ -120,7 +139,7 @@ public enum EmbeddingProviderFactory {
             var cloudConfig = config
             cloudConfig.embeddingModel = candidate.model
             cloudConfig.embeddingDimension = candidate.dimension
-            if let resolved = try? make(provider: candidate.provider, config: cloudConfig, logger: logger) {
+            if let resolved = try? make(provider: candidate.provider.rawValue, config: cloudConfig, logger: logger) {
                 return resolved
             }
         }
@@ -162,7 +181,7 @@ public enum EmbeddingProviderFactory {
             // auto-detects it, and an explicit mismatched value corrupts the index.
             let model = EmbeddingModelDefaults.swiftEmbeddingsModel(for: config.embeddingModel)
             if model == nil {
-                logger.debug("Unknown swift-embeddings model '\(config.embeddingModel)'; using the default")
+                logger.warning("Unknown swift-embeddings model '\(config.embeddingModel)'; using the default")
             }
             let swift = SwiftEmbeddingsProvider(model: model ?? .miniLM)
             return pin(swift, id: "swift-embeddings", model: swift.modelName)
@@ -239,6 +258,16 @@ public enum EmbeddingProviderFactory {
             modelID: model,
             dimension: provider.dimension
         )
+    }
+}
+
+private extension CloudEmbeddingProvider {
+    var keyVariable: String {
+        switch self {
+        case .openai: "OPENAI_API_KEY"
+        case .voyage: "VOYAGE_API_KEY"
+        case .gemini: "GEMINI_API_KEY"
+        }
     }
 }
 

@@ -146,7 +146,6 @@ public struct IndexReconciler: Sendable {
     ///
     /// - Parameters:
     ///   - report: Result of `reconcile`.
-    ///   - indexManager: Index to update.
     ///   - graphBuilder: Graph to remove deleted files from, when the graph is enabled.
     /// - Returns: Number of chunks removed for deleted files.
     @discardableResult

@@ -652,7 +652,7 @@ struct CLITests {
         )
 
         let install = ["install", "--agent", "claude-code", "--agent", "codex", "--hook"]
-        let (_, _, exitCode) = try runCommand(install, workingDirectory: fixtureDir.path)
+        let (_, _, exitCode) = try runInstall(install, in: fixtureDir)
         #expect(exitCode == 0)
 
         let content = try String(contentsOf: agents, encoding: .utf8)
@@ -665,9 +665,9 @@ struct CLITests {
         #expect(settings.contains("mcp__swiftindex__*"))
         #expect(settings.contains("prompt-hook"))
 
-        let (_, _, removeCode) = try runCommand(
+        let (_, _, removeCode) = try runInstall(
             ["install", "--agent", "claude-code", "--agent", "codex", "--remove"],
-            workingDirectory: fixtureDir.path
+            in: fixtureDir
         )
         #expect(removeCode == 0)
         #expect(try String(contentsOf: agents, encoding: .utf8) == "# Project\n")
@@ -718,7 +718,8 @@ struct CLITests {
             workingDirectory: fixtureDir.path
         )
         #expect(exploreCode == 0)
-        #expect(explore.contains("## Sample.swift"))
+        #expect(explore.contains("Sample.swift"))
+        #expect(explore.contains("func greet()"))
 
         let (affected, _, affectedCode) = try runCommand(
             ["affected", "--stdin"],
@@ -732,5 +733,198 @@ struct CLITests {
         #expect(deadCode == 0)
         #expect(dead.contains("Unused.neverCalled"))
         #expect(!dead.contains("Sample.greet"))
+    }
+}
+
+// MARK: - Install Safety and Prompt Hook
+
+extension CLITests {
+    /// Runs `install` with HOME in the fixture, so global agent configs stay untouched.
+    private func runInstall(
+        _ arguments: [String],
+        in dir: URL
+    ) throws -> (stdout: String, stderr: String, exitCode: Int32) {
+        try runCommand(
+            arguments,
+            workingDirectory: dir.path,
+            environment: ["HOME": dir.path, "CFFIXED_USER_HOME": dir.path]
+        )
+    }
+
+    private func settingsJSON(in dir: URL) throws -> [String: Any] {
+        let data = try Data(contentsOf: dir.appendingPathComponent(".claude/settings.json"))
+        return try #require(JSONCodec.deserialize(data) as? [String: Any])
+    }
+
+    private func promptHookCommands(_ settings: [String: Any]) -> [String] {
+        let groups = (settings["hooks"] as? [String: Any])?["UserPromptSubmit"] as? [[String: Any]] ?? []
+        return groups.flatMap { ($0["hooks"] as? [[String: Any]] ?? []).compactMap { $0["command"] as? String } }
+    }
+
+    @Test("install keeps unrelated settings, does not duplicate entries and keeps the hook without --hook")
+    func installSettingsRoundTrip() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let original: [String: Any] = [
+            "model": "opus",
+            "permissions": ["allow": ["Bash(ls)"]],
+            "hooks": ["UserPromptSubmit": [["hooks": [["type": "command", "command": "echo user"]]]]],
+        ]
+        try FileManager.default.createDirectory(
+            at: fixtureDir.appendingPathComponent(".claude"),
+            withIntermediateDirectories: true
+        )
+        try JSONCodec.serialize(original, options: [.prettyPrinted, .sortedKeys])
+            .write(to: fixtureDir.appendingPathComponent(".claude/settings.json"))
+
+        let hookInstall = ["install", "--agent", "claude-code", "--no-instructions", "--hook"]
+        #expect(try runInstall(hookInstall, in: fixtureDir).exitCode == 0)
+        #expect(try runInstall(hookInstall, in: fixtureDir).exitCode == 0)
+        let plainInstall = ["install", "--agent", "claude-code", "--no-instructions"]
+        #expect(try runInstall(plainInstall, in: fixtureDir).exitCode == 0)
+
+        let settings = try settingsJSON(in: fixtureDir)
+        #expect(settings["model"] as? String == "opus")
+        let allow = (settings["permissions"] as? [String: Any])?["allow"] as? [String]
+        #expect(allow == ["Bash(ls)", "mcp__swiftindex__*"])
+        let commands = promptHookCommands(settings)
+        #expect(commands.count == 2)
+        #expect(commands.contains("echo user"))
+        let ours = try #require(commands.first { $0.hasSuffix(" prompt-hook") })
+        #expect(ours.hasPrefix("'") && ours.contains("' prompt-hook"))
+
+        #expect(try runInstall(["install", "--agent", "claude-code", "--remove"], in: fixtureDir).exitCode == 0)
+        try #expect(NSDictionary(dictionary: settingsJSON(in: fixtureDir)).isEqual(to: original))
+    }
+
+    @Test("install and --remove leave a malformed settings.json alone and exit non-zero")
+    func installRefusesMalformedSettings() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let settingsURL = fixtureDir.appendingPathComponent(".claude/settings.json")
+        try FileManager.default.createDirectory(
+            at: settingsURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let malformed = Data("{ \"model\": \"opus\", }".utf8)
+        try malformed.write(to: settingsURL)
+
+        let (stdout, _, exitCode) = try runInstall(
+            ["install", "--agent", "claude-code", "--no-instructions", "--hook"],
+            in: fixtureDir
+        )
+        #expect(exitCode != 0)
+        #expect(stdout.contains("settings.json is not valid JSON"))
+        #expect(stdout.contains("Fix it and run again."))
+        #expect(try Data(contentsOf: settingsURL) == malformed)
+
+        let (_, _, removeCode) = try runInstall(["install", "--agent", "claude-code", "--remove"], in: fixtureDir)
+        #expect(removeCode != 0)
+        #expect(try Data(contentsOf: settingsURL) == malformed)
+    }
+
+    @Test("install and --remove never overwrite a CLAUDE.md that is not UTF-8")
+    func installKeepsNonUTF8Instructions() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let claudeMD = fixtureDir.appendingPathComponent("CLAUDE.md")
+        let bytes = Data([0x23, 0x20, 0xFF, 0xFE, 0x41, 0x0A])
+        try bytes.write(to: claudeMD)
+
+        let (stdout, _, exitCode) = try runInstall(["install", "--agent", "claude-code"], in: fixtureDir)
+        #expect(exitCode != 0)
+        #expect(stdout.contains("CLAUDE.md is not UTF-8 text"))
+        #expect(try Data(contentsOf: claudeMD) == bytes)
+
+        let (_, _, removeCode) = try runInstall(["install", "--agent", "claude-code", "--remove"], in: fixtureDir)
+        #expect(removeCode != 0)
+        #expect(try Data(contentsOf: claudeMD) == bytes)
+    }
+
+    @Test("--remove leaves a file without a block byte-identical, and install then remove restores it")
+    func removeRoundTripIsExact() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let agents = fixtureDir.appendingPathComponent("AGENTS.md")
+        let noBlock = Data("# Title\n\nNo trailing newline".utf8)
+        try noBlock.write(to: agents)
+
+        let remove = ["install", "--agent", "cursor", "--remove"]
+        #expect(try runInstall(remove, in: fixtureDir).exitCode == 0)
+        #expect(try Data(contentsOf: agents) == noBlock)
+
+        for original in ["# Title\n", "# Title\n\nText\n\n"] {
+            try Data(original.utf8).write(to: agents)
+            #expect(try runInstall(["install", "--agent", "cursor"], in: fixtureDir).exitCode == 0)
+            #expect(try runInstall(["install", "--agent", "cursor"], in: fixtureDir).exitCode == 0)
+            let installed = try String(contentsOf: agents, encoding: .utf8)
+            #expect(installed.components(separatedBy: "<!-- SWIFTINDEX_START -->").count == 2)
+            #expect(try runInstall(remove, in: fixtureDir).exitCode == 0)
+            #expect(try String(contentsOf: agents, encoding: .utf8) == original)
+        }
+    }
+
+    @Test("prompt-hook adds context for a named symbol and nothing for other prompts")
+    func promptHookInjectsContext() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let (_, _, indexCode) = try runCommand(["index", "--no-embed", "."], workingDirectory: fixtureDir.path)
+        #expect(indexCode == 0)
+
+        func hook(_ prompt: String) throws -> String {
+            let input = try JSONCodec.serialize(["prompt": prompt, "cwd": fixtureDir.path])
+            let (stdout, _, exitCode) = try runCommand(
+                ["prompt-hook"],
+                workingDirectory: fixtureDir.path,
+                stdin: String(bytes: input, encoding: .utf8)
+            )
+            #expect(exitCode == 0)
+            return stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        let output = try hook("what does Sample do")
+        let json = try #require(JSONCodec.deserialize(Data(output.utf8)) as? [String: Any])
+        let specific = try #require(json["hookSpecificOutput"] as? [String: Any])
+        #expect(specific["hookEventName"] as? String == "UserPromptSubmit")
+        let context = try #require(specific["additionalContext"] as? String)
+        #expect(context.contains("Sample.swift"))
+
+        #expect(try hook("what does NothingKnown do").isEmpty)
+    }
+
+    @Test("index stops with a clear message while another process holds the writer lock")
+    func indexStopsWhenWriterLockIsHeld() throws {
+        let fixtureDir = try createTestFixtures()
+        defer { cleanupFixtures(fixtureDir) }
+        let indexDir = fixtureDir.appendingPathComponent(".swiftindex")
+        try FileManager.default.createDirectory(at: indexDir, withIntermediateDirectories: true)
+
+        let holder = Process()
+        holder.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        holder.arguments = [
+            "-c",
+            """
+            import fcntl, sys, time
+            f = open(sys.argv[1], "a")
+            fcntl.flock(f, fcntl.LOCK_EX)
+            print("locked", flush=True)
+            time.sleep(60)
+            """,
+            indexDir.appendingPathComponent("writer.lock").path,
+        ]
+        let holderOutput = Pipe()
+        holder.standardOutput = holderOutput
+        try holder.run()
+        defer {
+            holder.terminate()
+            holder.waitUntilExit()
+        }
+        let ready = String(bytes: holderOutput.fileHandleForReading.availableData, encoding: .utf8) ?? ""
+        try #require(ready.contains("locked"))
+
+        let (stdout, stderr, exitCode) = try runCommand(["index", "--no-embed", "."], workingDirectory: fixtureDir.path)
+        #expect(exitCode != 0)
+        #expect((stdout + stderr).contains("Another SwiftIndex process"))
+        #expect(!FileManager.default.fileExists(atPath: indexDir.appendingPathComponent("chunks.db").path))
     }
 }

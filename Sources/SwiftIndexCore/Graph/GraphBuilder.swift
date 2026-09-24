@@ -82,7 +82,6 @@ public actor GraphBuilder {
     ///
     /// - Parameters:
     ///   - path: Absolute file path.
-    ///   - content: File content.
     ///   - fileHash: Hash of `content`.
     ///   - chunks: Chunks produced for the file, used to link symbols to chunks.
     ///   - projectRoot: Project root, used to infer the module name.

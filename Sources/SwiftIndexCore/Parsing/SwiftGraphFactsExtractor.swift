@@ -522,7 +522,7 @@ final class GraphVisitor: SyntaxVisitor {
         for inherited in clause.inheritedTypes {
             let name = inherited.type.trimmedDescription
             guard !name.isEmpty else { continue }
-            // Syntax cannot tell a superclass from a protocol, so both are recorded as
+            // Syntax cannot tell a superclass from a protocol, so the extractor records both as
             // `conforms`. The resolver changes the kind to `inherits` for a type target.
             references.append(RawReference(
                 name: name,

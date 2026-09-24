@@ -90,6 +90,7 @@ struct InstallCommand: AsyncParsableCommand {
 
         var rows: [(name: String, path: String, outcome: InstallOutcome)] = []
         var restartNames: [String] = []
+        var failures: [InstallFileError] = []
 
         for target in targets {
             // Some agents have no project-scoped config; fall back to global rather
@@ -112,10 +113,15 @@ struct InstallCommand: AsyncParsableCommand {
                 continue
             }
 
-            let outcome = try MCPConfigWriter.apply(plan, force: force)
-            rows.append((target.displayName, plan.configPath, outcome))
-            if outcome == .installed || outcome == .updated {
-                restartNames.append(target.displayName)
+            do {
+                let outcome = try MCPConfigWriter.apply(plan, force: force)
+                rows.append((target.displayName, plan.configPath, outcome))
+                if outcome == .installed || outcome == .updated {
+                    restartNames.append(target.displayName)
+                }
+            } catch let error as InstallFileError {
+                rows.append((target.displayName, plan.configPath, .skippedUnreadable))
+                failures.append(error)
             }
         }
 
@@ -125,7 +131,8 @@ struct InstallCommand: AsyncParsableCommand {
                 targets: targets,
                 scope: scope,
                 executablePath: pathResult.path,
-                workingDirectory: workingDirectory
+                workingDirectory: workingDirectory,
+                failures: &failures
             )
         }
 
@@ -133,12 +140,7 @@ struct InstallCommand: AsyncParsableCommand {
             print("")
             print("Restart \(restartNames.joined(separator: ", ")) to load the SwiftIndex tools.")
         }
-
-        if rows.contains(where: \.outcome.isFailure) {
-            print("")
-            print("Some configs could not be read. Re-run with --force to overwrite them.")
-            throw ExitCode.failure
-        }
+        try report(failures)
     }
 
     // MARK: - Agent Guidance
@@ -148,7 +150,8 @@ struct InstallCommand: AsyncParsableCommand {
         targets: [AgentTarget],
         scope: InstallScope,
         executablePath: String,
-        workingDirectory: String
+        workingDirectory: String,
+        failures: inout [InstallFileError]
     ) throws {
         guard scope == .project else { return }
 
@@ -156,12 +159,14 @@ struct InstallCommand: AsyncParsableCommand {
         if instructions {
             let files = targets.compactMap { AgentInstructionsWriter.fileName(forAgent: $0.id) }
                 .map { (workingDirectory as NSString).appendingPathComponent($0) }
-            changed += try AgentInstructionsWriter.apply(paths: files, removing: false)
+            changed += try AgentInstructionsWriter.apply(paths: files, removing: false, failures: &failures)
         }
         if targets.contains(where: { $0.id == "claude-code" }) {
             let path = ClaudeSettingsWriter.settingsPath(workingDirectory: workingDirectory)
-            let command = hook ? "\(executablePath) \(ClaudeSettingsWriter.hookSubcommand)" : nil
-            if try ClaudeSettingsWriter.apply(path: path, hookCommand: command, removing: false) {
+            let command = hook ? ClaudeSettingsWriter.hookCommand(executablePath: executablePath) : nil
+            if try collecting(&failures, { try ClaudeSettingsWriter.apply(
+                path: path, hookCommand: command, removing: false
+            ) }) {
                 changed.append(path)
             }
         }
@@ -170,29 +175,51 @@ struct InstallCommand: AsyncParsableCommand {
 
     private func removeInstallation(targets: [AgentTarget], scope: InstallScope, workingDirectory: String) throws {
         var changed: [String] = []
+        var failures: [InstallFileError] = []
         for target in targets {
             guard let path = target.configPath(scope: scope, workingDirectory: workingDirectory)
                 ?? target.configPath(scope: .global, workingDirectory: workingDirectory)
             else {
                 continue
             }
-            if try MCPConfigWriter.remove(configPath: path, format: target.format) {
+            if try collecting(&failures, { try MCPConfigWriter.remove(configPath: path, format: target.format) }) {
                 changed.append(path)
             }
         }
         if scope == .project {
             let files = targets.compactMap { AgentInstructionsWriter.fileName(forAgent: $0.id) }
                 .map { (workingDirectory as NSString).appendingPathComponent($0) }
-            changed += try AgentInstructionsWriter.apply(paths: files, removing: true)
+            changed += try AgentInstructionsWriter.apply(paths: files, removing: true, failures: &failures)
             let settings = ClaudeSettingsWriter.settingsPath(workingDirectory: workingDirectory)
-            if try ClaudeSettingsWriter.apply(path: settings, hookCommand: nil, removing: true) {
+            if try collecting(&failures, { try ClaudeSettingsWriter.apply(
+                path: settings, hookCommand: nil, removing: true
+            ) }) {
                 changed.append(settings)
             }
         }
         printChanged(changed, verb: "Removed SwiftIndex from")
-        if changed.isEmpty {
+        if changed.isEmpty, failures.isEmpty {
             print("Nothing to remove.")
         }
+        try report(failures)
+    }
+
+    private func collecting(_ failures: inout [InstallFileError], _ body: () throws -> Bool) throws -> Bool {
+        do {
+            return try body()
+        } catch let error as InstallFileError {
+            failures.append(error)
+            return false
+        }
+    }
+
+    private func report(_ failures: [InstallFileError]) throws {
+        guard !failures.isEmpty else { return }
+        print("")
+        for failure in failures {
+            print(failure.description)
+        }
+        throw ExitCode.failure
     }
 
     private func printChanged(_ paths: [String], verb: String) {

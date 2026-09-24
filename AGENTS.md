@@ -24,11 +24,14 @@
 | `./bin/mise run lint`               | Run linters                           |
 | `./bin/mise run format`             | Format all code                       |
 
+Without MetalToolchain, Swift 6.4 SwiftPM fails on `.metal` sources. Use
+`swift build --build-system native` in that case.
+
 ### CLI Commands
 
 | Command                          | Description                               |
 | -------------------------------- | ----------------------------------------- |
-| `swiftindex init`                | Initialize config (required first step)   |
+| `swiftindex init`                | Write an optional `.swiftindex.toml`      |
 | `swiftindex index [PATH]`        | Index a codebase                          |
 | `swiftindex search <QUERY>`      | Search indexed code                       |
 | `swiftindex search-docs <QUERY>` | Search documentation snippets             |
@@ -41,7 +44,6 @@
 | `swiftindex auth logout`         | Remove OAuth token from Keychain          |
 | `swiftindex status`              | Show config, index and freshness status   |
 | `swiftindex install`             | Configure all detected AI agents          |
-| `swiftindex parse-tree <PATH>`   | Visualize Swift AST structure             |
 | `swiftindex explore <QUERY>`     | Ranked, line-numbered code for a question |
 | `swiftindex graph <SYMBOL>`      | Callers, callees, impact, paths           |
 | `swiftindex graph --dead`        | List unreferenced declarations            |
@@ -212,7 +214,7 @@ check_indexing_status(task_id="abc-123")
 
 - `/Configuration` — TOML config loading (TOMLConfigLoader, Config, SearchEnhancementConfig)
   - `TOMLConfigValidator.allowedSections` must be updated when adding new config keys to `TOMLConfig` structs
-- `/Embedding` — Providers (MLX, Ollama, Voyage, OpenAI, SwiftEmbeddings), HubModelManager
+- `/Embedding` — Providers (MLX, Ollama, Voyage, OpenAI, Gemini, SwiftEmbeddings), HubModelManager
   - `EmbeddingBatcher` — Batches cross-file embedding requests for max GPU utilization
 - `/Index` — IndexManager (orchestrates storage and embedding)
 - `/LLM` — LLM providers and search enhancement features
@@ -298,7 +300,7 @@ ClaudeCodeAuthManager for the CLI-based flow.
 ### Architecture Patterns
 
 - Protocol-oriented design (swappable implementations)
-- Provider chain (embedding fallback: MLX → SwiftEmbeddings)
+- `auto` provider selection: index meta.json, cloud key, MLX, Swift Embeddings
 - Repository pattern for storage abstractions
 
 ### Style
@@ -373,16 +375,15 @@ let object = try JSONCodec.deserialize(data)
 
 ### Init Behavior Notes
 
-- **Config required**: Most commands require a config file. Running `swiftindex index`
-  without config will prompt to run init interactively (or show an error in
-  non-interactive mode).
+- **No config required**: Every command runs on built-in defaults when no config file
+  exists. `swiftindex init` only pins the settings in a `.swiftindex.toml`.
 - `swiftindex init` writes `provider = "auto"` by default and includes commented examples.
 - If MLX is selected and no metallib is beside the binary, it can fall back to Swift
   Embeddings defaults.
 - Tests can override MLX runtime detection with
   `SWIFTINDEX_MLX_RUNTIME_OVERRIDE=present|missing`.
 - **Dimension auto-detection**: Swift Embeddings provider auto-detects dimension from
-  the model. Only MLX, Voyage, and OpenAI require explicit `dimension` in config.
+  the model. Only MLX, Voyage, OpenAI and Gemini require explicit `dimension` in config.
   Don't specify dimension for `swift` provider — it will cause index corruption.
 
 ## Distribution
@@ -414,18 +415,12 @@ git push --tags
 
 ## Configuration
 
-### Initialization Requirement
+### Zero-Config Defaults
 
-**Configuration file is required** for most commands. If no `.swiftindex.toml` exists
-(project or global), commands will prompt to run `swiftindex init` first.
-
-- `swiftindex index` — prompts to run init interactively, shows error in non-interactive mode
-- `swiftindex search`, `swiftindex watch`, `swiftindex serve` — show error with instructions
-- `swiftindex providers` — works without config (informational command)
-
-This ensures explicit configuration and avoids implicit default behavior that may be
-confusing. The config file is the single source of truth for embedding provider,
-model settings, and indexing options.
+No command requires a config file. Every caller loads the config with
+`requireInitialization: false`, so a missing `.swiftindex.toml` gives the built-in defaults.
+The default embedding provider is `auto`. Run `swiftindex init` to pin settings in a
+project `.swiftindex.toml`. Run `swiftindex status` to see the resolved configuration.
 
 ### Config Priority
 
@@ -446,12 +441,12 @@ Config priority: CLI args > Environment > Project `.swiftindex.toml` > Global `~
 
 ### Auto Index and Embedding Options
 
-| Option                            | Type | Default | Description                                       |
-| --------------------------------- | ---- | ------- | ------------------------------------------------- |
-| `embedding.enabled`               | bool | true    | Compute vectors; false keeps FTS5 and graph only  |
-| `auto_index.reconcile_on_connect` | bool | true    | Catch up on edits when an MCP session starts      |
-| `auto_index.sync_threshold`       | int  | 25      | Changed files re-indexed before a catch-up defers |
-| `auto_index.watch`                | bool | true    | Watch the tree while `swiftindex serve` runs      |
+| Option                            | Type | Default | Description                                                              |
+| --------------------------------- | ---- | ------- | ------------------------------------------------------------------------ |
+| `embedding.enabled`               | bool | true    | Compute vectors; false keeps FTS5 and graph only                         |
+| `auto_index.reconcile_on_connect` | bool | true    | Reconcile the index when an MCP session starts                           |
+| `auto_index.sync_threshold`       | int  | 25      | Largest change set that a reconcile re-indexes; a larger set stays stale |
+| `auto_index.watch`                | bool | true    | Watch the tree while `swiftindex serve` runs                             |
 
 **One writer per index**: Each agent starts its own `swiftindex serve`, so one index can
 have several servers. The process that holds `flock` on `.swiftindex/writer.lock` is the
@@ -459,6 +454,7 @@ writer: it reconciles, watches and embeds. The other servers only read, and they
 vectors when the writer saves them. A reader becomes the writer when the lock is free.
 The kernel releases the lock when its process exits. `swiftindex index` and
 `swiftindex watch` also take the lock, and they stop with a message when a server holds it.
+An MCP server takes the lock at its first tool call and keeps it until it exits.
 The watcher stores changed chunks for text search and the graph at once; a background
 pass adds their vectors.
 
@@ -502,19 +498,19 @@ re-downloaded.
 
 ### Environment Variables
 
-| Variable                        | Description                               |
-| ------------------------------- | ----------------------------------------- |
-| `SWIFTINDEX_EMBEDDING_PROVIDER` | mlx, ollama, voyage, openai               |
-| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory override            |
-| `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (highest priority)      |
-| `CLAUDE_CODE_OAUTH_TOKEN`       | OAuth token (auto-set by Claude Code CLI) |
-| `ANTHROPIC_API_KEY`             | Anthropic API key (fallback)              |
-| `SWIFTINDEX_VOYAGE_API_KEY`     | Voyage AI key (priority)                  |
-| `VOYAGE_API_KEY`                | Voyage AI key (fallback)                  |
-| `SWIFTINDEX_OPENAI_API_KEY`     | OpenAI key (priority)                     |
-| `OPENAI_API_KEY`                | OpenAI key (fallback)                     |
-| `SWIFTINDEX_GEMINI_API_KEY`     | Gemini API key (priority)                 |
-| `GEMINI_API_KEY`                | Gemini API key (fallback)                 |
+| Variable                        | Description                                      |
+| ------------------------------- | ------------------------------------------------ |
+| `SWIFTINDEX_EMBEDDING_PROVIDER` | auto, mlx, swift, ollama, voyage, openai, gemini |
+| `SWIFTINDEX_MODEL_CACHE`        | Model cache directory override                   |
+| `SWIFTINDEX_ANTHROPIC_API_KEY`  | Anthropic API key (highest priority)             |
+| `CLAUDE_CODE_OAUTH_TOKEN`       | OAuth token (auto-set by Claude Code CLI)        |
+| `ANTHROPIC_API_KEY`             | Anthropic API key (fallback)                     |
+| `SWIFTINDEX_VOYAGE_API_KEY`     | Voyage AI key (priority)                         |
+| `VOYAGE_API_KEY`                | Voyage AI key (fallback)                         |
+| `SWIFTINDEX_OPENAI_API_KEY`     | OpenAI key (priority)                            |
+| `OPENAI_API_KEY`                | OpenAI key (fallback)                            |
+| `SWIFTINDEX_GEMINI_API_KEY`     | Gemini API key (priority)                        |
+| `GEMINI_API_KEY`                | Gemini API key (fallback)                        |
 
 **Anthropic Authentication Priority** (highest to lowest):
 

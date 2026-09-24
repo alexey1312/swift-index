@@ -20,9 +20,31 @@ enum InstallOutcome: Sendable, Equatable {
         case .wouldInstall: "would install"
         }
     }
+}
 
-    var isFailure: Bool {
-        self == .skippedUnreadable
+/// A configuration file that exists but cannot be parsed. Install never overwrites it.
+struct InstallFileError: Error, CustomStringConvertible {
+    let path: String
+    let reason: String
+
+    var description: String {
+        "\(path) \(reason). Fix it and run again."
+    }
+
+    static func invalidJSON(path: String, error: Error?) -> InstallFileError {
+        InstallFileError(path: path, reason: "is not valid JSON: " + (error.map { "\($0)" } ?? "not a JSON object"))
+    }
+
+    /// Top-level JSON object in `data`, or an error that names `path`.
+    static func jsonObject(path: String, data: Data) throws -> [String: Any] {
+        let parsed: Any
+        do {
+            parsed = try JSONCodec.deserialize(data)
+        } catch {
+            throw invalidJSON(path: path, error: error)
+        }
+        guard let object = parsed as? [String: Any] else { throw invalidJSON(path: path, error: nil) }
+        return object
     }
 }
 
@@ -106,18 +128,11 @@ enum MCPConfigWriter {
         let exists = fileManager.fileExists(atPath: plan.configPath)
 
         if exists {
-            if let data = fileManager.contents(atPath: plan.configPath),
-               let json = try? JSONCodec.deserialize(data) as? [String: Any]
-            {
-                existing = json
-            } else {
-                // Refuse even with --force. These files hold more than MCP entries —
-                // ~/.claude.json is Claude Code's own state — so replacing an
-                // unparseable one wholesale destroys unrelated user configuration.
-                // --force is for overwriting *our* entry, not for discarding a file
-                // we failed to understand.
-                return .skippedUnreadable
+            // Refuse even with --force: ~/.claude.json also holds Claude Code's own state.
+            guard let data = fileManager.contents(atPath: plan.configPath) else {
+                throw InstallFileError(path: plan.configPath, reason: "cannot be read")
             }
+            existing = try InstallFileError.jsonObject(path: plan.configPath, data: data)
         }
 
         var servers = existing["mcpServers"] as? [String: Any] ?? [:]
@@ -159,9 +174,7 @@ enum MCPConfigWriter {
 
         if exists {
             guard let existing = try? String(contentsOfFile: plan.configPath, encoding: .utf8) else {
-                // Same reasoning as the JSON path: never discard a config we could
-                // not read, even with --force.
-                return .skippedUnreadable
+                throw InstallFileError(path: plan.configPath, reason: "is not readable UTF-8 text")
             }
             contents = existing
         }
@@ -225,19 +238,19 @@ enum MCPConfigWriter {
 
     /// Removes the SwiftIndex entry from one config file.
     ///
-    /// - Returns: Whether the file changed. An unreadable file is left alone.
+    /// - Returns: Whether the file changed.
+    /// - Throws: `InstallFileError` for a file that exists but cannot be parsed. The file is left alone.
     static func remove(configPath: String, format: MCPConfigFormat) throws -> Bool {
         let fileManager = FileManager.default
-        guard fileManager.fileExists(atPath: configPath),
-              let data = fileManager.contents(atPath: configPath)
-        else {
-            return false
+        guard fileManager.fileExists(atPath: configPath) else { return false }
+        guard let data = fileManager.contents(atPath: configPath) else {
+            throw InstallFileError(path: configPath, reason: "cannot be read")
         }
 
         switch format {
         case .mcpServersJSON:
-            guard var json = try? JSONCodec.deserialize(data) as? [String: Any],
-                  var servers = json["mcpServers"] as? [String: Any],
+            var json = try InstallFileError.jsonObject(path: configPath, data: data)
+            guard var servers = json["mcpServers"] as? [String: Any],
                   servers.removeValue(forKey: serverName) != nil
             else {
                 return false
@@ -249,7 +262,9 @@ enum MCPConfigWriter {
             return true
 
         case .codexTOML:
-            guard let content = String(bytes: data, encoding: .utf8) else { return false }
+            guard let content = String(bytes: data, encoding: .utf8) else {
+                throw InstallFileError(path: configPath, reason: "is not readable UTF-8 text")
+            }
             let updated = removeSection(from: content)
             guard updated != content.trimmingCharacters(in: .newlines) else { return false }
             try backUpIfNeeded(path: configPath, exists: true)

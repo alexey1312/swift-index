@@ -71,18 +71,28 @@ public actor SymbolResolver {
 
         // Stream in batches: the lookup tables are the only global state, and they are
         // bounded by the symbol count rather than the edge count.
+        var previousIDs: [Int64] = []
         while true {
             let batch = try await chunkStore.unattemptedEdges(limit: 5000)
             guard !batch.isEmpty else { break }
+            let batchIDs = batch.map(\.id)
+            if batchIDs == previousIDs {
+                logger.warning("Edge resolution made no progress, stopping", metadata: [
+                    "edges": "\(batchIDs.count)",
+                ])
+                break
+            }
+            previousIDs = batchIDs
 
             var updates: [EdgeResolution] = []
-            for edge in batch {
+            for (edgeID, edge) in batch {
                 let outcome = resolve(
                     edge: edge,
                     localTypes: visibleTypes(for: edge.sourceID, in: localTypesBySymbol)
                 )
 
                 updates.append(EdgeResolution(
+                    edgeID: edgeID,
                     sourceID: edge.sourceID,
                     targetName: edge.targetName,
                     kind: edge.kind,
@@ -276,8 +286,7 @@ public actor SymbolResolver {
 
     /// Links each `override` member to the member it overrides in a superclass.
     ///
-    /// Rebuilt from scratch on every pass because it depends on `inherits` edges
-    /// anywhere in the project.
+    /// Each pass rebuilds these edges, because they depend on `inherits` edges in all files.
     private func rebuildOverrideEdges(chunkStore: GRDBChunkStore) async throws {
         try await chunkStore.deleteEdges(synthesizedBy: Self.overrideRule)
 

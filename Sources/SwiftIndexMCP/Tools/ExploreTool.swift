@@ -5,8 +5,8 @@ import SwiftIndexCore
 
 /// MCP tool that answers a code question with ranked, line-numbered source.
 ///
-/// Registered first and described as the default entry point: one call returns
-/// what an agent would otherwise collect with several search, read and grep calls.
+/// The server registers this tool first as the default entry point. One call returns
+/// what an agent otherwise collects with several search, read and grep calls.
 public struct ExploreTool: MCPToolHandler, Sendable {
     public let definition: MCPTool
 

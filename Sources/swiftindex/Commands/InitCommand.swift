@@ -34,7 +34,7 @@ struct InitCommand: AsyncParsableCommand {
 
     @Option(
         name: .shortAndLong,
-        help: "Embedding provider to use (mlx, ollama, voyage, openai, swift)"
+        help: "Embedding provider to use (auto, mlx, swift, ollama, voyage, openai, gemini)"
     )
     var provider: String?
 
@@ -190,8 +190,6 @@ struct InitCommand: AsyncParsableCommand {
         } else {
             lines.append("# model = \"\(suggestedModel(for: provider))\"")
         }
-        // Only write dimension for providers that require explicit dimension (MLX, Voyage, OpenAI)
-        // Swift Embeddings and auto providers detect dimension automatically
         if requiresExplicitDimension(provider: provider) {
             if let dimension = defaultDimension(for: provider, model: model) {
                 lines.append("dimension = \(dimension)")
@@ -321,8 +319,6 @@ struct InitCommand: AsyncParsableCommand {
     }
 
     private func requiresExplicitDimension(provider: String) -> Bool {
-        // MLX, Voyage, and OpenAI require explicit dimension in config
-        // Swift Embeddings auto-detects from model
         switch provider.lowercased() {
         case "mlx", "voyage", "openai", "gemini":
             true

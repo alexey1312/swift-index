@@ -41,7 +41,7 @@ public extension GRDBChunkStore {
                         symbol.isStatic, symbol.isRequirement, symbol.isOverride, symbol.access,
                         symbol.path, symbol.startLine, symbol.endLine,
                         chunkIDsByLine[symbol.startLine], symbol.inDegree, symbol.fileHash,
-                        symbol.attributes.isEmpty ? nil : symbol.attributes.joined(separator: ","),
+                        symbol.attributes.isEmpty ? nil : Set(symbol.attributes).sorted().joined(separator: ","),
                     ]
                 )
             }
@@ -158,17 +158,20 @@ public extension GRDBChunkStore {
     /// Filtering on `synthesized_by IS NULL` rather than just a null target is what
     /// terminates the pass: an edge whose name genuinely cannot be resolved stays
     /// null-targeted forever, so re-fetching by target alone would loop.
-    func unattemptedEdges(limit: Int) async throws -> [GraphEdge] {
+    func unattemptedEdges(limit: Int) async throws -> [(id: Int64, edge: GraphEdge)] {
         try await dbWriter.read { db in
             try Row.fetchAll(
                 db,
                 sql: """
                 SELECT * FROM edges
                 WHERE dst_symbol_id IS NULL AND synthesized_by IS NULL
+                ORDER BY id
                 LIMIT ?
                 """,
                 arguments: [limit]
-            ).compactMap(Self.edge(from:))
+            ).compactMap { row in
+                Self.edge(from: row).map { (id: row["id"], edge: $0) }
+            }
         }
     }
 
@@ -266,15 +269,7 @@ public extension GRDBChunkStore {
 
     // MARK: - Resolution support
 
-    /// Applies a resolved target to an edge.
-    ///
-    /// `OR IGNORE` so that if two edges would collapse onto the same target the
-    /// duplicate is left unresolved rather than aborting the entire resolution pass.
-    func updateEdgeResolution(_ update: EdgeResolution) async throws {
-        try await updateEdgeResolutions([update])
-    }
-
-    /// Writes many resolutions in one transaction.
+    /// Writes resolutions in one transaction.
     ///
     /// One transaction per edge made resolution I/O-bound: each commit waits for the
     /// disk, and a mid-size project has tens of thousands of edges.
@@ -287,31 +282,31 @@ public extension GRDBChunkStore {
         }
     }
 
+    /// Writes one resolution onto its row, so every attempted row leaves the unattempted state.
+    ///
+    /// `OR IGNORE` skips a row that would duplicate an existing resolved edge. That
+    /// row is then deleted, because the resolver would otherwise fetch it forever.
     private static func apply(_ update: EdgeResolution, in db: Database) throws {
-        let kind = update.kind.rawValue
         let newKind = (update.resolvedKind ?? update.kind).rawValue
         try db.execute(
             sql: """
             UPDATE OR IGNORE edges
             SET dst_symbol_id = ?, provenance = ?, confidence = ?,
                 ambiguity = ?, synthesized_by = ?, kind = ?
-            WHERE src_symbol_id = ? AND dst_name = ? AND kind = ? AND dst_symbol_id IS NULL
+            WHERE id = ? AND kind = ? AND dst_symbol_id IS NULL
             """,
             arguments: [
                 update.targetID, update.provenance.rawValue, update.confidence, update.ambiguity,
-                update.synthesizedBy, newKind, update.sourceID, update.targetName, kind,
+                update.synthesizedBy, newKind, update.edgeID, update.kind.rawValue,
             ]
         )
-        // An ignored update means an identical resolved edge already exists. The
-        // row would stay unattempted and the resolver would fetch it forever.
         if db.changesCount == 0 {
             try db.execute(
                 sql: """
                 DELETE FROM edges
-                WHERE src_symbol_id = ? AND dst_name = ? AND kind = ?
-                  AND dst_symbol_id IS NULL AND synthesized_by IS NULL
+                WHERE id = ? AND kind = ? AND dst_symbol_id IS NULL AND synthesized_by IS NULL
                 """,
-                arguments: [update.sourceID, update.targetName, kind]
+                arguments: [update.edgeID, update.kind.rawValue]
             )
         }
     }

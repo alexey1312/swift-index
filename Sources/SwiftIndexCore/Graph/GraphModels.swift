@@ -218,6 +218,17 @@ public struct GraphEdge: Sendable, Equatable, Codable {
 
 /// A resolved target to write back onto an edge.
 public struct EdgeResolution: Sendable {
+    /// Edge kinds that `resolvedKind` can change between.
+    public static let inheritanceKinds: Set<EdgeKind> = [.inherits, .conforms]
+
+    /// Whether an edge of `kind` can take `resolvedKind`.
+    public static func isValid(kind: EdgeKind, resolvedKind: EdgeKind?) -> Bool {
+        guard let resolvedKind else { return true }
+        return inheritanceKinds.contains(kind) && inheritanceKinds.contains(resolvedKind)
+    }
+
+    /// Row id of the edge in the `edges` table.
+    public let edgeID: Int64
     public let sourceID: String
     public let targetName: String
     public let kind: EdgeKind
@@ -227,9 +238,12 @@ public struct EdgeResolution: Sendable {
     public let ambiguity: Int
     public let synthesizedBy: String?
     /// Kind the edge takes once its target is known, e.g. `conforms` to `inherits`.
+    ///
+    /// Nil, or an inheritance kind on an edge of an inheritance kind.
     public let resolvedKind: EdgeKind?
 
     public init(
+        edgeID: Int64,
         sourceID: String,
         targetName: String,
         kind: EdgeKind,
@@ -240,6 +254,11 @@ public struct EdgeResolution: Sendable {
         synthesizedBy: String?,
         resolvedKind: EdgeKind? = nil
     ) {
+        precondition(
+            Self.isValid(kind: kind, resolvedKind: resolvedKind),
+            "resolvedKind \(String(describing: resolvedKind)) is not valid for a \(kind) edge"
+        )
+        self.edgeID = edgeID
         self.sourceID = sourceID
         self.targetName = targetName
         self.kind = kind

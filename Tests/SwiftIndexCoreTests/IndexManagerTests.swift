@@ -544,6 +544,57 @@ struct IndexManagerTests {
         #expect(try await manager.missingVectorCount() == 0)
     }
 
+    @Test("embedMissingVectors throws when the embedder returns too few vectors")
+    func embedMissingVectorsRejectsShortOutput() async throws {
+        let manager = try await makeIndexManager()
+        try await manager.reindexDeferringEmbedding(path: "/p/Deferred.swift", newChunks: deferredChunks(count: 3))
+
+        let dimension = dimension
+        await #expect(throws: ProviderError.self) {
+            try await manager.embedMissingVectors(batchSize: 3) { batch in
+                batch.dropFirst().map { _ in [Float](repeating: 0.5, count: dimension) }
+            }
+        }
+        #expect(try await manager.vectorCount() == 0)
+    }
+
+    @Test("A cancelled embedMissingVectors run keeps saved vectors and the next run embeds the rest")
+    func embedMissingVectorsResumes() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("embed-resume-\(UUID().uuidString)").path
+        defer { try? FileManager.default.removeItem(atPath: directory) }
+        let dimension = dimension
+        let total = 40
+        let saveInterval = 16
+
+        do {
+            let manager = try IndexManager(directory: directory, dimension: dimension)
+            try await manager.reindexDeferringEmbedding(
+                path: "/p/Deferred.swift",
+                newChunks: deferredChunks(count: total)
+            )
+            var calls = 0
+            await #expect(throws: CancellationError.self) {
+                try await manager.embedMissingVectors(batchSize: 1) { batch in
+                    calls += 1
+                    if calls > saveInterval {
+                        throw CancellationError()
+                    }
+                    return batch.map { _ in [Float](repeating: 0.5, count: dimension) }
+                }
+            }
+        }
+
+        let reloaded = try IndexManager(directory: directory, dimension: dimension)
+        try await reloaded.load()
+        #expect(try await reloaded.missingVectorCount() == total - saveInterval)
+        let embedded = try await reloaded.embedMissingVectors(batchSize: 4) { batch in
+            batch.map { _ in [Float](repeating: 0.5, count: dimension) }
+        }
+        #expect(embedded == total - saveInterval)
+        #expect(try await reloaded.missingVectorCount() == 0)
+    }
+
     @Test("Semantic search does not embed the query when the index has no vectors")
     func semanticSearchSkipsEmptyIndex() async throws {
         let chunkStore = try GRDBChunkStore()

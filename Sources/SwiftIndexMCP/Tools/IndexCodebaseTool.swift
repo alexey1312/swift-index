@@ -207,18 +207,13 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
 
     /// A blocking call returns a complete index. An async task returns once text
     /// search and the graph are ready, and the server embeds in the background.
-    private func finishEmbedding(
+    private func embedIfBlocking(
         indexManager: IndexManager,
-        path: String,
         config: Config,
         blocking: Bool
     ) async throws {
-        let mcpContext = MCPContext.shared
-        guard blocking, config.embeddingEnabled else {
-            await mcpContext.startEmbeddingBackfillIfNeeded(for: path, config: config)
-            return
-        }
-        let provider = try await mcpContext.getEmbeddingProvider(config: config)
+        guard blocking, config.embeddingEnabled else { return }
+        let provider = try await MCPContext.shared.getEmbeddingProvider(config: config)
         guard await provider.isAvailable() else {
             throw MCPError.executionFailed("No embedding provider available")
         }
@@ -244,7 +239,6 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             Run 'swiftindex init' in the project directory first.
             """)
         }
-        let taskManager = mcpContext.taskManager
 
         // Report initial status
         await context?.reportStatus("Initializing...")
@@ -252,6 +246,26 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
         guard await mcpContext.acquireWriterRole(for: path, config: config) else {
             throw await MCPError.executionFailed(mcpContext.writerConflictMessage(for: path, config: config))
         }
+
+        let result: IndexingResult
+        do {
+            await mcpContext.beginIndexing(for: path)
+            defer { await mcpContext.endIndexing(for: path) }
+            result = try await indexLocked(path: path, force: force, config: config, context: context, taskId: taskId)
+        }
+        await mcpContext.startEmbeddingBackfillIfNeeded(for: path, config: config)
+        return result
+    }
+
+    private func indexLocked(
+        path: String,
+        force: Bool,
+        config: Config,
+        context: ToolExecutionContext?,
+        taskId: String?
+    ) async throws -> IndexingResult {
+        let mcpContext = MCPContext.shared
+        let taskManager = mcpContext.taskManager
 
         // The watcher and the embedding pass would write to the index concurrently.
         // The next tool call restarts them.
@@ -373,7 +387,7 @@ public struct IndexCodebaseTool: MCPToolHandler, Sendable {
             ))
         }
         try await indexManager.save()
-        try await finishEmbedding(indexManager: indexManager, path: path, config: config, blocking: taskId == nil)
+        try await embedIfBlocking(indexManager: indexManager, config: config, blocking: taskId == nil)
 
         // Get final statistics
         let finalStats = try await indexManager.statistics()

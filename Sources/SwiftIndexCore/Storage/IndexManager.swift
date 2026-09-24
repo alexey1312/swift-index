@@ -649,7 +649,8 @@ public actor IndexManager {
     ///   - batchSize: Chunks per embedding call.
     ///   - embedder: Produces one vector per chunk, in order.
     ///   - progress: Called with the number of embedded chunks and the total.
-    /// - Returns: Number of chunks embedded.
+    /// - Returns: Number of vectors stored.
+    /// - Throws: `ProviderError.embeddingFailed` when the embedder returns a wrong vector count.
     @discardableResult
     public func embedMissingVectors(
         batchSize: Int = 64,
@@ -668,10 +669,15 @@ public actor IndexManager {
             guard !chunks.isEmpty else { continue }
 
             let vectors = try await embedder(chunks)
+            guard vectors.count == chunks.count else {
+                throw ProviderError.embeddingFailed(
+                    "embedder returned \(vectors.count) vectors for \(chunks.count) chunks"
+                )
+            }
             try await vectorStore.addBatch(zip(chunks, vectors).map { (id: $0.id, vector: $1) })
-            embedded += chunks.count
+            embedded += vectors.count
             progress?(start + ids.count, missing.count)
-            if embedded % saveInterval < chunks.count {
+            if embedded % saveInterval < vectors.count {
                 try await saveIfPersistent()
             }
         }

@@ -5,9 +5,8 @@ import Foundation
 /// Ranks symbols by how strongly the graph connects them to the search seeds.
 ///
 /// Text search alone ranks a file that mentions every query word above the code
-/// that actually runs. A random walk that restarts at the seeds moves score along
-/// call and type edges, so code that the seeds use or that uses the seeds rises,
-/// and an isolated text match falls.
+/// that actually runs. A random walk restarts at the seeds and moves score along
+/// graph edges. Code near the seeds rises. An isolated text match falls.
 public enum GraphRanker {
     /// An undirected, weighted connection between two symbols.
     public struct Link: Sendable, Equatable {
@@ -17,7 +16,9 @@ public enum GraphRanker {
         /// Line of the reference in the source file, when known.
         public let line: Int?
 
-        public init(source: String, target: String, weight: Double, line: Int? = nil) {
+        /// Returns nil when `weight` is not a finite, positive number.
+        public init?(source: String, target: String, weight: Double, line: Int? = nil) {
+            guard weight.isFinite, weight > 0 else { return nil }
             self.source = source
             self.target = target
             self.weight = weight
@@ -31,7 +32,6 @@ public enum GraphRanker {
     ///   - seeds: Restart weights per symbol id. Values need not sum to one.
     ///   - links: Graph connections, used in both directions.
     ///   - restart: Probability of a jump back to the seeds at each step.
-    ///   - iterations: Number of power iterations.
     /// - Returns: Scores that sum to one, keyed by symbol id.
     public static func personalizedPageRank(
         seeds: [String: Double],
@@ -44,7 +44,7 @@ public enum GraphRanker {
         let restartVector = seeds.filter { $0.value > 0 }.mapValues { $0 / seedTotal }
 
         var adjacency: [String: [(String, Double)]] = [:]
-        for link in links where link.source != link.target && link.weight > 0 {
+        for link in links where link.source != link.target {
             adjacency[link.source, default: []].append((link.target, link.weight))
             adjacency[link.target, default: []].append((link.source, link.weight))
         }

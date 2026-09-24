@@ -12,9 +12,11 @@ public struct ExploreBudget: Sendable, Equatable {
 
     /// Absolute ceiling for any answer.
     public static let hardCap = 24500
+    /// Smallest budget that still holds a header, one file and the footer.
+    public static let minimumCharacters = 1000
 
     public init(characters: Int, files: Int) {
-        self.characters = min(characters, Self.hardCap)
+        self.characters = min(max(characters, Self.minimumCharacters), Self.hardCap)
         self.files = max(files, 1)
     }
 
@@ -60,11 +62,17 @@ public struct ExploreFile: Sendable {
     /// Whether the file holds a symbol on the call path between the top seeds.
     public let onSpine: Bool
     /// Ranked symbols in the file, best first.
-    public let symbols: [(symbol: SymbolNode, score: Double)]
+    public let symbols: [RankedSymbol]
     /// Line ranges of matched chunks without graph symbols, e.g. Markdown.
     public let chunkRanges: [ClosedRange<Int>]
     /// Every symbol declared in the file, used to reduce a type to its signatures.
     public let declarations: [SymbolNode]
+}
+
+/// A symbol and its graph score.
+public struct RankedSymbol: Sendable, Equatable {
+    public let symbol: SymbolNode
+    public let score: Double
 }
 
 /// The blast radius of the top symbol.

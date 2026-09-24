@@ -25,13 +25,19 @@ public actor MCPContext {
     /// per path but its verdict keeps being reported.
     private var freshnessByPath: [String: StalenessInfo] = [:]
     /// Background embedding passes, keyed by resolved project path.
-    private var backfillTasks: [String: Task<Void, Never>] = [:]
+    private var backfillTasks: [String: (id: UUID, task: Task<Void, Never>)] = [:]
+    private var backfillStarting: Set<String> = []
     /// Writer locks this process holds, keyed by index directory.
     private var writerLocks: [String: IndexWriterLock] = [:]
+    /// Last I/O failure to take the writer lock, keyed by index directory.
+    private var writerLockErrors: [String: String] = [:]
+    /// Running `index_codebase` calls, keyed by resolved project path.
+    private var indexingCounts: [String: Int] = [:]
     /// Modification date of the vector file when this process last loaded it.
     private var vectorLoadDates: [String: Date] = [:]
     /// Live file watchers, keyed by resolved project path.
-    private var watchers: [String: (indexer: IncrementalIndexer, task: Task<Void, Never>)] = [:]
+    private var watchers: [String: (id: UUID, indexer: IncrementalIndexer, task: Task<Void, Never>)] = [:]
+    private var watcherStarting: Set<String> = []
     private var embeddingProvider: EmbeddingProviderChain?
     private var loadedConfigs: [String: Config] = [:]
     private var llmProviders: (utility: LLMProviderChain?, synthesis: LLMProviderChain?)?
@@ -333,6 +339,10 @@ public actor MCPContext {
     /// - Returns: What remains stale after the cheap work has been applied.
     public func ensureFreshness(for basePath: String, config: Config) async -> StalenessInfo {
         guard indexExists(for: basePath, config: config) else { return .clean }
+        let resolvedPath = resolvePath(basePath)
+        guard !isIndexing(resolvedPath) else {
+            return freshnessByPath[resolvedPath] ?? .clean
+        }
         guard acquireWriterRole(for: basePath, config: config) else {
             await reloadVectorsIfChanged(for: basePath, config: config)
             return await reconcileOnce(for: basePath, config: config, applying: false)
@@ -358,7 +368,16 @@ public actor MCPContext {
         if writerLocks[indexPath] != nil {
             return true
         }
-        guard let lock = IndexWriterLock.acquire(indexDirectory: indexPath) else {
+        let acquired: IndexWriterLock?
+        do {
+            acquired = try IndexWriterLock.acquire(indexDirectory: indexPath)
+            writerLockErrors[indexPath] = nil
+        } catch {
+            writerLockErrors[indexPath] = "\(error)"
+            logger.warning("Cannot take the index writer lock", metadata: ["error": "\(error)"])
+            return false
+        }
+        guard let lock = acquired else {
             return false
         }
         writerLocks[indexPath] = lock
@@ -371,6 +390,9 @@ public actor MCPContext {
     /// Message for a write attempt while another process holds the writer role.
     public func writerConflictMessage(for basePath: String, config: Config) -> String {
         let indexPath = (resolvePath(basePath) as NSString).appendingPathComponent(config.indexPath)
+        if let error = writerLockErrors[indexPath] {
+            return "SwiftIndex cannot take the writer lock of this index: \(error)"
+        }
         let holder = IndexWriterLock.recordedHolder(indexDirectory: indexPath).map { " (pid \($0))" } ?? ""
         return """
         Another SwiftIndex process\(holder) writes this index and keeps it current. \
@@ -392,7 +414,7 @@ public actor MCPContext {
             vectorLoadDates[indexPath] = current
             logger.debug("Reloaded vectors saved by the writer process")
         } catch {
-            logger.debug("Vector reload failed", metadata: ["error": "\(error.localizedDescription)"])
+            logger.warning("Vector reload failed", metadata: ["error": "\(error.localizedDescription)"])
         }
     }
 
@@ -410,58 +432,125 @@ public actor MCPContext {
     public func startEmbeddingBackfillIfNeeded(for basePath: String, config: Config) async {
         let resolvedPath = resolvePath(basePath)
         guard config.embeddingEnabled, backfillTasks[resolvedPath] == nil,
+              !backfillStarting.contains(resolvedPath), !isIndexing(resolvedPath),
               indexExists(for: basePath, config: config),
-              acquireWriterRole(for: basePath, config: config),
-              let indexManager = try? await getIndexManager(for: basePath, config: config),
-              let resolved = try? await getResolvedEmbedding(config: config),
-              let missing = try? await indexManager.missingVectorCount(), missing > 0
+              acquireWriterRole(for: basePath, config: config)
         else {
             return
         }
+        backfillStarting.insert(resolvedPath)
+        defer { backfillStarting.remove(resolvedPath) }
 
+        let indexManager: IndexManager
+        let resolved: ResolvedEmbedding
+        let missing: Int
+        do {
+            indexManager = try await getIndexManager(for: basePath, config: config)
+            resolved = try await getResolvedEmbedding(config: config)
+            missing = try await indexManager.missingVectorCount()
+        } catch {
+            logger.warning("Background embedding not started", metadata: ["error": "\(error)"])
+            return
+        }
+        guard missing > 0, !isIndexing(resolvedPath) else { return }
+
+        let id = UUID()
         let logger = logger
         let batchSize = max(config.embeddingBatchSize, 64)
-        backfillTasks[resolvedPath] = Task(priority: .utility) {
-            guard await resolved.chain.isAvailable() else {
-                logger.warning("Embedding provider unavailable; semantic search stays off")
-                return
-            }
-            do {
-                // Repeat until nothing is missing: the watcher adds chunks while a pass runs.
-                var total = 0
-                while true {
-                    let embedded = try await indexManager.embedMissingVectors(batchSize: batchSize) { chunks in
-                        try await resolved.chain.embed(chunks.map(\.content))
-                    }
-                    guard embedded > 0 else { break }
-                    total += embedded
-                }
-                logger.info("Background embedding finished", metadata: ["chunks": "\(total)"])
-            } catch {
-                logger.warning("Background embedding stopped", metadata: ["error": "\(error.localizedDescription)"])
-            }
-            self.finishBackfill(for: resolvedPath)
+        let task = Task(priority: .utility) {
+            await Self.embedMissing(
+                indexManager: indexManager,
+                chain: resolved.chain,
+                batchSize: batchSize,
+                logger: logger
+            )
+            self.finishBackfill(for: resolvedPath, id: id)
         }
+        backfillTasks[resolvedPath] = (id, task)
         logger.info("Embedding in background", metadata: ["chunks": "\(missing)"])
     }
 
-    private func finishBackfill(for resolvedPath: String) {
+    private static func embedMissing(
+        indexManager: IndexManager,
+        chain: EmbeddingProviderChain,
+        batchSize: Int,
+        logger: Logger
+    ) async {
+        guard await chain.isAvailable() else {
+            logger.warning("Embedding provider unavailable; semantic search stays off")
+            return
+        }
+        do {
+            // Repeat until nothing is missing: the watcher adds chunks while a pass runs.
+            var total = 0
+            var remaining = try await indexManager.missingVectorCount()
+            while remaining > 0, !Task.isCancelled {
+                let embedded = try await indexManager.embedMissingVectors(batchSize: batchSize) { chunks in
+                    try await chain.embed(chunks.map(\.content))
+                }
+                guard embedded > 0 else { break }
+                total += embedded
+                let next = try await indexManager.missingVectorCount()
+                guard next < remaining else {
+                    logger.warning("Background embedding stopped: missing vectors do not decrease", metadata: [
+                        "missing": "\(next)",
+                    ])
+                    break
+                }
+                remaining = next
+            }
+            logger.info("Background embedding finished", metadata: ["chunks": "\(total)"])
+        } catch {
+            logger.warning("Background embedding stopped", metadata: ["error": "\(error.localizedDescription)"])
+        }
+    }
+
+    private func finishBackfill(for resolvedPath: String, id: UUID) {
+        guard backfillTasks[resolvedPath]?.id == id else { return }
         backfillTasks[resolvedPath] = nil
+    }
+
+    // MARK: - Indexing State
+
+    /// Marks a full index of `basePath` as running. Background work and reconcile skip the path.
+    public func beginIndexing(for basePath: String) {
+        indexingCounts[resolvePath(basePath), default: 0] += 1
+    }
+
+    public func endIndexing(for basePath: String) {
+        let resolvedPath = resolvePath(basePath)
+        let count = (indexingCounts[resolvedPath] ?? 1) - 1
+        indexingCounts[resolvedPath] = count > 0 ? count : nil
+    }
+
+    public func isIndexing(_ basePath: String) -> Bool {
+        indexingCounts[resolvePath(basePath)] != nil
     }
 
     // MARK: - Watching
 
     /// Starts watching `basePath` when `auto_index.watch` is on and an index exists.
     ///
-    /// Started after the first reconcile, so the watcher only sees edits made later.
+    /// The first reconcile runs before the watcher, so the watcher sees only later edits.
     public func startWatcherIfNeeded(for basePath: String, config: Config) async {
         let resolvedPath = resolvePath(basePath)
         guard config.autoIndex.enabled, config.autoIndex.watch, watchers[resolvedPath] == nil,
+              !watcherStarting.contains(resolvedPath), !isIndexing(resolvedPath),
               indexExists(for: basePath, config: config),
-              acquireWriterRole(for: basePath, config: config),
-              let indexManager = try? await getIndexManager(for: basePath, config: config),
-              let resolved = try? await getResolvedEmbedding(config: config)
+              acquireWriterRole(for: basePath, config: config)
         else {
+            return
+        }
+        watcherStarting.insert(resolvedPath)
+        defer { watcherStarting.remove(resolvedPath) }
+
+        let indexManager: IndexManager
+        let resolved: ResolvedEmbedding
+        do {
+            indexManager = try await getIndexManager(for: basePath, config: config)
+            resolved = try await getResolvedEmbedding(config: config)
+        } catch {
+            logger.warning("Watcher not started", metadata: ["error": "\(error)"])
             return
         }
 
@@ -475,6 +564,9 @@ public actor MCPContext {
         await indexer.onChange { [self] in
             await startEmbeddingBackfillIfNeeded(for: resolvedPath, config: config)
         }
+        guard !isIndexing(resolvedPath) else { return }
+
+        let id = UUID()
         let logger = logger
         let task = Task {
             do {
@@ -482,9 +574,15 @@ public actor MCPContext {
             } catch {
                 logger.warning("Watcher stopped", metadata: ["error": "\(error.localizedDescription)"])
             }
+            self.finishWatcher(for: resolvedPath, id: id)
         }
-        watchers[resolvedPath] = (indexer, task)
+        watchers[resolvedPath] = (id, indexer, task)
         logger.info("Watching for changes", metadata: ["path": "\(resolvedPath)"])
+    }
+
+    private func finishWatcher(for resolvedPath: String, id: UUID) {
+        guard watchers[resolvedPath]?.id == id else { return }
+        watchers[resolvedPath] = nil
     }
 
     /// Stops the watcher for `basePath`, e.g. before a full reindex.
@@ -498,9 +596,9 @@ public actor MCPContext {
     /// Stops the watcher and the embedding pass for `basePath`, e.g. before a full reindex.
     public func stopBackgroundWork(for basePath: String) async {
         await stopWatcher(for: basePath)
-        if let task = backfillTasks.removeValue(forKey: resolvePath(basePath)) {
-            task.cancel()
-            await task.value
+        if let backfill = backfillTasks.removeValue(forKey: resolvePath(basePath)) {
+            backfill.task.cancel()
+            await backfill.task.value
         }
     }
 
@@ -509,9 +607,9 @@ public actor MCPContext {
         for path in Array(watchers.keys) {
             await stopWatcher(for: path)
         }
-        for task in backfillTasks.values {
-            task.cancel()
-            await task.value
+        for backfill in backfillTasks.values {
+            backfill.task.cancel()
+            await backfill.task.value
         }
         backfillTasks = [:]
         for lock in writerLocks.values {
@@ -548,6 +646,10 @@ public actor MCPContext {
             )
 
             var info = StalenessInfo()
+            if applying, isIndexing(resolvedPath) {
+                freshnessByPath[resolvedPath] = nil
+                return .clean
+            }
             guard applying else {
                 info.dirtyPaths = Set(report.changed.map(\.path))
                 freshnessByPath[resolvedPath] = info
@@ -585,10 +687,9 @@ public actor MCPContext {
                 return info
             }
 
-            // A large delta almost always means a branch switch. Re-embedding
-            // hundreds of files inside the first tool call would blow the client's
-            // timeout, so report staleness instead and let an explicit reindex catch
-            // up.
+            // A large delta usually comes from a branch switch. Parsing hundreds of files
+            // in the first tool call exceeds the client timeout. The threshold is all or
+            // nothing: a larger change set defers all files until an explicit re-index.
             guard report.changed.count <= config.autoIndex.syncThreshold else {
                 info.dirtyPaths = Set(report.changed.map(\.path))
                 info.deferredCatchUp = true

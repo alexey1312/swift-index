@@ -359,6 +359,27 @@ struct IncrementalIndexerTests {
         #expect(try await store.graphStatistics().resolved == 0)
     }
 
+    @Test("A failed graph resolve keeps the graph dirty for the next call")
+    func failedResolveKeepsGraphDirty() async throws {
+        let harness = try await Harness(dimension: dimension)
+        defer { harness.cleanup() }
+        await harness.indexer.enableGraph(projectRoot: harness.directory.path)
+
+        let callee = try harness.writeFile(name: "Callee.swift", content: "func target() -> Int { 1 }")
+        let caller = try harness.writeFile(name: "Caller.swift", content: "func source() -> Int { target() }")
+        try await harness.indexer.indexFile(at: callee, isNew: true)
+        try await harness.indexer.indexFile(at: caller, isNew: true)
+
+        let store = await harness.indexManager.chunkStore
+        try await store.dbWriter.write { try $0.execute(sql: "ALTER TABLE graph_meta RENAME TO graph_meta_off") }
+        await harness.indexer.resolveGraphIfNeeded()
+        #expect(try await store.graphStatistics().resolved == 0)
+
+        try await store.dbWriter.write { try $0.execute(sql: "ALTER TABLE graph_meta_off RENAME TO graph_meta") }
+        await harness.indexer.resolveGraphIfNeeded()
+        #expect(try await store.graphStatistics().resolved == 1)
+    }
+
     @Test("Indexing failures propagate to the caller")
     func indexingFailurePropagates() async throws {
         let harness = try await Harness(dimension: dimension, failEmbeddings: true)

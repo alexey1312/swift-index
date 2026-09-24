@@ -11,11 +11,17 @@ import SwiftIndexCore
 enum CLIUtils {
     /// Takes the index writer lock, or fails with the reason when another process has it.
     ///
-    /// An agent's MCP server keeps the lock while it runs, and its watcher keeps the
-    /// index current. A second writer would overwrite the vectors it keeps in memory.
+    /// An MCP server takes the lock at its first tool call and keeps it until it exits.
+    /// A second writer would overwrite the vectors that the server keeps in memory.
     static func acquireWriterLock(indexPath: String) throws -> IndexWriterLock {
-        if let lock = IndexWriterLock.acquire(indexDirectory: indexPath) {
-            return lock
+        let acquired: IndexWriterLock?
+        do {
+            acquired = try IndexWriterLock.acquire(indexDirectory: indexPath)
+        } catch {
+            throw ValidationError("\(error)")
+        }
+        if let acquired {
+            return acquired
         }
         let holder = IndexWriterLock.recordedHolder(indexDirectory: indexPath).map { " (pid \($0))" } ?? ""
         throw ValidationError("""

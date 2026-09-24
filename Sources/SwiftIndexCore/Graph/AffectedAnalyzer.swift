@@ -35,7 +35,6 @@ public enum AffectedAnalyzer {
     /// - Parameters:
     ///   - changedPaths: Changed files, absolute or relative to `projectRoot`.
     ///   - store: Index store with the symbol graph.
-    ///   - projectRoot: Project root.
     ///   - depth: Maximum number of reverse hops.
     public static func affectedTests(
         changedPaths: [String],

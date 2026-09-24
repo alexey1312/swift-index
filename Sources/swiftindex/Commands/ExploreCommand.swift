@@ -36,6 +36,12 @@ struct ExploreCommand: AsyncParsableCommand {
     @Flag(name: .long, help: "Enable verbose logging.")
     var verbose = false
 
+    func validate() throws {
+        if let budget, budget <= 0 {
+            throw ValidationError("--budget must be a positive number of characters.")
+        }
+    }
+
     func run() async throws {
         let logger = CLIUtils.makeLogger(verbose: verbose)
         let resolvedPath = FileCollector.canonicalPath(CLIUtils.resolvePath(path))

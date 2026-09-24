@@ -207,6 +207,35 @@ struct EmbeddingProviderFactoryTests {
         #expect(resolved.providerID == "swift-embeddings")
     }
 
+    @Test("auto throws when the cloud provider that built the index has no key")
+    func pinnedCloudProviderWithoutKeyThrows() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("factory-cloud-missing-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try IndexMetadata(
+            providerID: "openai",
+            modelID: "text-embedding-3-small",
+            dimension: 1536,
+            swiftindexVersion: "test"
+        ).save(toIndexDirectory: directory.path)
+
+        do {
+            _ = try await EmbeddingProviderFactory.resolve(
+                config: config(provider: "auto", voyageKey: "k"),
+                indexDirectory: directory.path
+            )
+            Issue.record("resolve did not throw")
+        } catch let error as ProviderError {
+            let message = error.localizedDescription
+            #expect(message.contains("OPENAI_API_KEY"))
+            #expect(message.contains("index --force"))
+        }
+
+        let rebuilt = try await EmbeddingProviderFactory.resolve(config: config(provider: "auto", voyageKey: "k"))
+        #expect(rebuilt.providerID == "voyage")
+    }
+
     // MARK: - Model mapping
 
     @Test("MLX replaces a short model name with its own default")

@@ -423,8 +423,10 @@ output_format = "toon"   # toon (token-optimized), human, or json
 # session, so edits made while no server was running are picked up.
 enabled = true
 reconcile_on_connect = true
-# Above this many changed files, report staleness instead of blocking a search.
+# Largest change set that a reconcile re-indexes. A larger set stays stale.
 sync_threshold = 25
+# Watch the tree while `swiftindex serve` runs.
+watch = true
 
 [storage]
 index_path = ".swiftindex"

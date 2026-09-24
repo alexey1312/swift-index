@@ -4,9 +4,8 @@ import Foundation
 
 /// Answers "how does X work" with the relevant source in one call.
 ///
-/// Search finds seeds, the symbol graph ranks the code around them, and the
-/// renderer returns line-numbered source for the best files together with the call
-/// path between the top seeds and the blast radius of the top symbol. One answer
+/// Search finds seeds. The symbol graph ranks the code near them. The renderer
+/// returns line-numbered source, the call path and the blast radius. One answer
 /// replaces the usual chain of search, read and grep calls.
 public actor ExploreEngine {
     static let seedLimit = 30
@@ -27,8 +26,6 @@ public actor ExploreEngine {
     ///   - store: Index store with chunks and the symbol graph.
     ///   - seedSearch: Search that finds the seeds. Hybrid search in normal use,
     ///     BM25 alone where no embedding model can load.
-    ///   - graphConfig: Graph settings.
-    ///   - renderer: Output renderer.
     public init(
         store: GRDBChunkStore,
         seedSearch: any SearchEngine,
@@ -95,7 +92,7 @@ public actor ExploreEngine {
             let ranked = symbolScores.values
                 .filter { $0.0.path == path && $0.1 > 0 }
                 .sorted { $0.1 > $1.1 }
-                .map { (symbol: $0.0, score: $0.1) }
+                .map { RankedSymbol(symbol: $0.0, score: $0.1) }
             try await selected.append(ExploreFile(
                 path: path,
                 score: score,
@@ -196,9 +193,11 @@ public actor ExploreEngine {
                 else {
                     continue
                 }
-                links.append(GraphRanker.Link(
+                if let link = GraphRanker.Link(
                     source: edge.sourceID, target: target, weight: edge.confidence, line: edge.firstLine
-                ))
+                ) {
+                    links.append(link)
+                }
                 for id in [edge.sourceID, target] where nodes.count < Self.maxNodes && nodes.insert(id).inserted {
                     frontier.append(id)
                 }

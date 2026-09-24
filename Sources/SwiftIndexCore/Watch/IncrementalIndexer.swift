@@ -219,6 +219,7 @@ public actor IncrementalIndexer {
         do {
             try await graphBuilder.resolve()
         } catch {
+            graphNeedsResolve = true
             logger.warning("Graph resolution failed", metadata: ["error": "\(error.localizedDescription)"])
         }
     }

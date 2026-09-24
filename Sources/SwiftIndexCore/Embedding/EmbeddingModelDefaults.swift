@@ -4,10 +4,9 @@ import Foundation
 
 /// Default model and dimension for each local embedding provider.
 ///
-/// `Config` carries one `embeddingModel` for every provider, and its default is the
-/// swift-embeddings model. Under `auto` the same config can select MLX, which needs
-/// a Hugging Face repo ID, so each provider maps a foreign short name onto its own
-/// default.
+/// `Config` has one `embeddingModel` for all providers. Its default is the swift-embeddings
+/// model. Under `auto`, the same config can select MLX, which needs a Hugging Face repo ID.
+/// Thus each provider maps a short name from a different provider onto its own default.
 public enum EmbeddingModelDefaults {
     public static let mlxModel = "mlx-community/Qwen3-Embedding-0.6B-4bit-DWQ"
     public static let mlxDimension = 1024
@@ -16,10 +15,10 @@ public enum EmbeddingModelDefaults {
     ///
     /// A cloud provider embeds a whole project in seconds, where a local model can
     /// take minutes. `auto` uses the first one that has an API key.
-    public static let cloudPreference: [(provider: String, model: String, dimension: Int)] = [
-        ("openai", "text-embedding-3-small", 1536),
-        ("voyage", "voyage-code-2", 1024),
-        ("gemini", "text-embedding-004", 768),
+    public static let cloudPreference: [CloudEmbeddingDefault] = [
+        CloudEmbeddingDefault(provider: .openai, model: "text-embedding-3-small", dimension: 1536),
+        CloudEmbeddingDefault(provider: .voyage, model: "voyage-code-2", dimension: 1024),
+        CloudEmbeddingDefault(provider: .gemini, model: "text-embedding-004", dimension: 768),
     ]
 
     /// Printed when `auto` falls back to a local model because no key is set.
@@ -59,6 +58,18 @@ public enum EmbeddingModelDefaults {
             $0.rawValue.lowercased() == name || $0.huggingFaceId.lowercased() == name
         }
     }
+}
+
+public enum CloudEmbeddingProvider: String, Sendable, CaseIterable {
+    case openai
+    case voyage
+    case gemini
+}
+
+public struct CloudEmbeddingDefault: Sendable {
+    public let provider: CloudEmbeddingProvider
+    public let model: String
+    public let dimension: Int
 }
 
 /// Public view of MLX runtime readiness for targets outside SwiftIndexCore.

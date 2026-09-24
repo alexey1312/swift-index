@@ -29,8 +29,8 @@ public struct Config: Sendable, Equatable {
 
     /// Whether chunks get embedding vectors for semantic search.
     ///
-    /// When false, the index has only FTS5 text search and the symbol graph. It is
-    /// built in seconds and never loads an embedding model.
+    /// When false, the index has only FTS5 text search and the symbol graph.
+    /// Indexing does not load an embedding model.
     public var embeddingEnabled: Bool
 
     // MARK: - Search Configuration
@@ -407,12 +407,10 @@ public struct AutoIndexConfig: Sendable, Equatable, Codable {
     /// a branch switch, or simply a gap between sessions.
     public var reconcileOnConnect: Bool
 
-    /// Maximum number of changed files re-indexed synchronously before the rest are
-    /// reported as stale and left to an explicit reindex.
+    /// Largest change set that a reconcile re-indexes; a larger set stays stale.
     ///
-    /// A large delta almost always means a branch switch. Blocking the first search
-    /// for minutes is worse than answering immediately and saying results may be out
-    /// of date.
+    /// The reconcile re-indexes all changed files or none of them. A large change set
+    /// usually comes from a branch switch, and an explicit re-index updates it.
     public var syncThreshold: Int
 
     /// Watch the working tree while the MCP server runs, so edits are indexed as

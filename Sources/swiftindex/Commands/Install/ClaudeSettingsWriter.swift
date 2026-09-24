@@ -12,18 +12,29 @@ enum ClaudeSettingsWriter {
         (workingDirectory as NSString).appendingPathComponent(".claude/settings.json")
     }
 
-    /// Settings with the SwiftIndex permission and, when `hookCommand` is set, the
-    /// prompt hook. Existing keys stay as they are.
+    static func hookCommand(executablePath: String) -> String {
+        "'" + executablePath.replacingOccurrences(of: "'", with: #"'\''"#) + "' " + hookSubcommand
+    }
+
+    static func isSwiftIndexHook(_ command: String) -> Bool {
+        command.trimmingCharacters(in: .whitespaces).hasSuffix(" " + hookSubcommand)
+    }
+
+    /// Settings with the SwiftIndex permission. When `hookCommand` is set, the prompt
+    /// hook is added or replaced; otherwise an existing hook stays. Other keys stay as they are.
     static func merged(_ settings: [String: Any], hookCommand: String?) -> [String: Any] {
-        var result = removed(settings)
+        var result = settings
 
         var permissions = result["permissions"] as? [String: Any] ?? [:]
         var allow = permissions["allow"] as? [String] ?? []
-        allow.append(permission)
+        if !allow.contains(permission) {
+            allow.append(permission)
+        }
         permissions["allow"] = allow
         result["permissions"] = permissions
 
         if let hookCommand {
+            result = removingHook(result)
             var hooks = result["hooks"] as? [String: Any] ?? [:]
             var groups = hooks["UserPromptSubmit"] as? [[String: Any]] ?? []
             groups.append(["hooks": [["type": "command", "command": hookCommand]]])
@@ -35,45 +46,54 @@ enum ClaudeSettingsWriter {
 
     /// Settings without anything SwiftIndex added.
     static func removed(_ settings: [String: Any]) -> [String: Any] {
-        var result = settings
+        var result = removingHook(settings)
 
         if var permissions = result["permissions"] as? [String: Any],
-           let allow = permissions["allow"] as? [String]
+           let allow = permissions["allow"] as? [String],
+           allow.contains(permission)
         {
-            permissions["allow"] = allow.filter { $0 != permission }
-            result["permissions"] = permissions
-        }
-
-        if var hooks = result["hooks"] as? [String: Any],
-           let groups = hooks["UserPromptSubmit"] as? [[String: Any]]
-        {
-            let kept = groups.filter { group in
-                let commands = (group["hooks"] as? [[String: Any]] ?? []).compactMap { $0["command"] as? String }
-                return !commands.contains { $0.hasSuffix(" " + hookSubcommand) }
-            }
-            if kept.isEmpty {
-                hooks.removeValue(forKey: "UserPromptSubmit")
-            } else {
-                hooks["UserPromptSubmit"] = kept
-            }
-            result["hooks"] = hooks.isEmpty ? nil : hooks
+            let kept = allow.filter { $0 != permission }
+            permissions["allow"] = kept.isEmpty ? nil : kept
+            result["permissions"] = permissions.isEmpty ? nil : permissions
         }
         return result
     }
 
-    /// Updates the settings file.
-    ///
-    /// - Returns: Whether the file changed. An unreadable file is left alone.
+    private static func removingHook(_ settings: [String: Any]) -> [String: Any] {
+        guard var hooks = settings["hooks"] as? [String: Any],
+              let groups = hooks["UserPromptSubmit"] as? [[String: Any]]
+        else {
+            return settings
+        }
+        var changed = false
+        let kept: [[String: Any]] = groups.compactMap { group in
+            guard let entries = group["hooks"] as? [[String: Any]] else { return group }
+            let others = entries.filter { !isSwiftIndexHook($0["command"] as? String ?? "") }
+            guard others.count != entries.count else { return group }
+            changed = true
+            guard !others.isEmpty else { return nil }
+            var updated = group
+            updated["hooks"] = others
+            return updated
+        }
+        guard changed else { return settings }
+
+        var result = settings
+        hooks["UserPromptSubmit"] = kept.isEmpty ? nil : kept
+        result["hooks"] = hooks.isEmpty ? nil : hooks
+        return result
+    }
+
+    /// - Returns: Whether the file changed.
+    /// - Throws: `InstallFileError` for a file that exists but is not a JSON object. The file is left alone.
     static func apply(path: String, hookCommand: String?, removing: Bool) throws -> Bool {
         let fileManager = FileManager.default
         var settings: [String: Any] = [:]
         if fileManager.fileExists(atPath: path) {
-            guard let data = fileManager.contents(atPath: path),
-                  let json = try? JSONCodec.deserialize(data) as? [String: Any]
-            else {
-                return false
+            guard let data = fileManager.contents(atPath: path) else {
+                throw InstallFileError(path: path, reason: "cannot be read")
             }
-            settings = json
+            settings = try InstallFileError.jsonObject(path: path, data: data)
         } else if removing {
             return false
         }
