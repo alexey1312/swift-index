@@ -51,19 +51,15 @@ jobs:
       - name: Show Swift version
         run: swift --version
 
-      # Swift 6.4 SwiftPM compiles the .metal sources of mlx-swift.
-      - name: Ensure Metal toolchain
-        run: xcrun -sdk macosx metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
-
       - name: Build
         run: |
           set -o pipefail
-          swift build 2>&1 | xcsift
+          swift build --build-system native 2>&1 | xcsift
 
       - name: Test
         run: |
           set -o pipefail
-          swift test --skip Performance --verbose 2>&1 | tee test-output.log | xcsift
+          swift test --build-system native --skip Performance --verbose 2>&1 | tee test-output.log | xcsift
 
       # xcsift summarizes XCTest results only, so a swift-testing failure shows
       # up as a non-zero exit with an otherwise successful-looking summary.

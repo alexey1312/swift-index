@@ -57,16 +57,16 @@ description = "Build the Swift package (debug)"
 # pipefail: without it xcsift's exit status masks a failed swift build.
 run = """
 set -o pipefail
-swift build 2>&1 | xcsift
+swift build --build-system native 2>&1 | xcsift
 """
 
 [tasks."build:release"]
 description = "Build the Swift package (release)"
 run = """
 set -euo pipefail
-swift build --configuration release -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
+swift build --build-system native --configuration release -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
 ./scripts/build-mlx-metallib
-BIN_DIR="$(swift build --configuration release --show-bin-path)"
+BIN_DIR="$(swift build --build-system native --configuration release --show-bin-path)"
 cp -f .build/mlx-metal/default.metallib .build/mlx-metal/mlx.metallib "${BIN_DIR}/"
 """
 
@@ -75,7 +75,7 @@ description = "Run all tests"
 env = { SWIFTINDEX_SKIP_KEYCHAIN = "1" }
 run = """
 set -o pipefail
-swift test 2>&1 | xcsift
+swift test --build-system native 2>&1 | xcsift
 """
 
 [tasks."test:filter"]
@@ -83,7 +83,7 @@ description = "Run tests with filter (usage: mise run test:filter SwiftIndexCore
 env = { SWIFTINDEX_SKIP_KEYCHAIN = "1" }
 run = """
 set -o pipefail
-swift test --filter {{arg(name='filter')}} 2>&1 | xcsift
+swift test --build-system native --filter {{arg(name='filter')}} 2>&1 | xcsift
 """
 
 [tasks.lint]

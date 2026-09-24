@@ -24,8 +24,8 @@
 | `./bin/mise run lint`               | Run linters                           |
 | `./bin/mise run format`             | Format all code                       |
 
-Without MetalToolchain, Swift 6.4 SwiftPM fails on `.metal` sources. Use
-`swift build --build-system native` in that case.
+The tasks and CI use `swift build --build-system native`. The Swift 6.4 default build
+system needs MetalToolchain for the `.metal` sources, and it does not link `CNumKong.o`.
 
 ### CLI Commands
 
@@ -370,8 +370,8 @@ let object = try JSONCodec.deserialize(data)
   a valid check; run `xcrun metal --version`. Install it with
   `xcodebuild -downloadComponent MetalToolchain`.
 - End users do not need MetalToolchain: release artifacts ship the metallib.
-- Swift 6.4 SwiftPM compiles `.metal` sources and fails without MetalToolchain. Install
-  it, or use `swift build --build-system native`.
+- The Swift 6.4 default build system compiles `.metal` sources and fails without
+  MetalToolchain. The tasks and CI use `--build-system native`, which skips them.
 
 ### Init Behavior Notes
 

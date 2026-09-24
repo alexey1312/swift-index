@@ -48,7 +48,7 @@ jobs:
       - name: Build release binary (arm64)
         run: |
           set -euo pipefail
-          swift build -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
+          swift build --build-system native -c release --arch arm64 -Xswiftc -no-whole-module-optimization 2>&1 | xcsift
           ./scripts/build-mlx-metallib
 
       - name: Create release archive
