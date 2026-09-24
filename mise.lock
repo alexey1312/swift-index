@@ -11,22 +11,23 @@ url_api = "https://api.github.com/repos/rhysd/actionlint/releases/assets/3849248
 provenance = "github-attestations"
 
 [[tools.dprint]]
-version = "0.57.0"
+version = "0.57.4"
 backend = "aqua:dprint/dprint"
 
 [tools.dprint."platforms.macos-arm64"]
-checksum = "sha256:14bdbfb9b1e3ebd614d5ec08a068b04b0d0370d70c112723003dd9103a4c0c3a"
-url = "https://github.com/dprint/dprint/releases/download/0.57.0/dprint-aarch64-apple-darwin.zip"
-url_api = "https://api.github.com/repos/dprint/dprint/releases/assets/536956636"
+checksum = "sha256:f9e752812791f258e89ff88a7affd05c793b0db3d929718651eae7df5f19eb2e"
+url = "https://github.com/dprint/dprint/releases/download/0.57.4/dprint-aarch64-apple-darwin.zip"
+url_api = "https://api.github.com/repos/dprint/dprint/releases/assets/546351171"
+provenance = "github-attestations"
 
 [[tools.hk]]
-version = "1.57.0"
-backend = "aqua:jdx/hk"
+version = "2.0.1"
+backend = "packslip:github.com/jdx/hk"
 
 [tools.hk."platforms.macos-arm64"]
-checksum = "sha256:7b10c00e1f1b51d3e43cd5e738cc5fd93bf3ec0b777505744ac37c8b1e171188"
-url = "https://github.com/jdx/hk/releases/download/v1.57.0/hk-aarch64-apple-darwin.tar.gz"
-url_api = "https://api.github.com/repos/jdx/hk/releases/assets/536864261"
+checksum = "sha256:6ec393f898f562f76c4839a910356b4afec6740eff23f18ebdf8cf41c793a461"
+url = "https://github.com/jdx/hk/releases/download/v2.0.1/hk-aarch64-apple-darwin.tar.gz"
+signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 
 [[tools.pkl]]
 version = "0.32.1"
@@ -38,12 +39,12 @@ url = "https://github.com/apple/pkl/releases/download/0.32.1/pkl-macos-aarch64"
 url_api = "https://api.github.com/repos/apple/pkl/releases/assets/487426570"
 
 [[tools.swift]]
-version = "6.3.3"
+version = "6.4.0"
 backend = "core:swift"
 
 [tools.swift."platforms.macos-arm64"]
-checksum = "blake3:2a9e6afeb9f796a60fb8183f4063960c2ff683476f5cf94464332586a9e86cd3"
-url = "https://download.swift.org/swift-6.3.3-release/xcode/swift-6.3.3-RELEASE/swift-6.3.3-RELEASE-osx.pkg"
+checksum = "blake3:b7d02453cf1224c0b2e4ee2bf6c22b7ea9f7c0fb7beb8eeb3446a858d387d3b2"
+url = "https://download.swift.org/swift-6.4.0-release/xcode/swift-6.4.0-RELEASE/swift-6.4.0-RELEASE-osx.pkg"
 
 [[tools.swiftformat]]
 version = "0.63.0"
@@ -59,10 +60,10 @@ url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swif
 url_api = "https://api.github.com/repos/realm/SwiftLint/releases/assets/524187565"
 
 [[tools.xcsift]]
-version = "1.4.2"
+version = "1.5.0"
 backend = "github:ldomaradzki/xcsift"
 
 [tools.xcsift."platforms.macos-arm64"]
-checksum = "sha256:e4ed485231a7cd16f5dd4bab8890cad9182a697f8f948b514456f520da29fc4e"
-url = "https://github.com/ldomaradzki/xcsift/releases/download/v1.4.2/xcsift-v1.4.2-macos-arm64.tar.gz"
-url_api = "https://api.github.com/repos/ldomaradzki/xcsift/releases/assets/520460519"
+checksum = "sha256:cd34da90715d79a1b743a6d74b609a3b40dc7cde3c0d707ca4a11d218e952a3a"
+url = "https://github.com/ldomaradzki/xcsift/releases/download/v1.5.0/xcsift-v1.5.0-macos-arm64.tar.gz"
+url_api = "https://api.github.com/repos/ldomaradzki/xcsift/releases/assets/559656761"

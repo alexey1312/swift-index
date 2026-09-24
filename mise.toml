@@ -33,16 +33,16 @@ run = "git config core.hooksPath .githooks 2>/dev/null || true"
 
 [tools]
 # --- Swift Development ---
-swift = "6.3.3"        # Swift compiler and toolchain
-xcsift = "1.4.2"       # A Swift parses output
+swift = "6.4.0"        # Swift compiler and toolchain
+xcsift = "1.5.0"       # A Swift parses output
 swiftformat = "0.63.0" # Swift code formatting
 swiftlint = "0.65.1"   # Swift linting
 
 # --- Documentation & Formatting ---
-dprint = "0.57.0" # MD/JSON/YAML formatting (Rust, fast)
+dprint = "0.57.4" # MD/JSON/YAML formatting (Rust, fast)
 
 # --- Git & CI ---
-hk = "1.57.0"         # Git hooks manager
+hk = "2.0.1"          # Git hooks manager
 actionlint = "1.7.12" # GitHub Actions linting
 
 # --- Configuration ---

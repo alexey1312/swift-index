@@ -13,7 +13,7 @@ env:
 jobs:
   lint:
     name: Lint
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
 
@@ -29,14 +29,14 @@ jobs:
 
   build:
     name: Build & Test
-    runs-on: macos-15
+    runs-on: macos-26
     needs: lint
 
     steps:
       - uses: actions/checkout@v7
 
       - name: Cache SPM dependencies
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .build
           key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
@@ -49,6 +49,10 @@ jobs:
 
       - name: Show Swift version
         run: swift --version
+
+      # Swift 6.4 SwiftPM compiles the .metal sources of mlx-swift.
+      - name: Ensure Metal toolchain
+        run: xcrun -sdk macosx metal --version >/dev/null 2>&1 || xcodebuild -downloadComponent MetalToolchain
 
       - name: Build
         run: |

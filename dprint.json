@@ -6,7 +6,7 @@
     ".claude/**",
     ".cursor/**"
   ],
-  "plugins": ["npm:@dprint/markdown@0.23.2"],
+  "plugins": ["npm:@dprint/markdown@0.24.0"],
   "markdown": {
     "lineWidth": 120,
     "textWrap": "maintain"
