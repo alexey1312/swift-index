@@ -39,9 +39,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: .build
-          key: ${{ runner.os }}-spm-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          # mise.toml pins the Swift version, and build products of another compiler break the build.
+          key: ${{ runner.os }}-${{ runner.arch }}-spm-${{ hashFiles('mise.toml') }}-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: |
-            ${{ runner.os }}-spm-
+            ${{ runner.os }}-${{ runner.arch }}-spm-${{ hashFiles('mise.toml') }}-
 
       - uses: jdx/mise-action@v4
         with:
